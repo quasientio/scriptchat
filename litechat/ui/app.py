@@ -13,12 +13,37 @@ from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.lexers import Lexer
+from prompt_toolkit.formatted_text import ANSI, to_formatted_text
 
 from ..core.commands import AppState, handle_command, set_model, set_temperature
 from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
     branch_conversation, delete_conversation, Conversation, Message
 )
+
+
+class AnsiLexer(Lexer):
+    """Lexer that interprets ANSI color codes in buffer text."""
+
+    def lex_document(self, document):
+        """Lex the document and return formatted text for each line.
+
+        Args:
+            document: The document to lex
+
+        Returns:
+            Function that takes line number and returns formatted text
+        """
+        lines = document.text.split('\n')
+
+        def get_line(lineno):
+            if lineno < len(lines):
+                # Parse ANSI codes and convert to list of formatted text tuples
+                return to_formatted_text(ANSI(lines[lineno]))
+            return []
+
+        return get_line
 
 
 class LiteChatUI:
@@ -53,6 +78,9 @@ class LiteChatUI:
             complete_while_typing=True
         )
 
+        # Create read-only buffer for conversation display
+        self.conversation_buffer = Buffer(read_only=True)
+
         # Create layout
         self.layout = self._create_layout()
 
@@ -67,16 +95,20 @@ class LiteChatUI:
             mouse_support=False
         )
 
+        # Initialize conversation display (scroll to bottom initially)
+        self._update_conversation_display()
+
     def _create_layout(self) -> Layout:
         """Create the application layout.
 
         Returns:
             Layout object with conversation, status, and input panes
         """
-        # Conversation pane (top) - using formatted text for colors
+        # Conversation pane (top) - using buffer for scroll control with ANSI lexer
         conversation_window = Window(
-            content=FormattedTextControl(
-                text=self._get_conversation_text,
+            content=BufferControl(
+                buffer=self.conversation_buffer,
+                lexer=AnsiLexer(),
                 focusable=False
             ),
             wrap_lines=True
@@ -256,32 +288,44 @@ class LiteChatUI:
         """
         return self.prompt_message
 
-    def _get_conversation_text(self):
-        """Get formatted conversation text with colors.
+    def _build_conversation_text(self) -> str:
+        """Build conversation text with ANSI color codes.
 
         Returns:
-            List of (style, text) tuples for formatted display
+            String with ANSI color codes for display
         """
-        result = []
+        lines = []
+
+        # ANSI color codes
+        GRAY = '\033[90m'
+        CYAN = '\033[96m'
+        GREEN = '\033[92m'
+        RESET = '\033[0m'
 
         for msg in self.state.current_conversation.messages:
             if msg.role == 'system':
-                # System messages in dim gray, not part of actual conversation
-                result.append(('fg:ansigray italic', f"[system] {msg.content}\n"))
+                # System messages in dim gray
+                lines.append(f"{GRAY}[system] {msg.content}{RESET}")
             elif msg.role == 'user':
                 # User messages in cyan
-                result.append(('fg:ansibrightcyan', '[user] '))
-                result.append(('', f"{msg.content}\n"))
+                lines.append(f"{CYAN}[user]{RESET} {msg.content}")
             elif msg.role == 'assistant':
                 # Assistant messages in green
-                result.append(('fg:ansibrightgreen', '[assistant] '))
-                result.append(('', f"{msg.content}\n"))
+                lines.append(f"{GREEN}[assistant]{RESET} {msg.content}")
 
-        return result
+        return '\n'.join(lines)
 
     def _update_conversation_display(self):
-        """Update the conversation display."""
-        # With FormattedTextControl, we just need to invalidate to trigger redraw
+        """Update the conversation display and scroll to bottom."""
+        # Build text with ANSI colors
+        text = self._build_conversation_text()
+
+        # Update buffer with new content, cursor at end for auto-scroll
+        self.conversation_buffer.reset(
+            document=Document(text=text, cursor_position=len(text))
+        )
+
+        # Force redraw
         self.app.invalidate()
 
     def _add_system_message(self, text: str):
@@ -294,7 +338,7 @@ class LiteChatUI:
         self.state.current_conversation.messages.append(
             Message(role='system', content=text)
         )
-        self.app.invalidate()
+        self._update_conversation_display()
 
     def _handle_user_message(self, message: str):
         """Handle a user message by sending it to the LLM.
@@ -390,6 +434,11 @@ class LiteChatUI:
         Args:
             args: Optional arguments (model index)
         """
+        # If index provided as argument, use it directly
+        if args.strip():
+            self._setmodel_callback(args.strip())
+            return
+
         # Display model list
         lines = ["Available models:"]
         for i, model in enumerate(self.state.config.models):
@@ -474,6 +523,11 @@ class LiteChatUI:
 
         if not summaries:
             self._add_system_message("No saved conversations found")
+            return
+
+        # If index provided as argument, use it directly
+        if args.strip():
+            self._load_callback(args.strip(), summaries)
             return
 
         lines = ["Saved conversations:"]
