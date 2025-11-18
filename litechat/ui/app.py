@@ -78,8 +78,8 @@ class LiteChatUI:
             complete_while_typing=True
         )
 
-        # Create read-only buffer for conversation display
-        self.conversation_buffer = Buffer(read_only=True)
+        # Create buffer for conversation display (not read-only so we can scroll)
+        self.conversation_buffer = Buffer()
 
         # Create layout
         self.layout = self._create_layout()
@@ -92,7 +92,7 @@ class LiteChatUI:
             layout=self.layout,
             key_bindings=self.kb,
             full_screen=True,
-            mouse_support=False
+            mouse_support=True  # Enable mouse scrolling
         )
 
         # Initialize conversation display (scroll to bottom initially)
@@ -105,11 +105,11 @@ class LiteChatUI:
             Layout object with conversation, status, and input panes
         """
         # Conversation pane (top) - using buffer for scroll control with ANSI lexer
-        conversation_window = Window(
+        self.conversation_window = Window(
             content=BufferControl(
                 buffer=self.conversation_buffer,
                 lexer=AnsiLexer(),
-                focusable=False
+                focusable=True  # Allow focus for scrolling
             ),
             wrap_lines=True
         )
@@ -151,7 +151,7 @@ class LiteChatUI:
 
         # Main container
         root_container = HSplit([
-            conversation_window,
+            self.conversation_window,
             status_window,
             separator_window,
             prompt_line_window,
@@ -229,17 +229,27 @@ class LiteChatUI:
                     event.app.invalidate()  # Force redraw to show cleared input
                     self._handle_user_message(text)
 
+        @kb.add('escape')
+        def handle_escape(event):
+            """Handle Escape to return focus to input."""
+            event.app.layout.focus(self.input_window)
+
         @kb.add('tab')
         def handle_tab(event):
-            """Handle Tab key for completion."""
+            """Handle Tab key for completion or focus switch."""
             buff = event.current_buffer
 
-            # If there are completions available, cycle through them
-            if buff.complete_state:
-                buff.complete_next()
+            # If in input buffer, handle completion
+            if buff == self.input_buffer:
+                # If there are completions available, cycle through them
+                if buff.complete_state:
+                    buff.complete_next()
+                else:
+                    # Start completion - show menu
+                    buff.start_completion(select_first=True)
+            # If in conversation buffer, switch to input
             else:
-                # Start completion - show menu
-                buff.start_completion(select_first=True)
+                event.app.layout.focus(self.input_window)
 
         @kb.add('s-tab')
         def handle_shift_tab(event):
@@ -247,6 +257,36 @@ class LiteChatUI:
             buff = event.current_buffer
             if buff.complete_state:
                 buff.complete_previous()
+
+        @kb.add('c-up')
+        def handle_ctrl_up(event):
+            """Handle Ctrl+Up to focus conversation for scrolling."""
+            # Focus conversation and position cursor in middle for scrolling
+            event.app.layout.focus(self.conversation_buffer)
+            doc = self.conversation_buffer.document
+            # Position cursor in middle or near bottom to allow scrolling up
+            self.conversation_buffer.cursor_position = max(0, len(doc.text) - 500)
+
+        @kb.add('c-home')
+        def handle_ctrl_home(event):
+            """Handle Ctrl+Home to jump to start of conversation."""
+            event.app.layout.focus(self.conversation_buffer)
+            self.conversation_buffer.cursor_position = 0
+
+        @kb.add('c-end')
+        def handle_ctrl_end(event):
+            """Handle Ctrl+End to jump to end of conversation."""
+            event.app.layout.focus(self.conversation_buffer)
+            doc = self.conversation_buffer.document
+            # Position slightly before end to allow scrolling
+            self.conversation_buffer.cursor_position = max(0, len(doc.text) - 1)
+
+        # Prevent typing in conversation buffer
+        @kb.add('<any>', filter=Condition(lambda: self.app.layout.has_focus(self.conversation_buffer)))
+        def handle_conversation_input(event):
+            """Prevent editing in conversation buffer - only allow navigation."""
+            # Allow navigation keys, block everything else
+            pass  # Key will be ignored for non-navigation keys
 
         @kb.add('c-c')
         @kb.add('c-d')
