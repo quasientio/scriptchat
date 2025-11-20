@@ -91,10 +91,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         return CommandResult(message="Started new conversation")
 
     # Commands that need UI interaction
-    elif command == 'setmodel':
+    elif command == 'model':
         return CommandResult(
             needs_ui_interaction=True,
-            command_type='setmodel'
+            command_type='model'
         )
 
     elif command == 'save':
@@ -115,10 +115,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='branch'
         )
 
-    elif command == 'settemp':
+    elif command == 'temp':
         return CommandResult(
             needs_ui_interaction=True,
-            command_type='settemp'
+            command_type='temp'
         )
 
     elif command == 'clear':
@@ -158,7 +158,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /setModel, /setTemp, /clear, /file, /exit"
+                    "Available commands: /new, /save, /load, /branch, /model, /temp, /clear, /file, /exit"
         )
 
 

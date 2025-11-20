@@ -65,7 +65,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/setModel', '/setTemp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -485,28 +485,28 @@ class LiteChatUI:
 
         if result.needs_ui_interaction:
             # Handle commands that need user interaction
-            if result.command_type == 'setmodel':
-                self._handle_setmodel(args)
+            if result.command_type == 'model':
+                self._handle_model(args)
             elif result.command_type == 'save':
                 self._handle_save(args)
             elif result.command_type == 'load':
                 self._handle_load(args)
             elif result.command_type == 'branch':
                 self._handle_branch(args)
-            elif result.command_type == 'settemp':
-                self._handle_settemp(args)
+            elif result.command_type == 'temp':
+                self._handle_temp(args)
             elif result.command_type == 'clear':
                 self._handle_clear()
 
-    def _handle_setmodel(self, args: str = ""):
-        """Handle /setModel command.
+    def _handle_model(self, args: str = ""):
+        """Handle /model command.
 
         Args:
             args: Optional arguments (model index)
         """
         # If index provided as argument, use it directly
         if args.strip():
-            self._setmodel_callback(args.strip())
+            self._model_callback(args.strip())
             return
 
         # Display model list
@@ -519,10 +519,10 @@ class LiteChatUI:
         self.prompt_message = "Enter model index:"
 
         # Get user input
-        self._prompt_for_input(self._setmodel_callback)
+        self._prompt_for_input(self._model_callback)
 
-    def _setmodel_callback(self, index_str: str):
-        """Callback for setModel input.
+    def _model_callback(self, index_str: str):
+        """Callback for model input.
 
         Args:
             index_str: User input (model index)
@@ -653,22 +653,22 @@ class LiteChatUI:
         except Exception as e:
             self._add_system_message(f"Error branching: {str(e)}")
 
-    def _handle_settemp(self, args: str = ""):
-        """Handle /setTemp command.
+    def _handle_temp(self, args: str = ""):
+        """Handle /temp command.
 
         Args:
             args: Optional arguments (temperature value)
         """
         if args:
             # Temperature provided as argument
-            self._settemp_callback(args)
+            self._temp_callback(args)
         else:
             # Prompt for temperature
             self.prompt_message = "New temperature (0.0-2.0):"
-            self._prompt_for_input(self._settemp_callback)
+            self._prompt_for_input(self._temp_callback)
 
-    def _settemp_callback(self, temp_str: str):
-        """Callback for setTemp input.
+    def _temp_callback(self, temp_str: str):
+        """Callback for temp input.
 
         Args:
             temp_str: User input (temperature)

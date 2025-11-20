@@ -72,8 +72,8 @@ All commands start with `/`:
 - `/save` - Save the current conversation
 - `/load` - Load a saved conversation
 - `/branch` - Create a branch (copy) of the current conversation
-- `/setModel` - Switch to a different model
-- `/setTemp` - Change the temperature setting
+- `/model` - Switch to a different model
+- `/temp` - Change the temperature setting
 - `/clear` - Clear and delete the current conversation
 - `/exit` - Exit lite-chat
 
@@ -100,7 +100,7 @@ You can manually edit message files or delete them as needed.
 1. Start lite-chat: `python -m litechat`
 2. Chat with the default model
 3. Save your conversation: `/save` then enter a name
-4. Switch models: `/setModel` then select a model
+4. Switch models: `/model` then select a model
 5. Continue chatting with the new model
 6. Create a branch to try different approaches: `/branch`
 7. Load a previous conversation: `/load`
