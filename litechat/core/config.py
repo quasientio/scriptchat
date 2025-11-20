@@ -1,5 +1,6 @@
 """Configuration loading and management for lite-chat."""
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,9 @@ class Config:
     system_prompt: Optional[str]
     default_model: str
     default_temperature: float
+    timeout: int  # API request timeout in seconds
+    log_level: str  # Logging level: DEBUG, INFO, WARNING, ERROR
+    log_file: Optional[Path]  # Path to log file (None = stderr)
     models: list[ModelConfig]
 
     def get_model(self, name: str) -> ModelConfig:
@@ -42,6 +46,44 @@ class Config:
             if model.name == name:
                 return model
         raise ValueError(f"Model '{name}' not found in configuration")
+
+
+def _setup_logging(config: Config) -> None:
+    """Configure logging based on config settings.
+
+    Args:
+        config: Configuration object with logging settings
+    """
+    # Convert log level string to logging constant
+    numeric_level = getattr(logging, config.log_level, logging.INFO)
+
+    # Create formatter with timestamp, level, and message
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(numeric_level)
+
+    # Remove any existing handlers
+    root_logger.handlers.clear()
+
+    # Add appropriate handler based on config
+    if config.log_file:
+        # Ensure log directory exists
+        config.log_file.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(config.log_file)
+    else:
+        handler = logging.StreamHandler()
+
+    handler.setLevel(numeric_level)
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+
+    # Log the configuration
+    logging.info(f"Logging initialized: level={config.log_level}, file={config.log_file}")
 
 
 def load_config() -> Config:
@@ -66,7 +108,8 @@ def load_config() -> Config:
     with open(config_path, 'r') as f:
         data = toml.load(f)
 
-    # Extract ollama section
+    # Extract sections
+    general_section = data.get('general', {})
     ollama_section = data.get('ollama', {})
 
     # Parse models
@@ -92,7 +135,12 @@ def load_config() -> Config:
 
         models.append(ModelConfig(name=name, contexts=contexts))
 
-    # Get configuration values with defaults
+    # Get general configuration values
+    log_level = general_section.get('log_level', 'INFO').upper()
+    log_file_str = general_section.get('log_file')
+    log_file = Path(log_file_str).expanduser() if log_file_str else None
+
+    # Get Ollama configuration values with defaults
     api_url = ollama_section.get('api_url', 'http://localhost:11434/api')
     api_key = ollama_section.get('api_key', '')
 
@@ -108,6 +156,7 @@ def load_config() -> Config:
     system_prompt = ollama_section.get('system_prompt')
     default_model = ollama_section.get('default_model')
     default_temperature = ollama_section.get('default_temperature', 0.7)
+    timeout = ollama_section.get('timeout', 1200)  # Default: 20 minutes
 
     # Validate default_model
     if not default_model:
@@ -120,12 +169,20 @@ def load_config() -> Config:
             f"default_model '{default_model}' not found in configured models: {model_names}"
         )
 
-    return Config(
+    config = Config(
         api_url=api_url,
         api_key=api_key,
         conversations_dir=conversations_dir,
         system_prompt=system_prompt,
         default_model=default_model,
         default_temperature=default_temperature,
+        timeout=timeout,
+        log_level=log_level,
+        log_file=log_file,
         models=models
     )
+
+    # Configure logging based on settings
+    _setup_logging(config)
+
+    return config

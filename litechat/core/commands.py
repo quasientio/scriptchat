@@ -25,6 +25,7 @@ class CommandResult:
     should_exit: bool = False
     needs_ui_interaction: bool = False
     command_type: Optional[str] = None  # For complex commands that need UI handling
+    file_content: Optional[str] = None  # For /file command - content to send as user message
 
 
 def create_new_conversation(state: AppState) -> Conversation:
@@ -126,10 +127,38 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='clear'
         )
 
+    elif command == 'file':
+        # Load file contents
+        if len(parts) < 2:
+            return CommandResult(message="Usage: /file <path>")
+
+        file_path = parts[1].strip()
+        try:
+            # Expand user path (e.g., ~/file.txt)
+            expanded_path = Path(file_path).expanduser()
+
+            # Read file contents
+            with open(expanded_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Return the file contents to be sent as a user message
+            return CommandResult(
+                file_content=content,
+                message=f"Loaded file: {expanded_path}"
+            )
+        except FileNotFoundError:
+            return CommandResult(message=f"File not found: {file_path}")
+        except PermissionError:
+            return CommandResult(message=f"Permission denied: {file_path}")
+        except UnicodeDecodeError:
+            return CommandResult(message=f"Cannot read file (not UTF-8 text): {file_path}")
+        except Exception as e:
+            return CommandResult(message=f"Error reading file: {str(e)}")
+
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /setModel, /setTemp, /clear, /exit"
+                    "Available commands: /new, /save, /load, /branch, /setModel, /setTemp, /clear, /file, /exit"
         )
 
 

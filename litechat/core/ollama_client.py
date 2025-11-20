@@ -1,5 +1,6 @@
 """Ollama API client and server management for lite-chat."""
 
+import logging
 import os
 import subprocess
 import time
@@ -9,6 +10,8 @@ import requests
 
 from .config import Config
 from .conversations import Conversation, Message
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaServerManager:
@@ -37,7 +40,10 @@ class OllamaServerManager:
         if (self.current_process is not None and
                 self.current_context_length == context_length and
                 self.current_process.poll() is None):
+            logger.debug(f"Ollama server already running with context_length={context_length}")
             return
+
+        logger.info(f"Starting Ollama server with context_length={context_length}")
 
         # Stop existing process if running
         self.stop()
@@ -80,9 +86,12 @@ class OllamaServerManager:
         # Check if process is still running
         if self.current_process.poll() is not None:
             # Process already exited
+            logger.debug("Ollama process already stopped")
             self.current_process = None
             self.current_context_length = None
             return
+
+        logger.info("Stopping Ollama server process")
 
         # Try graceful termination first
         try:
@@ -90,12 +99,15 @@ class OllamaServerManager:
 
             # Wait up to 5 seconds for process to terminate
             self.current_process.wait(timeout=5)
+            logger.info("Ollama server stopped gracefully")
         except subprocess.TimeoutExpired:
             # Force kill if still alive
+            logger.warning("Ollama server did not stop gracefully, forcing kill")
             self.current_process.kill()
             self.current_process.wait()
+            logger.info("Ollama server killed")
         except Exception as e:
-            print(f"Error stopping Ollama process: {e}")
+            logger.error(f"Error stopping Ollama process: {e}")
 
         self.current_process = None
         self.current_context_length = None
@@ -172,20 +184,50 @@ class OllamaChatClient:
         # Send POST request
         url = f"{self.config.api_url.rstrip('/')}/chat"
 
+        logger.debug(f"Sending chat request to {url} with model={convo.model_name}, "
+                     f"temperature={convo.temperature}, num_ctx={context_length}")
+
         try:
-            response = self.session.post(url, json=payload, timeout=120)
+            response = self.session.post(url, json=payload, timeout=self.config.timeout)
             response.raise_for_status()
-        except requests.exceptions.ConnectionError:
+            logger.debug(f"Received successful response from Ollama API")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error to Ollama API at {url}: {e}")
             raise ConnectionError(
                 f"Failed to connect to Ollama API at {url}. "
                 "Ensure Ollama is running and accessible."
             )
-        except requests.exceptions.Timeout:
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout error after {self.config.timeout} seconds: {e}")
             raise TimeoutError(
-                "Request to Ollama API timed out. The model may be taking too long to respond."
+                f"Request to Ollama API timed out after {self.config.timeout} seconds. "
+                "The model may be taking too long to respond. "
+                "You can increase the timeout in your config.toml file."
             )
         except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"Ollama API returned an error: {e}")
+            # Log the full error details including response body
+            error_details = {
+                'status_code': response.status_code,
+                'reason': response.reason,
+                'url': url,
+                'request_payload': payload
+            }
+            try:
+                error_details['response_body'] = response.text
+                response_json = response.json()
+                error_details['response_json'] = response_json
+            except Exception:
+                error_details['response_body'] = response.text if hasattr(response, 'text') else 'Unable to read response'
+
+            logger.error(f"HTTP error from Ollama API: {e}")
+            logger.error(f"Error details: {error_details}")
+
+            # Include response body in error message if available
+            error_msg = f"Ollama API returned an error: {e}"
+            if 'response_body' in error_details and error_details['response_body']:
+                error_msg += f"\nResponse: {error_details['response_body']}"
+
+            raise RuntimeError(error_msg)
 
         # Parse response
         data = response.json()
@@ -194,9 +236,19 @@ class OllamaChatClient:
         tokens_in = data.get('prompt_eval_count', 0)
         tokens_out = data.get('eval_count', 0)
 
+        logger.info(f"Response received: tokens_in={tokens_in}, tokens_out={tokens_out}, "
+                    f"response_length={len(assistant_content)} chars")
+
         # Update conversation
         convo.tokens_in += tokens_in
         convo.tokens_out += tokens_out
+
+        # Update context length tracking
+        convo.context_length_configured = context_length
+        convo.context_length_used = convo.tokens_in
+
+        logger.debug(f"Conversation totals: tokens_in={convo.tokens_in}, "
+                     f"tokens_out={convo.tokens_out}, context_used={convo.context_length_used}")
 
         # Append only assistant message (user message should already be in conversation)
         convo.messages.append(Message(role='assistant', content=assistant_content))
@@ -208,6 +260,8 @@ class OllamaChatClient:
         if not self.current_model:
             return
 
+        logger.info(f"Unloading model: {self.current_model}")
+
         try:
             # Use the /api/generate endpoint with keep_alive=0 to unload
             url = f"{self.config.api_url.rstrip('/')}/generate"
@@ -216,7 +270,7 @@ class OllamaChatClient:
                 'keep_alive': 0  # Unload immediately
             }
             self.session.post(url, json=payload, timeout=5)
-            print(f"Unloaded model: {self.current_model}")
+            logger.info(f"Successfully unloaded model: {self.current_model}")
         except Exception as e:
-            print(f"Error unloading model: {e}")
+            logger.warning(f"Error unloading model {self.current_model}: {e}")
             pass  # Ignore errors during cleanup

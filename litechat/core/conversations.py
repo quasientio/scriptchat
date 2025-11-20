@@ -25,6 +25,8 @@ class Conversation:
     messages: list[Message] = field(default_factory=list)
     tokens_in: int = 0
     tokens_out: int = 0
+    context_length_configured: Optional[int] = None  # Max context length model is running with
+    context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
 
 
 @dataclass
@@ -170,6 +172,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
             meta = json.load(f)
         model_name = meta.get('model', 'unknown')
         temperature = meta.get('temperature', 0.7)
+        context_length_configured = meta.get('context_length_configured', None)
+        context_length_used = meta.get('context_length_used', None)
     else:
         # Try to infer from directory name
         parts = dir_name.split('_', 2)
@@ -178,6 +182,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         else:
             model_name = 'unknown'
         temperature = 0.7
+        context_length_configured = None
+        context_length_used = None
 
     # Load message files
     messages = []
@@ -213,7 +219,9 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         temperature=temperature,
         messages=messages,
         tokens_in=0,
-        tokens_out=0
+        tokens_out=0,
+        context_length_configured=context_length_configured,
+        context_length_used=context_length_used
     )
 
 
@@ -261,6 +269,10 @@ def save_conversation(
     }
     if system_prompt:
         meta['system_prompt_snapshot'] = system_prompt
+    if convo.context_length_configured is not None:
+        meta['context_length_configured'] = convo.context_length_configured
+    if convo.context_length_used is not None:
+        meta['context_length_used'] = convo.context_length_used
 
     meta_path = conv_dir / 'meta.json'
     with open(meta_path, 'w') as f:

@@ -65,7 +65,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/setModel', '/setTemp', '/clear', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/setModel', '/setTemp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -311,10 +311,16 @@ class LiteChatUI:
             dots = "." * ((self.thinking_dots % 3) + 1)
             thinking_indicator = f" | Thinking{dots}"
 
+        # Build context usage display
+        context_display = ""
+        if convo.context_length_configured is not None and convo.context_length_used is not None:
+            percentage = (convo.context_length_used / convo.context_length_configured * 100) if convo.context_length_configured > 0 else 0
+            context_display = f" | {convo.context_length_used}/{convo.context_length_configured} ({percentage:.1f}%)"
+
         text = (
-            f"model: {convo.model_name} | "
-            f"tokens: {convo.tokens_in} in / {convo.tokens_out} out | "
-            f"convo: {conv_id}{thinking_indicator}"
+            f"{convo.model_name} | "
+            f"{convo.tokens_in} in / {convo.tokens_out} out{context_display} | "
+            f"{conv_id}{thinking_indicator}"
         )
 
         # Return with reverse video (inverted colors)
@@ -412,6 +418,9 @@ class LiteChatUI:
 
         # Call LLM in a background thread so UI stays responsive
         def call_llm():
+            import time
+            start_time = time.time()
+
             try:
                 # Send to LLM (this will add the assistant response)
                 response = self.state.client.chat(
@@ -419,11 +428,27 @@ class LiteChatUI:
                     message
                 )
 
+                # Calculate duration
+                end_time = time.time()
+                duration_secs = int(end_time - start_time)
+                mins = duration_secs // 60
+                secs = duration_secs % 60
+
+                # Format duration message
+                if mins > 0:
+                    duration_msg = f"Thought for {mins} mins {secs} secs"
+                else:
+                    duration_msg = f"Thought for {secs} secs"
+
                 # Stop thinking animation
                 self.thinking = False
 
                 # Update display again with assistant response
                 self._update_conversation_display()
+
+                # Add timing system message
+                self._add_system_message(duration_msg)
+
                 self.app.invalidate()
 
             except Exception as e:
@@ -452,6 +477,11 @@ class LiteChatUI:
 
         if result.should_exit:
             self.app.exit()
+
+        # Handle file content - send it as a user message
+        if result.file_content:
+            self._handle_user_message(result.file_content)
+            return
 
         if result.needs_ui_interaction:
             # Handle commands that need user interaction

@@ -1,6 +1,16 @@
 # Example configuration for lite-chat
 # Copy this file to ~/.lite-chat/config.toml and customize as needed
 
+[general]
+# Logging configuration
+# Log level: DEBUG, INFO, WARNING, ERROR (default: INFO)
+log_level = "INFO"
+
+# Log file path (optional, defaults to stderr if not specified)
+# Use an absolute path or ~ for home directory
+# Example: log_file = "~/.lite-chat/logs/litechat.log"
+# log_file = ""
+
 [ollama]
 # Base URL for the Ollama API
 api_url = "http://localhost:11434/api"
@@ -20,6 +30,10 @@ default_model = "llama3.2"
 
 # Default temperature for new conversations (0.0 - 2.0)
 default_temperature = 0.7
+
+# API request timeout in seconds (default: 1200 = 20 minutes)
+# Increase this if you get timeout errors with large models or long conversations
+timeout = 1200
 
 # Model definitions
 # Each model must have a name and contexts (comma-separated list of context lengths)
