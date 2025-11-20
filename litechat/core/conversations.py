@@ -378,3 +378,45 @@ def delete_conversation(root: Path, dir_name: str) -> None:
     conv_dir = root / dir_name
     if conv_dir.exists():
         shutil.rmtree(conv_dir)
+
+
+def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> Conversation:
+    """Rename a saved conversation by renaming its directory.
+
+    Args:
+        root: Conversations root directory
+        convo: Conversation to rename (must already be saved)
+        new_save_name: New save name to use in directory name
+
+    Returns:
+        Updated Conversation with new id
+
+    Raises:
+        ValueError: If conversation is unsaved
+        FileExistsError: If the target directory already exists
+    """
+    if convo.id is None:
+        raise ValueError("Conversation must be saved before it can be renamed")
+
+    old_dir = root / convo.id
+    if not old_dir.exists():
+        raise FileNotFoundError(f"Conversation directory not found: {old_dir}")
+
+    save_slug = _slugify_save_name(new_save_name)
+
+    # Preserve original timestamp and model slug when possible
+    parts = convo.id.split('_', 2)
+    if len(parts) >= 3:
+        new_dir_name = f"{parts[0]}_{parts[1]}_{save_slug}"
+    else:
+        # Fallback to new timestamp if existing id isn't in expected format
+        new_dir_name = _create_dir_name(convo.model_name, save_slug)
+
+    new_dir = root / new_dir_name
+
+    if new_dir.exists():
+        raise FileExistsError(f"Cannot rename: target already exists ({new_dir_name})")
+
+    old_dir.rename(new_dir)
+    convo.id = new_dir_name
+    return convo

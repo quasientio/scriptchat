@@ -65,7 +65,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -493,6 +493,8 @@ class LiteChatUI:
                 self._handle_load(args)
             elif result.command_type == 'branch':
                 self._handle_branch(args)
+            elif result.command_type == 'rename':
+                self._handle_rename(args)
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
@@ -652,6 +654,34 @@ class LiteChatUI:
             self._add_system_message(f"Branched to: {new_convo.id}")
         except Exception as e:
             self._add_system_message(f"Error branching: {str(e)}")
+
+    def _handle_rename(self, args: str = ""):
+        """Handle /rename command."""
+        if not self.state.current_conversation.id:
+            self._add_system_message("Save the conversation first before renaming (/save).")
+            return
+
+        if args.strip():
+            self._rename_callback(args.strip())
+        else:
+            self.prompt_message = "New name for this conversation:"
+            self._prompt_for_input(self._rename_callback)
+
+    def _rename_callback(self, new_name: str):
+        """Callback for rename input."""
+        from ..core.conversations import rename_conversation
+
+        if not new_name.strip():
+            self._add_system_message("Rename cancelled (empty name).")
+            return
+
+        try:
+            rename_conversation(self.state.conversations_root, self.state.current_conversation, new_name)
+            self._add_system_message(f"Conversation renamed to: {self.state.current_conversation.id}")
+        except FileExistsError as e:
+            self._add_system_message(str(e))
+        except Exception as e:
+            self._add_system_message(f"Error renaming: {str(e)}")
 
     def _handle_temp(self, args: str = ""):
         """Handle /temp command.

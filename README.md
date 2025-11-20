@@ -73,6 +73,7 @@ All commands start with `/`:
 - `/save` - Save the current conversation
 - `/load` - Load a saved conversation
 - `/branch` - Create a branch (copy) of the current conversation
+- `/rename` - Rename a saved conversation (renames its directory)
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message
@@ -104,7 +105,7 @@ You can manually edit message files or delete them as needed.
 3. Save your conversation: `/save` then enter a name
 4. Switch models: `/model` then select a model
 5. Continue chatting with the new model
-6. Create a branch to try different approaches: `/branch`
+6. Rename or branch to organize: `/rename new-name` or `/branch`
 7. Load a previous conversation: `/load`
 8. Exit when done: `/exit` or Ctrl+C
 

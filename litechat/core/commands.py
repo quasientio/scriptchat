@@ -115,6 +115,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='branch'
         )
 
+    elif command == 'rename':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='rename'
+        )
+
     elif command == 'temp':
         return CommandResult(
             needs_ui_interaction=True,
@@ -158,7 +164,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /model, /temp, /clear, /file, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /model, /temp, /clear, /file, /exit"
         )
 
 
