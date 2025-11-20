@@ -22,6 +22,7 @@ class Config:
     api_url: str
     api_key: str
     conversations_dir: Path
+    exports_dir: Optional[Path]
     system_prompt: Optional[str]
     default_model: str
     default_temperature: float
@@ -140,11 +141,16 @@ def load_config() -> Config:
     log_file_str = general_section.get('log_file')
     log_file = Path(log_file_str).expanduser() if log_file_str else None
 
+    exports_dir_str = general_section.get('exports_dir')
+    exports_dir = Path(exports_dir_str).expanduser() if exports_dir_str else None
+    if exports_dir:
+        exports_dir.mkdir(parents=True, exist_ok=True)
+
     # Get Ollama configuration values with defaults
     api_url = ollama_section.get('api_url', 'http://localhost:11434/api')
     api_key = ollama_section.get('api_key', '')
 
-    conversations_dir_str = ollama_section.get(
+    conversations_dir_str = general_section.get(
         'conversations_dir',
         str(Path.home() / '.lite-chat' / 'conversations')
     )
@@ -173,6 +179,7 @@ def load_config() -> Config:
         api_url=api_url,
         api_key=api_key,
         conversations_dir=conversations_dir,
+        exports_dir=exports_dir,
         system_prompt=system_prompt,
         default_model=default_model,
         default_temperature=default_temperature,

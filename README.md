@@ -54,7 +54,8 @@ Key configuration options:
 - `default_model`: Model to use on startup
 - `default_temperature`: Temperature for new conversations (0.0-2.0)
 - `system_prompt`: System prompt for all conversations
-- `conversations_dir`: Where to store conversations
+- `conversations_dir`: Where to store conversations (set in `[general]`)
+- `exports_dir`: Where to write exports (defaults to current working directory if not set)
 - `[[models]]`: List of available models with context lengths (comma-separated in `contexts`; the first value is used to start the server)
 
 ## Usage
@@ -75,6 +76,7 @@ All commands start with `/`:
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats` - List saved conversations
+- `/export [format]` - Export the current conversation (formats: `md`; prompts if omitted)
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message

@@ -65,7 +65,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/export', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -497,6 +497,8 @@ class LiteChatUI:
                 self._handle_rename(args)
             elif result.command_type == 'chats':
                 self._handle_chats()
+            elif result.command_type == 'export':
+                self._handle_export(args)
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
@@ -673,6 +675,44 @@ class LiteChatUI:
             )
 
         self._add_system_message('\n'.join(lines))
+
+    def _handle_export(self, args: str = ""):
+        """Handle /export command."""
+        format_arg = args.strip().lower()
+
+        if format_arg and format_arg != 'md':
+            self._add_system_message("Unsupported format. Available: md")
+            return
+
+        if format_arg == 'md':
+            self._export_md()
+        else:
+            self.prompt_message = "Export format (available: md):"
+            self._prompt_for_input(self._export_format_callback)
+
+    def _export_format_callback(self, fmt: str):
+        """Callback for export format prompt."""
+        fmt = fmt.strip().lower()
+        if not fmt:
+            self._add_system_message("Export cancelled (no format selected).")
+            return
+        if fmt != 'md':
+            self._add_system_message("Unsupported format. Available: md")
+            return
+        self._export_md()
+
+    def _export_md(self):
+        """Export conversation to Markdown."""
+        from pathlib import Path
+        from ..core.conversations import export_conversation_md
+
+        target_dir = self.state.config.exports_dir or Path.cwd()
+
+        try:
+            path = export_conversation_md(self.state.current_conversation, target_dir)
+            self._add_system_message(f"Exported to: {path}")
+        except Exception as e:
+            self._add_system_message(f"Error exporting: {str(e)}")
 
     def _handle_rename(self, args: str = ""):
         """Handle /rename command."""

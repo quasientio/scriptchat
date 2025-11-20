@@ -420,3 +420,48 @@ def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> 
     old_dir.rename(new_dir)
     convo.id = new_dir_name
     return convo
+
+
+def export_conversation_md(convo: Conversation, export_dir: Path, filename: Optional[str] = None) -> Path:
+    """Export a conversation to a Markdown file.
+
+    Args:
+        convo: Conversation to export
+        export_dir: Directory to write the export file
+        filename: Optional filename (defaults to conversation id or a generated name)
+
+    Returns:
+        Path to the written Markdown file
+    """
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    if not filename:
+        if convo.id:
+            filename = f"{convo.id}.md"
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            model_slug = _slugify_model_name(convo.model_name)
+            filename = f"chat_{timestamp}_{model_slug}.md"
+
+    export_path = export_dir / filename
+
+    lines = [
+        f"# Conversation {convo.id or 'unsaved'}",
+        f"- Model: {convo.model_name}",
+        f"- Temperature: {convo.temperature:.2f}",
+        f"- Exported: {datetime.now().isoformat()}",
+        ""
+    ]
+
+    for msg in convo.messages:
+        # Skip system messages (status prompts, system prompt snapshots, etc.)
+        if msg.role == 'system':
+            continue
+        heading = msg.role.capitalize()
+        lines.append(f"## {heading}")
+        lines.append("")
+        lines.append(msg.content)
+        lines.append("")
+
+    export_path.write_text('\n'.join(lines), encoding='utf-8')
+    return export_path

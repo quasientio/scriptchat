@@ -11,15 +11,18 @@ log_level = "INFO"
 # Example: log_file = "~/.lite-chat/logs/litechat.log"
 # log_file = ""
 
+# Directory for storing conversations
+conversations_dir = "~/.lite-chat/conversations"
+
+# Directory for exports (optional). If not set, exports go to the current working directory.
+# exports_dir = "~/.lite-chat/exports"
+
 [ollama]
 # Base URL for the Ollama API
 api_url = "http://localhost:11434/api"
 
 # Optional API key (leave empty if not needed)
 api_key = ""
-
-# Directory for storing conversations
-conversations_dir = "~/.lite-chat/conversations"
 
 # System prompt to use for all conversations
 system_prompt = "You are a helpful assistant."
