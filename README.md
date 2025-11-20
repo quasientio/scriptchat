@@ -74,6 +74,7 @@ All commands start with `/`:
 - `/load` - Load a saved conversation
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
+- `/chats` - List saved conversations
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message

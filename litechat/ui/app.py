@@ -65,7 +65,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -495,6 +495,8 @@ class LiteChatUI:
                 self._handle_branch(args)
             elif result.command_type == 'rename':
                 self._handle_rename(args)
+            elif result.command_type == 'chats':
+                self._handle_chats()
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
@@ -654,6 +656,23 @@ class LiteChatUI:
             self._add_system_message(f"Branched to: {new_convo.id}")
         except Exception as e:
             self._add_system_message(f"Error branching: {str(e)}")
+
+    def _handle_chats(self):
+        """Handle /chats command (list saved conversations)."""
+        summaries = list_conversations(self.state.conversations_root)
+
+        if not summaries:
+            self._add_system_message("No saved conversations found")
+            return
+
+        lines = ["Saved conversations:"]
+        for i, summary in enumerate(summaries):
+            lines.append(
+                f"  [{i}] {summary.display_name} "
+                f"(model: {summary.model_name}, created: {summary.created_at[:10]})"
+            )
+
+        self._add_system_message('\n'.join(lines))
 
     def _handle_rename(self, args: str = ""):
         """Handle /rename command."""
