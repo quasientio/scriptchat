@@ -8,6 +8,7 @@ A terminal-based chat client for interacting with local LLMs via Ollama.
 - Multiple pre-configured models with easy switching
 - Persistent, file-based conversations (save, load, and branch)
 - Multi-line message support
+- Send file contents into the chat
 - Token usage tracking
 - Temperature adjustment
 - System prompts
@@ -54,7 +55,7 @@ Key configuration options:
 - `default_temperature`: Temperature for new conversations (0.0-2.0)
 - `system_prompt`: System prompt for all conversations
 - `conversations_dir`: Where to store conversations
-- `[[models]]`: List of available models with context lengths
+- `[[models]]`: List of available models with context lengths (comma-separated in `contexts`; the first value is used to start the server)
 
 ## Usage
 
@@ -74,6 +75,7 @@ All commands start with `/`:
 - `/branch` - Create a branch (copy) of the current conversation
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
+- `/file <path>` - Send the contents of a text file as your message
 - `/clear` - Clear and delete the current conversation
 - `/exit` - Exit lite-chat
 
