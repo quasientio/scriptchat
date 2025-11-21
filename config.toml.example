@@ -1,15 +1,15 @@
-# Example configuration for lite-chat
+# Example configuration for lite-chat (new provider schema)
 # Copy this file to ~/.lite-chat/config.toml and customize as needed
 
 [general]
-# Logging configuration
-# Log level: DEBUG, INFO, WARNING, ERROR (default: INFO)
+
+# Log file path (optional, defaults to stderr if not specified)
+# Use an absolute path or ~ for home directory
 log_level = "INFO"
 
 # Log file path (optional, defaults to stderr if not specified)
 # Use an absolute path or ~ for home directory
-# Example: log_file = "~/.lite-chat/logs/litechat.log"
-# log_file = ""
+# log_file = "~/.lite-chat/logs/litechat.log"
 
 # Directory for storing conversations
 conversations_dir = "~/.lite-chat/conversations"
@@ -17,22 +17,15 @@ conversations_dir = "~/.lite-chat/conversations"
 # Directory for exports (optional). If not set, exports go to the current working directory.
 # exports_dir = "~/.lite-chat/exports"
 
-# Enable streaming responses (default: false)
+# Streaming (optional; default false)
 # enable_streaming = true
 
-[ollama]
-# Base URL for the Ollama API
-api_url = "http://localhost:11434/api"
-
-# Optional API key (leave empty if not needed)
-api_key = ""
+# Default provider/model
+default_provider = "ollama"
+default_model = "llama3.2"
 
 # System prompt to use for all conversations
 system_prompt = "You are a helpful assistant."
-
-# Default model to use on startup
-# Must match one of the model names defined below
-default_model = "llama3.2"
 
 # Default temperature for new conversations (0.0 - 2.0)
 default_temperature = 0.7
@@ -41,21 +34,31 @@ default_temperature = 0.7
 # Increase this if you get timeout errors with large models or long conversations
 timeout = 1200
 
-# Model definitions
-# Each model must have a name and contexts (comma-separated list of context lengths)
-# The first context value is used when starting the Ollama server
-[[models]]
-name = "llama3.2"
-contexts = "8192"
+# Provider definitions. Add as many as you need.
 
-[[models]]
-name = "llama3.1:8b"
-contexts = "8192,32768"
+# Ollama provider with contexts
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = [
+  { name = "llama3.2", contexts = "8192" },
+  { name = "phi3",     contexts = "8192,32768" }
+]
 
-[[models]]
-name = "gemma2"
-contexts = "4096"
+# OpenAI-compatible provider (OpenAI)
+[[providers]]
+id = "openai"
+type = "openai-compatible"
+api_url = "https://api.openai.com"
+api_key = "sk-..."
+models = "gpt-4o,gpt-4o-mini"
+# headers = { OpenAI-Organization = "org_id" }
 
-[[models]]
-name = "qwen2.5:7b"
-contexts = "8192"
+# OpenAI-compatible provider (DeepSeek)
+[[providers]]
+id = "deepseek"
+type = "openai-compatible"
+api_url = "https://api.deepseek.com"
+api_key = "sk-..."
+models = "deepseek-chat,deepseek-reasoner"

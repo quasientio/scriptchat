@@ -14,7 +14,7 @@ class AppState:
     """Global application state."""
     config: Config
     current_conversation: Conversation
-    client: OllamaChatClient
+    client: object
     conversations_root: Path
 
 
@@ -48,10 +48,11 @@ def create_new_conversation(state: AppState) -> Conversation:
 
     return Conversation(
         id=None,
+        provider_id=state.current_conversation.provider_id if state.current_conversation else state.config.default_provider,
         model_name=state.current_conversation.model_name,
         temperature=state.current_conversation.temperature,
         messages=messages,
-        system_prompt=state.config.system_prompt,
+        system_prompt=state.current_conversation.system_prompt or state.config.system_prompt,
         tokens_in=0,
         tokens_out=0
     )
@@ -154,6 +155,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='prompt'
         )
 
+    elif command == 'provider':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='provider'
+        )
+
     elif command == 'run':
         if len(parts) < 2 or not parts[1].strip():
             return CommandResult(message="Usage: /run <path>")
@@ -210,7 +217,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /echo, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /provider, /model, /temp, /clear, /file, /echo, /exit"
         )
 
 
@@ -225,7 +232,7 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
         CommandResult with execution result
     """
     try:
-        model_cfg = state.config.get_model(model_name)
+        state.config.get_model(state.current_conversation.provider_id, model_name)
         state.current_conversation.model_name = model_name
         # Reset token counters when changing model
         state.current_conversation.tokens_in = 0

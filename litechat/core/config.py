@@ -13,7 +13,20 @@ import toml
 class ModelConfig:
     """Configuration for a single model."""
     name: str
-    contexts: list[int]
+    contexts: list[int] = None  # Optional; used for Ollama/ctx-length
+
+
+@dataclass
+class ProviderConfig:
+    """Configuration for a model provider."""
+    id: str
+    type: str  # e.g., "ollama", "openai-compatible"
+    api_url: str
+    api_key: str = ""
+    models: list[ModelConfig] = None
+    streaming: bool = True
+    headers: dict = None
+    default_model: Optional[str] = None
 
 
 @dataclass
@@ -25,17 +38,26 @@ class Config:
     exports_dir: Optional[Path]
     enable_streaming: bool
     system_prompt: Optional[str]
+    default_provider: str
     default_model: str
     default_temperature: float
     timeout: int  # API request timeout in seconds
     log_level: str  # Logging level: DEBUG, INFO, WARNING, ERROR
     log_file: Optional[Path]  # Path to log file (None = stderr)
-    models: list[ModelConfig]
+    providers: list[ProviderConfig]
 
-    def get_model(self, name: str) -> ModelConfig:
-        """Get model configuration by name.
+    def get_provider(self, provider_id: str) -> ProviderConfig:
+        """Get provider configuration by id."""
+        for p in self.providers:
+            if p.id == provider_id:
+                return p
+        raise ValueError(f"Provider '{provider_id}' not found in configuration")
+
+    def get_model(self, provider_id: str, name: str) -> ModelConfig:
+        """Get model configuration by provider and name.
 
         Args:
+            provider_id: Provider id
             name: Model name to look up
 
         Returns:
@@ -44,10 +66,17 @@ class Config:
         Raises:
             ValueError: If model is not found
         """
-        for model in self.models:
-            if model.name == name:
-                return model
-        raise ValueError(f"Model '{name}' not found in configuration")
+        provider = self.get_provider(provider_id)
+        if provider.models:
+            for model in provider.models:
+                if model.name == name:
+                    return model
+        # If models not specified, allow dynamic model names
+        return ModelConfig(name=name, contexts=None)
+
+    def list_models(self, provider_id: str) -> list[ModelConfig]:
+        provider = self.get_provider(provider_id)
+        return provider.models or []
 
 
 def _setup_logging(config: Config) -> None:
@@ -114,28 +143,9 @@ def load_config() -> Config:
     general_section = data.get('general', {})
     ollama_section = data.get('ollama', {})
 
-    # Parse models
-    models_data = data.get('models', [])
-    if not models_data:
-        raise ValueError("No models configured in config.toml")
-
-    models = []
-    for model_data in models_data:
-        name = model_data.get('name')
-        if not name:
-            raise ValueError("Model missing 'name' field")
-
-        contexts_str = model_data.get('contexts', '')
-        if not contexts_str:
-            raise ValueError(f"Model '{name}' missing 'contexts' field")
-
-        # Parse comma-separated context lengths
-        try:
-            contexts = [int(c.strip()) for c in contexts_str.split(',')]
-        except ValueError:
-            raise ValueError(f"Invalid contexts format for model '{name}': {contexts_str}")
-
-        models.append(ModelConfig(name=name, contexts=contexts))
+    # Parse providers
+    providers_config = data.get('providers', [])
+    models_data_legacy = data.get('models', [])
 
     # Get general configuration values
     log_level = general_section.get('log_level', 'INFO').upper()
@@ -162,21 +172,118 @@ def load_config() -> Config:
 
     enable_streaming = bool(general_section.get('enable_streaming', False))
 
-    system_prompt = ollama_section.get('system_prompt')
-    default_model = ollama_section.get('default_model')
-    default_temperature = ollama_section.get('default_temperature', 0.7)
-    timeout = ollama_section.get('timeout', 1200)  # Default: 20 minutes
+    system_prompt = general_section.get('system_prompt', ollama_section.get('system_prompt'))
+    default_model = general_section.get('default_model') or ollama_section.get('default_model')
+    default_temperature = general_section.get('default_temperature', ollama_section.get('default_temperature', 0.7))
+    timeout = general_section.get('timeout', ollama_section.get('timeout', 1200))  # Default: 20 minutes
 
-    # Validate default_model
+    default_provider = general_section.get('default_provider', 'ollama')
+
+    providers: list[ProviderConfig] = []
+
+    def parse_models_field(value) -> list[ModelConfig]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            names = [n.strip() for n in value.split(',') if n.strip()]
+            return [ModelConfig(name=n, contexts=None) for n in names]
+        if isinstance(value, list):
+            result = []
+            for entry in value:
+                if isinstance(entry, dict):
+                    name = entry.get('name')
+                    if not name:
+                        continue
+                    contexts_val = entry.get('contexts')
+                    contexts = None
+                    if contexts_val:
+                        try:
+                            contexts = [int(c.strip()) for c in str(contexts_val).split(',')]
+                        except Exception:
+                            contexts = None
+                    result.append(ModelConfig(name=name, contexts=contexts))
+                elif isinstance(entry, str):
+                    result.append(ModelConfig(name=entry.strip(), contexts=None))
+            return result
+        return []
+
+    if providers_config:
+        for entry in providers_config:
+            pid = entry.get('id')
+            ptype = entry.get('type')
+            api_url = entry.get('api_url')
+            if not pid or not ptype or not api_url:
+                raise ValueError("Each provider must have id, type, and api_url")
+            models = parse_models_field(entry.get('models'))
+            providers.append(ProviderConfig(
+                id=pid,
+                type=ptype,
+                api_url=api_url,
+                api_key=entry.get('api_key', ''),
+                models=models,
+                streaming=entry.get('streaming', True),
+                headers=entry.get('headers', {}),
+                default_model=entry.get('default_model')
+            ))
+    else:
+        # Legacy config: build a single ollama provider from [ollama] and [[models]]
+        legacy_models = []
+        for model_data in models_data_legacy:
+            name = model_data.get('name')
+            if not name:
+                raise ValueError("Model missing 'name' field")
+
+            contexts_str = model_data.get('contexts', '')
+            if not contexts_str:
+                raise ValueError(f"Model '{name}' missing 'contexts' field")
+
+            try:
+                contexts = [int(c.strip()) for c in contexts_str.split(',')]
+            except ValueError:
+                raise ValueError(f"Invalid contexts format for model '{name}': {contexts_str}")
+
+            legacy_models.append(ModelConfig(name=name, contexts=contexts))
+
+        providers.append(ProviderConfig(
+            id='ollama',
+            type='ollama',
+            api_url=api_url,
+            api_key=api_key,
+            models=legacy_models,
+            streaming=True,
+            headers={},
+            default_model=default_model
+        ))
+        default_provider = 'ollama'
+
+    # Validate default provider exists
+    provider_ids = [p.id for p in providers]
+    if default_provider not in provider_ids:
+        raise ValueError(f"default_provider '{default_provider}' not found in providers {provider_ids}")
+
+    # If default_model not set, try provider default or first model
     if not default_model:
-        raise ValueError("'default_model' must be specified in [ollama] section")
+        try:
+            default_provider_obj = next(p for p in providers if p.id == default_provider)
+        except StopIteration:
+            default_provider_obj = None
+        if default_provider_obj:
+            if default_provider_obj.default_model:
+                default_model = default_provider_obj.default_model
+            elif default_provider_obj.models:
+                default_model = default_provider_obj.models[0].name
 
-    # Check that default_model exists in models
-    model_names = [m.name for m in models]
-    if default_model not in model_names:
-        raise ValueError(
-            f"default_model '{default_model}' not found in configured models: {model_names}"
-        )
+    # Validate default model exists in default provider if available
+    try:
+        default_provider_obj = next(p for p in providers if p.id == default_provider)
+    except StopIteration:
+        default_provider_obj = None
+    if default_provider_obj and default_model:
+        model_names = [m.name for m in default_provider_obj.models or []]
+        if model_names and default_model not in model_names:
+            raise ValueError(
+                f"default_model '{default_model}' not found in provider '{default_provider}'. Options: {model_names}"
+            )
 
     config = Config(
         api_url=api_url,
@@ -185,12 +292,13 @@ def load_config() -> Config:
         exports_dir=exports_dir,
         enable_streaming=enable_streaming,
         system_prompt=system_prompt,
+        default_provider=default_provider,
         default_model=default_model,
         default_temperature=default_temperature,
         timeout=timeout,
         log_level=log_level,
         log_file=log_file,
-        models=models
+        providers=providers
     )
 
     # Configure logging based on settings

@@ -113,7 +113,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/clear', '/file', '/echo', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/provider', '/model', '/temp', '/clear', '/file', '/echo', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -391,7 +391,7 @@ class LiteChatUI:
             context_display = f" | {convo.context_length_used}/{convo.context_length_configured} ({percentage:.1f}%)"
 
         text = (
-            f"{convo.model_name} | "
+            f"{convo.provider_id}/{convo.model_name} | "
             f"{convo.tokens_in} in / {convo.tokens_out} out{context_display} | "
             f"{conv_id}{thinking_indicator}"
         )
@@ -542,6 +542,8 @@ class LiteChatUI:
                 self._handle_temp(args)
             elif result.command_type == 'clear':
                 self._handle_clear(args)
+            elif result.command_type == 'provider':
+                self._handle_provider(args)
 
     def _handle_model(self, args: str = ""):
         """Handle /model command.
@@ -556,9 +558,14 @@ class LiteChatUI:
 
         # Display model list
         lines = ["Available models:"]
-        for i, model in enumerate(self.state.config.models):
-            contexts_str = ', '.join(str(c) for c in model.contexts)
-            lines.append(f"  [{i}] {model.name} (contexts: {contexts_str})")
+        models = self.state.config.list_models(self.state.current_conversation.provider_id)
+        if not models:
+            lines.append("  (no models listed for this provider; enter a model name manually)")
+        else:
+            for i, model in enumerate(models):
+                contexts_str = ', '.join(str(c) for c in model.contexts) if model.contexts else ''
+                ctx_display = f" (contexts: {contexts_str})" if contexts_str else ""
+                lines.append(f"  [{i}] {model.name}{ctx_display}")
 
         self._add_system_message('\n'.join(lines))
         self.prompt_message = "Enter model index:"
@@ -574,8 +581,9 @@ class LiteChatUI:
         """
         try:
             index = int(index_str)
-            if 0 <= index < len(self.state.config.models):
-                model_name = self.state.config.models[index].name
+            models = self.state.config.list_models(self.state.current_conversation.provider_id)
+            if 0 <= index < len(models):
+                model_name = models[index].name
                 result = set_model(self.state, model_name)
                 self._add_system_message(result.message)
             else:
@@ -583,12 +591,73 @@ class LiteChatUI:
         except ValueError:
             # Try model name
             model_name = index_str.strip()
-            model_names = [m.name for m in self.state.config.models]
+            model_names = [m.name for m in self.state.config.list_models(self.state.current_conversation.provider_id)]
             if model_name in model_names:
                 result = set_model(self.state, model_name)
                 self._add_system_message(result.message)
             else:
                 self._add_system_message("Invalid input. Enter model index or exact model name.")
+
+    def _handle_provider(self, args: str = ""):
+        """Handle /provider command (switch provider)."""
+        providers = self.state.config.providers
+        if args.strip():
+            arg = args.strip()
+            # Try index
+            try:
+                idx = int(arg)
+                if 0 <= idx < len(providers):
+                    provider = providers[idx]
+                    self._switch_provider(provider)
+                    return
+                else:
+                    self._add_system_message("Invalid provider index.")
+                    return
+            except ValueError:
+                # Try id match
+                for p in providers:
+                    if p.id == arg:
+                        self._switch_provider(p)
+                        return
+                self._add_system_message("Invalid provider. Use /provider to list.")
+                return
+
+        # List providers
+        lines = ["Available providers:"]
+        for i, p in enumerate(providers):
+            line = f"  [{i}] {p.id} ({p.type})"
+            if p.default_model:
+                line += f" default_model={p.default_model}"
+            lines.append(line)
+        self._add_system_message('\n'.join(lines))
+        self.prompt_message = "Enter provider index:"
+        self._prompt_for_input(self._provider_callback)
+
+    def _provider_callback(self, index_str: str):
+        try:
+            idx = int(index_str)
+            providers = self.state.config.providers
+            if 0 <= idx < len(providers):
+                self._switch_provider(providers[idx])
+            else:
+                self._add_system_message("Invalid provider index.")
+        except ValueError:
+            self._add_system_message("Invalid input. Enter provider index.")
+
+    def _switch_provider(self, provider):
+        """Switch current conversation to a new provider."""
+        self.state.current_conversation.provider_id = provider.id
+        # Choose model: provider.default_model or keep current if exists, else first model
+        new_model = provider.default_model or self.state.current_conversation.model_name
+        provider_models = [m.name for m in (provider.models or [])]
+        if provider_models:
+            if new_model not in provider_models:
+                new_model = provider_models[0]
+        self.state.current_conversation.model_name = new_model
+        # Reset token counts
+        self.state.current_conversation.tokens_in = 0
+        self.state.current_conversation.tokens_out = 0
+        self._add_system_message(f"Switched to provider: {provider.id} model: {new_model}")
 
     def _handle_save(self, save_name: str = ""):
         """Handle /save command.
@@ -1151,11 +1220,9 @@ class LiteChatUI:
     def _cleanup(self):
         """Cleanup resources on exit."""
         try:
-            print("\nUnloading model...")
-            self.state.client.unload_model()
-
-            print("Stopping Ollama server...")
-            self.state.client.server_manager.stop()
+            print("\nCleaning up providers...")
+            if hasattr(self.state.client, "cleanup"):
+                self.state.client.cleanup()
             print("Cleanup complete.")
         except Exception as e:
             print(f"Error during cleanup: {e}")

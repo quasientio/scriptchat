@@ -8,6 +8,8 @@ from pathlib import Path
 from .core.config import load_config
 from .core.conversations import Conversation, Message, save_conversation
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
+from .core.openai_client import OpenAIChatClient
+from .core.provider_dispatcher import ProviderDispatcher
 from .core.commands import AppState, handle_command, set_model, set_temperature
 from .ui.app import run_ui
 
@@ -311,10 +313,24 @@ def main():
             else:
                 print(f"Logging to stderr (level: {config.log_level})")
 
-        # Initialize server manager and client
-        logger.debug("Initializing Ollama server manager and client")
-        server_manager = OllamaServerManager(config.api_url)
-        client = OllamaChatClient(config, server_manager)
+        # Initialize provider clients
+        provider_clients = {}
+        for p in config.providers:
+            if p.type == "ollama":
+                logger.debug("Initializing Ollama provider '%s'", p.id)
+                server_manager = OllamaServerManager(p.api_url)
+                provider_clients[p.id] = OllamaChatClient(config, server_manager, base_url=p.api_url)
+            elif p.type == "openai-compatible":
+                logger.debug("Initializing OpenAI-compatible provider '%s'", p.id)
+                provider_clients[p.id] = OpenAIChatClient(config, p, timeout=config.timeout)
+            else:
+                logger.warning("Provider type '%s' not supported yet (id=%s)", p.type, p.id)
+
+        dispatcher = ProviderDispatcher(provider_clients)
+
+        if config.default_provider not in provider_clients:
+            available = ", ".join(provider_clients.keys())
+            raise ValueError(f"Default provider '{config.default_provider}' not configured. Available: {available}")
 
         # Create initial conversation
         messages = []
@@ -324,9 +340,22 @@ def main():
                 content=config.system_prompt
             ))
 
+        # Pick initial model: config.default_model, provider.default_model, or first provider model
+        initial_model = config.default_model
+        try:
+            default_provider_obj = config.get_provider(config.default_provider)
+            if not initial_model:
+                if default_provider_obj.default_model:
+                    initial_model = default_provider_obj.default_model
+                elif default_provider_obj.models:
+                    initial_model = default_provider_obj.models[0].name
+        except ValueError:
+            pass
+
         initial_conversation = Conversation(
             id=None,
-            model_name=config.default_model,
+            provider_id=config.default_provider,
+            model_name=initial_model,
             temperature=config.default_temperature,
             messages=messages,
             system_prompt=config.system_prompt,
@@ -338,7 +367,7 @@ def main():
         state = AppState(
             config=config,
             current_conversation=initial_conversation,
-            client=client,
+            client=dispatcher,
             conversations_root=config.conversations_dir
         )
 

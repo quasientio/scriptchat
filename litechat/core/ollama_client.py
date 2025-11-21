@@ -117,16 +117,18 @@ class OllamaServerManager:
 class OllamaChatClient:
     """Client for communicating with the Ollama chat API."""
 
-    def __init__(self, config: Config, server_manager: OllamaServerManager):
+    def __init__(self, config: Config, server_manager: OllamaServerManager, base_url: Optional[str] = None):
         """Initialize the chat client.
 
         Args:
             config: Application configuration
             server_manager: Server manager instance
+            base_url: Optional override for API URL
         """
         self.config = config
         self.server_manager = server_manager
         self.current_model = None  # Track current model for cleanup
+        self.api_url = base_url or config.api_url
 
         # Create session with authorization header if api_key is present
         self.session = requests.Session()
@@ -155,9 +157,13 @@ class OllamaChatClient:
             ValueError: If model not found in config
             requests.RequestException: If HTTP request fails
         """
+        if convo.provider_id != 'ollama':
+            raise ValueError(f"Provider '{convo.provider_id}' not supported by Ollama client")
         # Look up model configuration
-        model_cfg = self.config.get_model(convo.model_name)
-        context_length = model_cfg.contexts[0]
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        context_length = model_cfg.contexts[0] if model_cfg.contexts else None
+        if context_length is None:
+            context_length = 8192  # fallback if not provided
 
         # Track current model for cleanup
         self.current_model = convo.model_name
@@ -193,7 +199,7 @@ class OllamaChatClient:
         }
 
         # Send POST request
-        url = f"{self.config.api_url.rstrip('/')}/chat"
+        url = f"{self.api_url.rstrip('/')}/chat"
 
         logger.debug(f"Sending chat request to {url} with model={convo.model_name}, "
                      f"temperature={convo.temperature}, num_ctx={context_length}")

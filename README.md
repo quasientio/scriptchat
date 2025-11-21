@@ -50,14 +50,41 @@ Edit `~/.lite-chat/config.toml` to configure lite-chat. See `config.toml.example
 
 Key configuration options:
 
-- `api_url`: Ollama API endpoint (default: http://localhost:11434/api)
-- `default_model`: Model to use on startup
+- `default_provider`: Provider id to use on startup (see `[[providers]]`)
+- `default_model`: Model to use on startup (for the default provider)
 - `default_temperature`: Temperature for new conversations (0.0-2.0)
 - `system_prompt`: System prompt for all conversations (override per conversation with `/prompt`)
 - `conversations_dir`: Where to store conversations (set in `[general]`)
 - `exports_dir`: Where to write exports (defaults to current working directory if not set)
 - `enable_streaming`: Enable token streaming (default: false)
-- `[[models]]`: List of available models with context lengths (comma-separated in `contexts`; the first value is used to start the server)
+- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama` or `openai-compatible` for now), `api_url`, optional `api_key`, `models` (comma-separated), optional `default_model`, and optional `streaming`/`headers`.
+
+Example providers:
+```toml
+[general]
+default_provider = "ollama"
+default_model = "llama3"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3,phi3"
+
+[[providers]]
+id = "openai"
+type = "openai-compatible"
+api_url = "https://api.openai.com"
+api_key = "sk-..."
+models = "gpt-4o,gpt-4o-mini"
+
+[[providers]]
+id = "deepseek"
+type = "openai-compatible"
+api_url = "https://api.deepseek.com"
+api_key = "sk-..."
+models = "deepseek-chat,deepseek-coder"
+```
 
 ## Usage
 
@@ -81,8 +108,9 @@ All commands start with `/`:
 - `/export [format]` - Export the current conversation (formats: `md`; prompts if omitted)
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
+- `/provider [id|index]` - Switch provider (lists if omitted)
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
-- `/model` - Switch to a different model
+- `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)

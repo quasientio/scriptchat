@@ -20,6 +20,7 @@ class Message:
 class Conversation:
     """A conversation with an LLM."""
     id: Optional[str]  # Directory name, or None if unsaved
+    provider_id: str
     model_name: str
     temperature: float
     system_prompt: Optional[str] = None
@@ -172,6 +173,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         with open(meta_path, 'r') as f:
             meta = json.load(f)
         model_name = meta.get('model', 'unknown')
+        provider_id = meta.get('provider_id', 'ollama')
         temperature = meta.get('temperature', 0.7)
         context_length_configured = meta.get('context_length_configured', None)
         context_length_used = meta.get('context_length_used', None)
@@ -184,6 +186,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         else:
             model_name = 'unknown'
         temperature = 0.7
+        provider_id = 'ollama'
         context_length_configured = None
         context_length_used = None
         system_prompt = None
@@ -222,6 +225,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
 
     return Conversation(
         id=dir_name,
+        provider_id=provider_id,
         model_name=model_name,
         temperature=temperature,
         system_prompt=system_prompt,
@@ -272,6 +276,7 @@ def save_conversation(
     # Write meta.json
     meta = {
         'model': convo.model_name,
+        'provider_id': convo.provider_id,
         'temperature': convo.temperature,
         'created_at': datetime.now().isoformat()
     }
@@ -367,6 +372,7 @@ def branch_conversation(
     # Create new conversation object
     new_convo = Conversation(
         id=new_dir_name,
+        provider_id=convo.provider_id,
         model_name=convo.model_name,
         temperature=convo.temperature,
         messages=convo.messages.copy(),
