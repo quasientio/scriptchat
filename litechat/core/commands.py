@@ -133,6 +133,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='export'
         )
 
+    elif command == 'stream':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='stream'
+        )
+
     elif command == 'temp':
         return CommandResult(
             needs_ui_interaction=True,
@@ -176,7 +182,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /export, /model, /temp, /clear, /file, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /export, /stream, /model, /temp, /clear, /file, /exit"
         )
 
 

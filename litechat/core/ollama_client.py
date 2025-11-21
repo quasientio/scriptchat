@@ -1,5 +1,6 @@
 """Ollama API client and server management for lite-chat."""
 
+import json
 import logging
 import os
 import subprocess
@@ -132,12 +133,20 @@ class OllamaChatClient:
         if config.api_key:
             self.session.headers['Authorization'] = f'Bearer {config.api_key}'
 
-    def chat(self, convo: Conversation, new_user_message: str) -> str:
+    def chat(
+        self,
+        convo: Conversation,
+        new_user_message: str,
+        streaming: bool = False,
+        on_chunk=None
+    ) -> str:
         """Send a chat message and get response from Ollama.
 
         Args:
             convo: Current conversation
             new_user_message: New message from user
+            streaming: Whether to stream the response
+            on_chunk: Optional callback accepting partial text (called for streaming)
 
         Returns:
             Assistant's response text
@@ -187,10 +196,18 @@ class OllamaChatClient:
         logger.debug(f"Sending chat request to {url} with model={convo.model_name}, "
                      f"temperature={convo.temperature}, num_ctx={context_length}")
 
+        if streaming:
+            payload['stream'] = True
+            return self._chat_stream(url, payload, convo, context_length, on_chunk)
+        else:
+            return self._chat_single(url, payload, convo, context_length)
+
+    def _chat_single(self, url, payload, convo, context_length):
+        """Handle non-streaming chat."""
         try:
             response = self.session.post(url, json=payload, timeout=self.config.timeout)
             response.raise_for_status()
-            logger.debug(f"Received successful response from Ollama API")
+            logger.debug("Received successful response from Ollama API")
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Connection error to Ollama API at {url}: {e}")
             raise ConnectionError(
@@ -205,31 +222,8 @@ class OllamaChatClient:
                 "You can increase the timeout in your config.toml file."
             )
         except requests.exceptions.HTTPError as e:
-            # Log the full error details including response body
-            error_details = {
-                'status_code': response.status_code,
-                'reason': response.reason,
-                'url': url,
-                'request_payload': payload
-            }
-            try:
-                error_details['response_body'] = response.text
-                response_json = response.json()
-                error_details['response_json'] = response_json
-            except Exception:
-                error_details['response_body'] = response.text if hasattr(response, 'text') else 'Unable to read response'
+            self._raise_http_error(e, response, url, payload)
 
-            logger.error(f"HTTP error from Ollama API: {e}")
-            logger.error(f"Error details: {error_details}")
-
-            # Include response body in error message if available
-            error_msg = f"Ollama API returned an error: {e}"
-            if 'response_body' in error_details and error_details['response_body']:
-                error_msg += f"\nResponse: {error_details['response_body']}"
-
-            raise RuntimeError(error_msg)
-
-        # Parse response
         data = response.json()
 
         assistant_content = data.get('message', {}).get('content', '')
@@ -254,6 +248,91 @@ class OllamaChatClient:
         convo.messages.append(Message(role='assistant', content=assistant_content))
 
         return assistant_content
+
+    def _chat_stream(self, url, payload, convo, context_length, on_chunk):
+        """Handle streaming chat responses."""
+        try:
+            response = self.session.post(url, json=payload, timeout=self.config.timeout, stream=True)
+            response.raise_for_status()
+            logger.debug("Streaming response initiated from Ollama API")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error to Ollama API at {url}: {e}")
+            raise ConnectionError(
+                f"Failed to connect to Ollama API at {url}. "
+                "Ensure Ollama is running and accessible."
+            )
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout error after {self.config.timeout} seconds: {e}")
+            raise TimeoutError(
+                f"Request to Ollama API timed out after {self.config.timeout} seconds. "
+                "The model may be taking too long to respond. "
+                "You can increase the timeout in your config.toml file."
+            )
+        except requests.exceptions.HTTPError as e:
+            self._raise_http_error(e, response, url, payload)
+
+        assistant_msg = Message(role='assistant', content="")
+        convo.messages.append(assistant_msg)
+
+        total_tokens_in = 0
+        total_tokens_out = 0
+
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                logger.debug(f"Skipping non-JSON line from stream: {line}")
+                continue
+
+            content = data.get('message', {}).get('content', '')
+            if content:
+                assistant_msg.content += content
+                if on_chunk:
+                    try:
+                        on_chunk(assistant_msg.content)
+                    except Exception:
+                        logger.debug("on_chunk callback raised but streaming will continue")
+
+            if data.get('done'):
+                total_tokens_in = data.get('prompt_eval_count', total_tokens_in)
+                total_tokens_out = data.get('eval_count', total_tokens_out)
+                break
+
+        convo.tokens_in += total_tokens_in
+        convo.tokens_out += total_tokens_out
+        convo.context_length_configured = context_length
+        convo.context_length_used = convo.tokens_in
+
+        logger.info(f"Streaming response complete: tokens_in={total_tokens_in}, tokens_out={total_tokens_out}, "
+                    f"response_length={len(assistant_msg.content)} chars")
+
+        return assistant_msg.content
+
+    def _raise_http_error(self, exc, response, url, payload):
+        """Raise enriched HTTP error for Ollama responses."""
+        error_details = {
+            'status_code': response.status_code,
+            'reason': response.reason,
+            'url': url,
+            'request_payload': payload
+        }
+        try:
+            error_details['response_body'] = response.text
+            response_json = response.json()
+            error_details['response_json'] = response_json
+        except Exception:
+            error_details['response_body'] = response.text if hasattr(response, 'text') else 'Unable to read response'
+
+        logger.error(f"HTTP error from Ollama API: {exc}")
+        logger.error(f"Error details: {error_details}")
+
+        error_msg = f"Ollama API returned an error: {exc}"
+        if 'response_body' in error_details and error_details['response_body']:
+            error_msg += f"\nResponse: {error_details['response_body']}"
+
+        raise RuntimeError(error_msg)
 
     def unload_model(self) -> None:
         """Unload the current model from Ollama to free memory."""

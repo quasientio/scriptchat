@@ -65,7 +65,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/export', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/export', '/stream', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -423,9 +423,18 @@ class LiteChatUI:
 
             try:
                 # Send to LLM (this will add the assistant response)
+                streaming = bool(self.state.config.enable_streaming)
+
+                def on_chunk(_):
+                    # Update display as content streams in
+                    self._update_conversation_display()
+                    self.app.invalidate()
+
                 response = self.state.client.chat(
                     self.state.current_conversation,
-                    message
+                    message,
+                    streaming=streaming,
+                    on_chunk=on_chunk if streaming else None
                 )
 
                 # Calculate duration
@@ -499,6 +508,8 @@ class LiteChatUI:
                 self._handle_chats()
             elif result.command_type == 'export':
                 self._handle_export(args)
+            elif result.command_type == 'stream':
+                self._handle_stream(args)
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
@@ -713,6 +724,21 @@ class LiteChatUI:
             self._add_system_message(f"Exported to: {path}")
         except Exception as e:
             self._add_system_message(f"Error exporting: {str(e)}")
+
+    def _handle_stream(self, args: str = ""):
+        """Handle /stream command (toggle or set on/off)."""
+        arg = args.strip().lower()
+        if arg in ('on', 'off'):
+            self.state.config.enable_streaming = (arg == 'on')
+        elif not arg:
+            # Toggle when no arg
+            self.state.config.enable_streaming = not self.state.config.enable_streaming
+        else:
+            self._add_system_message("Usage: /stream [on|off]")
+            return
+
+        status = "enabled" if self.state.config.enable_streaming else "disabled"
+        self._add_system_message(f"Streaming {status}.")
 
     def _handle_rename(self, args: str = ""):
         """Handle /rename command."""

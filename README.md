@@ -56,6 +56,7 @@ Key configuration options:
 - `system_prompt`: System prompt for all conversations
 - `conversations_dir`: Where to store conversations (set in `[general]`)
 - `exports_dir`: Where to write exports (defaults to current working directory if not set)
+- `enable_streaming`: Enable token streaming (default: false)
 - `[[models]]`: List of available models with context lengths (comma-separated in `contexts`; the first value is used to start the server)
 
 ## Usage
@@ -77,6 +78,7 @@ All commands start with `/`:
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats` - List saved conversations
 - `/export [format]` - Export the current conversation (formats: `md`; prompts if omitted)
+- `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message

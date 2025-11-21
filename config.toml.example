@@ -17,6 +17,9 @@ conversations_dir = "~/.lite-chat/conversations"
 # Directory for exports (optional). If not set, exports go to the current working directory.
 # exports_dir = "~/.lite-chat/exports"
 
+# Enable streaming responses (default: false)
+# enable_streaming = true
+
 [ollama]
 # Base URL for the Ollama API
 api_url = "http://localhost:11434/api"

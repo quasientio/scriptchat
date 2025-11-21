@@ -23,6 +23,7 @@ class Config:
     api_key: str
     conversations_dir: Path
     exports_dir: Optional[Path]
+    enable_streaming: bool
     system_prompt: Optional[str]
     default_model: str
     default_temperature: float
@@ -159,6 +160,8 @@ def load_config() -> Config:
     # Ensure conversations directory exists
     conversations_dir.mkdir(parents=True, exist_ok=True)
 
+    enable_streaming = bool(general_section.get('enable_streaming', False))
+
     system_prompt = ollama_section.get('system_prompt')
     default_model = ollama_section.get('default_model')
     default_temperature = ollama_section.get('default_temperature', 0.7)
@@ -180,6 +183,7 @@ def load_config() -> Config:
         api_key=api_key,
         conversations_dir=conversations_dir,
         exports_dir=exports_dir,
+        enable_streaming=enable_streaming,
         system_prompt=system_prompt,
         default_model=default_model,
         default_temperature=default_temperature,
