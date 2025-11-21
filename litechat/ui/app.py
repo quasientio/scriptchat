@@ -113,7 +113,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/clear', '/file', '/echo', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -419,6 +419,7 @@ class LiteChatUI:
         GRAY = '\033[90m'
         CYAN = '\033[96m'
         GREEN = '\033[92m'
+        YELLOW = '\033[93m'
         RESET = '\033[0m'
 
         for msg in self.state.current_conversation.messages:
@@ -431,6 +432,9 @@ class LiteChatUI:
             elif msg.role == 'assistant':
                 # Assistant messages in green
                 lines.append(f"{GREEN}[assistant]{RESET} {msg.content}")
+            elif msg.role == 'echo':
+                # Echo messages in yellow, no prefix
+                lines.append(f"{YELLOW}{msg.content}{RESET}")
 
         return '\n'.join(lines)
 
@@ -481,6 +485,21 @@ class LiteChatUI:
         parts = command_line[1:].split(maxsplit=1)
         cmd = parts[0].lower() if parts else ""
         args = parts[1] if len(parts) > 1 else ""
+
+        # Handle /echo specially - display without adding to conversation
+        if cmd == 'echo':
+            message = args if args else ""
+            # Display echo message directly in conversation pane
+            if message:
+                # Temporarily add to display, but mark it somehow
+                from ..core.conversations import Message
+                # Add as a special message that won't be sent to LLM
+                # We'll use a marker to identify echo messages
+                self.state.current_conversation.messages.append(
+                    Message(role='echo', content=message)
+                )
+                self._update_conversation_display()
+            return
 
         result = handle_command(command_line, self.state)
 

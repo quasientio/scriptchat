@@ -202,10 +202,15 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         except Exception as e:
             return CommandResult(message=f"Error reading file: {str(e)}")
 
+    elif command == 'echo':
+        # Echo command - print message without sending to LLM
+        message = parts[1] if len(parts) > 1 else ""
+        return CommandResult(message=message)
+
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /echo, /exit"
         )
 
 

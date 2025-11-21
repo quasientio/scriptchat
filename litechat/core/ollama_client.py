@@ -166,12 +166,14 @@ class OllamaChatClient:
         self.server_manager.ensure_running(context_length)
 
         # Build messages array from conversation
+        # Filter out 'echo' messages - they're display-only
         messages = []
         for msg in convo.messages:
-            messages.append({
-                'role': msg.role,
-                'content': msg.content
-            })
+            if msg.role != 'echo':
+                messages.append({
+                    'role': msg.role,
+                    'content': msg.content
+                })
 
         # Add new user message
         messages.append({
