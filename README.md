@@ -81,6 +81,7 @@ All commands start with `/`:
 - `/export [format]` - Export the current conversation (formats: `md`; prompts if omitted)
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
+- `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message

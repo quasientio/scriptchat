@@ -1,6 +1,7 @@
 """Terminal UI for lite-chat using prompt_toolkit."""
 
 import threading
+from pathlib import Path
 from typing import Optional
 
 from prompt_toolkit import Application
@@ -66,10 +67,12 @@ class LiteChatUI:
         self.input_history: list[str] = []
         self.input_history_index: Optional[int] = None
         self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
+        self.script_queue: list[str] = []  # Pending script lines to execute
+        self.running_script: bool = False
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -473,6 +476,8 @@ class LiteChatUI:
                 self._handle_stream(args)
             elif result.command_type == 'prompt':
                 self._handle_prompt(args)
+            elif result.command_type == 'run':
+                self._handle_run(args)
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
@@ -505,7 +510,7 @@ class LiteChatUI:
         """Callback for model input.
 
         Args:
-            index_str: User input (model index)
+            index_str: User input (model index or name)
         """
         try:
             index = int(index_str)
@@ -516,7 +521,14 @@ class LiteChatUI:
             else:
                 self._add_system_message("Invalid model index")
         except ValueError:
-            self._add_system_message("Invalid input. Please enter a number.")
+            # Try model name
+            model_name = index_str.strip()
+            model_names = [m.name for m in self.state.config.models]
+            if model_name in model_names:
+                result = set_model(self.state, model_name)
+                self._add_system_message(result.message)
+            else:
+                self._add_system_message("Invalid input. Enter model index or exact model name.")
 
     def _handle_save(self, save_name: str = ""):
         """Handle /save command.
@@ -658,6 +670,31 @@ class LiteChatUI:
             return
         self._handle_user_message(msg)
 
+    def _handle_run(self, args: str):
+        """Handle /run command to execute scripted commands/messages from a file."""
+        path = args.strip()
+        if not path:
+            self._add_system_message("Usage: /run <path>")
+            return
+
+        try:
+            with open(Path(path).expanduser(), 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            self._add_system_message(f"File not found: {path}")
+            return
+        except Exception as e:
+            self._add_system_message(f"Error reading {path}: {e}")
+            return
+
+        script_lines = self._parse_script_lines(lines)
+        if not script_lines:
+            self._add_system_message(f"No runnable lines in {path} (comments/empty only).")
+            return
+
+        self._add_system_message(f"Running script: {path} ({len(script_lines)} lines)")
+        self._run_script_queue(script_lines)
+
     def _send_message_now(self, message: str):
         """Send a user message immediately (assumes LLM is free)."""
         from ..core.conversations import Message
@@ -730,6 +767,8 @@ class LiteChatUI:
         if self.thinking:
             return
         if not self.message_queue:
+            # If no messages pending, try to advance any running script
+            self._process_script_queue()
             return
         next_message = self.message_queue.pop(0)
         self._send_message_now(next_message)
@@ -893,6 +932,8 @@ class LiteChatUI:
             # Create new conversation
             from ..core.commands import create_new_conversation
             self.state.current_conversation = create_new_conversation(self.state)
+            self.message_queue.clear()
+            self.script_queue.clear()
             self._update_conversation_display()
             self._add_system_message("Conversation cleared")
         else:
@@ -965,6 +1006,51 @@ class LiteChatUI:
             self.state.current_conversation.messages.insert(0, Message(role='system', content=prompt))
 
         self._update_conversation_display()
+
+    def _parse_script_lines(self, lines: list[str]) -> list[str]:
+        """Parse script lines, stripping comments/empties."""
+        parsed = []
+        for raw in lines:
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            parsed.append(line)
+        return parsed
+
+    def _run_script_queue(self, lines: list[str]):
+        """Initialize and start running a script queue."""
+        self.script_queue = list(lines)
+        self.running_script = True
+        self._process_script_queue()
+
+    def _process_script_queue(self):
+        """Process pending script lines if idle and no queued messages."""
+        if self.thinking or self.message_queue:
+            return
+        if not self.script_queue:
+            if self.running_script:
+                self.running_script = False
+                self._add_system_message("Script completed.")
+            return
+
+        # Consume as many immediate lines as possible without blocking
+        while not self.thinking and not self.message_queue and self.script_queue:
+            line = self.script_queue.pop(0)
+            self._execute_script_line(line)
+            if self.thinking or self.message_queue:
+                break
+
+        # If done and nothing pending, announce completion
+        if not self.thinking and not self.message_queue and not self.script_queue and self.running_script:
+            self.running_script = False
+            self._add_system_message("Script completed.")
+
+    def _execute_script_line(self, line: str):
+        """Execute a single script line as command or message."""
+        if line.startswith('/'):
+            self._handle_command(line)
+        else:
+            self._handle_user_message(line)
 
     def _cleanup(self):
         """Cleanup resources on exit."""
