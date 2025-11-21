@@ -193,9 +193,29 @@ def handle_batch_command(line: str, state: AppState, line_num: int) -> tuple[boo
             print(args)
         return True, None
 
+    elif command == 'sleep':
+        # Sleep for specified seconds
+        if not args:
+            print(f"[{line_num}] Error: /sleep requires duration in seconds")
+            return True, None
+
+        try:
+            import time
+            seconds = float(args)
+            if seconds < 0:
+                print(f"[{line_num}] Error: Sleep duration must be positive")
+                return True, None
+
+            print(f"[{line_num}] Sleeping for {seconds} seconds...")
+            time.sleep(seconds)
+            print(f"[{line_num}] Sleep complete")
+        except ValueError:
+            print(f"[{line_num}] Error: Invalid sleep duration: {args}")
+        return True, None
+
     else:
         print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-        print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /stream, /prompt, /save, /send, /file, /export, /echo")
+        print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /stream, /prompt, /save, /send, /file, /export, /echo, /sleep")
         return True, None
 
 
