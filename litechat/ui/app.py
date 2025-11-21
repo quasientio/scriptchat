@@ -592,7 +592,7 @@ class LiteChatUI:
             # Try model name
             model_name = index_str.strip()
             model_names = [m.name for m in self.state.config.list_models(self.state.current_conversation.provider_id)]
-            if model_name in model_names:
+            if model_name in model_names or model_name:
                 result = set_model(self.state, model_name)
                 self._add_system_message(result.message)
             else:
@@ -876,6 +876,7 @@ class LiteChatUI:
                 self._add_system_message(duration_msg)
                 self.app.invalidate()
             except Exception as e:
+                logger.exception("Chat error")
                 self.thinking = False
                 self._add_system_message(f"Error: {str(e)}")
                 self.app.invalidate()
@@ -1083,6 +1084,7 @@ class LiteChatUI:
                     target_id
                 )
             except Exception as e:
+                logger.exception("Error deleting conversation")
                 self._add_system_message(f"Error deleting: {str(e)}")
                 self.pending_clear_index = None
                 self.pending_clear_target_id = None
