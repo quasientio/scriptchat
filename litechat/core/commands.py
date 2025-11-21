@@ -51,6 +51,7 @@ def create_new_conversation(state: AppState) -> Conversation:
         model_name=state.current_conversation.model_name,
         temperature=state.current_conversation.temperature,
         messages=messages,
+        system_prompt=state.config.system_prompt,
         tokens_in=0,
         tokens_out=0
     )
@@ -139,6 +140,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='stream'
         )
 
+    elif command == 'prompt':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='prompt'
+        )
+
     elif command == 'temp':
         return CommandResult(
             needs_ui_interaction=True,
@@ -182,7 +189,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /export, /stream, /model, /temp, /clear, /file, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /export, /stream, /prompt, /model, /temp, /clear, /file, /exit"
         )
 
 

@@ -53,7 +53,7 @@ Key configuration options:
 - `api_url`: Ollama API endpoint (default: http://localhost:11434/api)
 - `default_model`: Model to use on startup
 - `default_temperature`: Temperature for new conversations (0.0-2.0)
-- `system_prompt`: System prompt for all conversations
+- `system_prompt`: System prompt for all conversations (override per conversation with `/prompt`)
 - `conversations_dir`: Where to store conversations (set in `[general]`)
 - `exports_dir`: Where to write exports (defaults to current working directory if not set)
 - `enable_streaming`: Enable token streaming (default: false)
@@ -79,6 +79,7 @@ All commands start with `/`:
 - `/chats` - List saved conversations
 - `/export [format]` - Export the current conversation (formats: `md`; prompts if omitted)
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
+- `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message

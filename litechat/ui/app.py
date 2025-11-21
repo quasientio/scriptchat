@@ -1,6 +1,7 @@
 """Terminal UI for lite-chat using prompt_toolkit."""
 
 import threading
+from typing import Optional
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -65,7 +66,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/export', '/stream', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/export', '/stream', '/prompt', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -510,6 +511,8 @@ class LiteChatUI:
                 self._handle_export(args)
             elif result.command_type == 'stream':
                 self._handle_stream(args)
+            elif result.command_type == 'prompt':
+                self._handle_prompt(args)
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
@@ -566,7 +569,7 @@ class LiteChatUI:
             save_conversation(
                 self.state.conversations_root,
                 self.state.current_conversation,
-                system_prompt=self.state.config.system_prompt
+                system_prompt=self.state.current_conversation.system_prompt
             )
             self._add_system_message("Conversation saved")
         else:
@@ -594,7 +597,7 @@ class LiteChatUI:
                 self.state.conversations_root,
                 self.state.current_conversation,
                 save_name=save_name,
-                system_prompt=self.state.config.system_prompt
+                system_prompt=self.state.current_conversation.system_prompt
             )
             self._add_system_message(f"Conversation saved as: {self.state.current_conversation.id}")
         except Exception as e:
@@ -663,7 +666,7 @@ class LiteChatUI:
                 self.state.conversations_root,
                 self.state.current_conversation,
                 new_save_name=new_save_name,
-                system_prompt=self.state.config.system_prompt
+                system_prompt=self.state.current_conversation.system_prompt
             )
             self.state.current_conversation = new_convo
             self._add_system_message(f"Branched to: {new_convo.id}")
@@ -739,6 +742,32 @@ class LiteChatUI:
 
         status = "enabled" if self.state.config.enable_streaming else "disabled"
         self._add_system_message(f"Streaming {status}.")
+
+    def _handle_prompt(self, args: str = ""):
+        """Handle /prompt command (set/clear system prompt for this conversation)."""
+        arg = args.strip()
+
+        if arg:
+            if arg.lower() == 'clear':
+                self._set_system_prompt(None)
+                self._add_system_message("System prompt cleared for this conversation.")
+            else:
+                self._set_system_prompt(arg)
+                self._add_system_message("System prompt set for this conversation.")
+            return
+
+        self.prompt_message = "New system prompt (empty to clear):"
+        self._prompt_for_input(self._prompt_callback)
+
+    def _prompt_callback(self, prompt_text: str):
+        """Callback for system prompt input."""
+        text = prompt_text.strip()
+        if not text:
+            self._set_system_prompt(None)
+            self._add_system_message("System prompt cleared for this conversation.")
+        else:
+            self._set_system_prompt(text)
+            self._add_system_message("System prompt set for this conversation.")
 
     def _handle_rename(self, args: str = ""):
         """Handle /rename command."""
@@ -833,6 +862,19 @@ class LiteChatUI:
         """
         # Store callback - will be called when user presses Enter
         self.pending_callback = callback
+
+    def _set_system_prompt(self, prompt: Optional[str]):
+        """Set or clear the system prompt for the current conversation."""
+        # Remove existing leading system message if present
+        if self.state.current_conversation.messages and self.state.current_conversation.messages[0].role == 'system':
+            self.state.current_conversation.messages.pop(0)
+
+        self.state.current_conversation.system_prompt = prompt if prompt else None
+
+        if prompt:
+            self.state.current_conversation.messages.insert(0, Message(role='system', content=prompt))
+
+        self._update_conversation_display()
 
     def _cleanup(self):
         """Cleanup resources on exit."""

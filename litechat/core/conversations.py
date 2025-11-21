@@ -22,6 +22,7 @@ class Conversation:
     id: Optional[str]  # Directory name, or None if unsaved
     model_name: str
     temperature: float
+    system_prompt: Optional[str] = None
     messages: list[Message] = field(default_factory=list)
     tokens_in: int = 0
     tokens_out: int = 0
@@ -174,6 +175,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         temperature = meta.get('temperature', 0.7)
         context_length_configured = meta.get('context_length_configured', None)
         context_length_used = meta.get('context_length_used', None)
+        system_prompt = meta.get('system_prompt') or meta.get('system_prompt_snapshot')
     else:
         # Try to infer from directory name
         parts = dir_name.split('_', 2)
@@ -184,6 +186,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         temperature = 0.7
         context_length_configured = None
         context_length_used = None
+        system_prompt = None
 
     # Load message files
     messages = []
@@ -213,10 +216,15 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
 
         messages.append(Message(role=role, content=content))
 
+    # Prepend system prompt if present in metadata
+    if system_prompt:
+        messages.insert(0, Message(role='system', content=system_prompt))
+
     return Conversation(
         id=dir_name,
         model_name=model_name,
         temperature=temperature,
+        system_prompt=system_prompt,
         messages=messages,
         tokens_in=0,
         tokens_out=0,
@@ -267,8 +275,9 @@ def save_conversation(
         'temperature': convo.temperature,
         'created_at': datetime.now().isoformat()
     }
-    if system_prompt:
-        meta['system_prompt_snapshot'] = system_prompt
+    prompt_snapshot = system_prompt or convo.system_prompt
+    if prompt_snapshot:
+        meta['system_prompt'] = prompt_snapshot
     if convo.context_length_configured is not None:
         meta['context_length_configured'] = convo.context_length_configured
     if convo.context_length_used is not None:
@@ -361,6 +370,7 @@ def branch_conversation(
         model_name=convo.model_name,
         temperature=convo.temperature,
         messages=convo.messages.copy(),
+        system_prompt=convo.system_prompt,
         tokens_in=convo.tokens_in,
         tokens_out=convo.tokens_out
     )

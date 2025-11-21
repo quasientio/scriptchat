@@ -47,6 +47,7 @@ def main():
             model_name=config.default_model,
             temperature=config.default_temperature,
             messages=messages,
+            system_prompt=config.system_prompt,
             tokens_in=0,
             tokens_out=0
         )
