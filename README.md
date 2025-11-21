@@ -77,6 +77,7 @@ All commands start with `/`:
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats` - List saved conversations
+- `/send <message>` - Queue a message (sends immediately if the model is idle)
 - `/export [format]` - Export the current conversation (formats: `md`; prompts if omitted)
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)

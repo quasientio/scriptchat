@@ -128,6 +128,14 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='chats'
         )
 
+    elif command == 'send':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /send <message>")
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='send'
+        )
+
     elif command == 'export':
         return CommandResult(
             needs_ui_interaction=True,
@@ -189,7 +197,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /export, /stream, /prompt, /model, /temp, /clear, /file, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /model, /temp, /clear, /file, /exit"
         )
 
 

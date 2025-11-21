@@ -65,10 +65,11 @@ class LiteChatUI:
         self.thinking_dots = 0  # Animation counter for thinking indicator
         self.input_history: list[str] = []
         self.input_history_index: Optional[int] = None
+        self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/export', '/stream', '/prompt', '/model', '/temp', '/clear', '/file', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/model', '/temp', '/clear', '/file', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -420,81 +421,11 @@ class LiteChatUI:
         Args:
             message: User message text
         """
-        # Add user message to conversation immediately
-        from ..core.conversations import Message
-        self.state.current_conversation.messages.append(
-            Message(role='user', content=message)
-        )
+        if self.thinking or self.message_queue:
+            self._enqueue_message(message)
+            return
 
-        # Update display to show user message right away
-        self._update_conversation_display()
-
-        # Start thinking animation
-        self.thinking = True
-        self.thinking_dots = 0
-
-        # Animate the thinking indicator
-        def animate_thinking():
-            import time
-            while self.thinking:
-                self.thinking_dots += 1
-                self.app.invalidate()
-                time.sleep(0.5)
-
-        animation_thread = threading.Thread(target=animate_thinking, daemon=True)
-        animation_thread.start()
-
-        # Call LLM in a background thread so UI stays responsive
-        def call_llm():
-            import time
-            start_time = time.time()
-
-            try:
-                # Send to LLM (this will add the assistant response)
-                streaming = bool(self.state.config.enable_streaming)
-
-                def on_chunk(_):
-                    # Update display as content streams in
-                    self._update_conversation_display()
-                    self.app.invalidate()
-
-                response = self.state.client.chat(
-                    self.state.current_conversation,
-                    message,
-                    streaming=streaming,
-                    on_chunk=on_chunk if streaming else None
-                )
-
-                # Calculate duration
-                end_time = time.time()
-                duration_secs = int(end_time - start_time)
-                mins = duration_secs // 60
-                secs = duration_secs % 60
-
-                # Format duration message
-                if mins > 0:
-                    duration_msg = f"Thought for {mins} mins {secs} secs"
-                else:
-                    duration_msg = f"Thought for {secs} secs"
-
-                # Stop thinking animation
-                self.thinking = False
-
-                # Update display again with assistant response
-                self._update_conversation_display()
-
-                # Add timing system message
-                self._add_system_message(duration_msg)
-
-                self.app.invalidate()
-
-            except Exception as e:
-                self.thinking = False
-                self._add_system_message(f"Error: {str(e)}")
-                self.app.invalidate()
-
-        thread = threading.Thread(target=call_llm, daemon=True)
-        thread.start()
+        self._send_message_now(message)
 
     def _handle_command(self, command_line: str):
         """Handle a command.
@@ -534,6 +465,8 @@ class LiteChatUI:
                 self._handle_rename(args)
             elif result.command_type == 'chats':
                 self._handle_chats()
+            elif result.command_type == 'send':
+                self._handle_send(args)
             elif result.command_type == 'export':
                 self._handle_export(args)
             elif result.command_type == 'stream':
@@ -716,6 +649,90 @@ class LiteChatUI:
             )
 
         self._add_system_message('\n'.join(lines))
+
+    def _handle_send(self, args: str):
+        """Handle /send command - enqueue or send immediately."""
+        msg = args.strip()
+        if not msg:
+            self._add_system_message("Usage: /send <message>")
+            return
+        self._handle_user_message(msg)
+
+    def _send_message_now(self, message: str):
+        """Send a user message immediately (assumes LLM is free)."""
+        from ..core.conversations import Message
+
+        # Add user message to conversation and show it
+        self.state.current_conversation.messages.append(
+            Message(role='user', content=message)
+        )
+        self._update_conversation_display()
+
+        # Start thinking animation
+        self.thinking = True
+        self.thinking_dots = 0
+
+        def animate_thinking():
+            import time
+            while self.thinking:
+                self.thinking_dots += 1
+                self.app.invalidate()
+                time.sleep(0.5)
+
+        threading.Thread(target=animate_thinking, daemon=True).start()
+
+        def call_llm():
+            import time
+            start_time = time.time()
+
+            try:
+                streaming = bool(self.state.config.enable_streaming)
+
+                def on_chunk(_):
+                    self._update_conversation_display()
+                    self.app.invalidate()
+
+                self.state.client.chat(
+                    self.state.current_conversation,
+                    message,
+                    streaming=streaming,
+                    on_chunk=on_chunk if streaming else None
+                )
+
+                end_time = time.time()
+                duration_secs = int(end_time - start_time)
+                mins = duration_secs // 60
+                secs = duration_secs % 60
+                duration_msg = f"Thought for {mins} mins {secs} secs" if mins > 0 else f"Thought for {secs} secs"
+
+                self.thinking = False
+                self._update_conversation_display()
+                self._add_system_message(duration_msg)
+                self.app.invalidate()
+            except Exception as e:
+                self.thinking = False
+                self._add_system_message(f"Error: {str(e)}")
+                self.app.invalidate()
+            finally:
+                # Process any queued messages
+                self._process_queue()
+
+        threading.Thread(target=call_llm, daemon=True).start()
+
+    def _enqueue_message(self, message: str):
+        """Queue a user message to send later."""
+        self.message_queue.append(message)
+        position = len(self.message_queue)
+        self._add_system_message(f"Message queued (#{position}).")
+
+    def _process_queue(self):
+        """Send next queued message if available and not already thinking."""
+        if self.thinking:
+            return
+        if not self.message_queue:
+            return
+        next_message = self.message_queue.pop(0)
+        self._send_message_now(next_message)
 
     def _handle_export(self, args: str = ""):
         """Handle /export command."""
