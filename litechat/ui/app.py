@@ -102,6 +102,8 @@ class LiteChatUI:
         self.pending_callback = None  # Callback waiting for user input
         self.thinking = False  # Track if LLM is processing
         self.thinking_dots = 0  # Animation counter for thinking indicator
+        self.current_inference_thread = None  # Track current LLM thread for cancellation
+        self.cancel_requested_at = None  # Timestamp of first ESC press for double-ESC cancel
         self.input_history: list[str] = []
         self.input_history_index: Optional[int] = None
         self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
@@ -284,7 +286,25 @@ class LiteChatUI:
 
         @kb.add('escape')
         def handle_escape(event):
-            """Handle Escape to return focus to input."""
+            """Handle Escape to cancel inference or return focus to input."""
+            import time
+
+            # If LLM is thinking, handle cancellation with confirmation
+            if self.thinking:
+                current_time = time.time()
+
+                # Check if ESC was recently pressed (within 2 seconds)
+                if self.cancel_requested_at and (current_time - self.cancel_requested_at) < 2.0:
+                    # Double ESC - proceed with cancellation
+                    self.cancel_requested_at = None
+                    self._cancel_inference()
+                else:
+                    # First ESC - ask for confirmation
+                    self.cancel_requested_at = current_time
+                    self._add_system_message("⚠ Press ESC again within 2 seconds to cancel inference")
+                return
+
+            # Otherwise, return focus to input
             event.app.layout.focus(self.input_window)
 
         @kb.add('tab')
@@ -872,12 +892,14 @@ class LiteChatUI:
                 duration_msg = f"Thought for {mins} mins {secs} secs" if mins > 0 else f"Thought for {secs} secs"
 
                 self.thinking = False
+                self.cancel_requested_at = None
                 self._update_conversation_display()
                 self._add_system_message(duration_msg)
                 self.app.invalidate()
             except Exception as e:
                 logger.exception("Chat error")
                 self.thinking = False
+                self.cancel_requested_at = None
                 self._add_system_message(f"Error: {str(e)}")
                 self.app.invalidate()
             finally:
@@ -1218,6 +1240,40 @@ class LiteChatUI:
             self._handle_command(line)
         else:
             self._handle_user_message(line)
+
+    def _cancel_inference(self):
+        """Cancel the current LLM inference."""
+        if not self.thinking:
+            return
+
+        logger.info("Cancelling inference")
+
+        # Show cancelling message immediately
+        self._add_system_message("Cancelling...")
+        self.app.invalidate()
+
+        # Stop Ollama server to kill the running inference
+        # Only do this for Ollama provider
+        if self.state.current_conversation.provider_id == 'ollama':
+            try:
+                # Access Ollama client from dispatcher
+                ollama_client = self.state.client.clients.get('ollama')
+                if ollama_client and hasattr(ollama_client, 'server_manager'):
+                    ollama_client.server_manager.stop()
+                    self._add_system_message("⚠ Inference cancelled (Ollama stopped)")
+                else:
+                    self._add_system_message("⚠ Inference cancelled (soft)")
+            except Exception as e:
+                logger.error(f"Error stopping Ollama: {e}")
+                self._add_system_message(f"⚠ Error cancelling: {e}")
+        else:
+            # For non-Ollama providers, just set thinking to false
+            # The request will complete in background but we ignore it
+            self._add_system_message("⚠ Inference cancelled (request continues in background)")
+
+        self.thinking = False
+        self.cancel_requested_at = None
+        self.app.invalidate()
 
     def _cleanup(self):
         """Cleanup resources on exit."""
