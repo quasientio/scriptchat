@@ -63,6 +63,8 @@ class LiteChatUI:
         self.pending_callback = None  # Callback waiting for user input
         self.thinking = False  # Track if LLM is processing
         self.thinking_dots = 0  # Animation counter for thinking indicator
+        self.input_history: list[str] = []
+        self.input_history_index: Optional[int] = None
 
         # Create command completer
         command_completer = WordCompleter(
@@ -206,6 +208,8 @@ class LiteChatUI:
                     self.multiline_mode = False
                     self.multiline_buffer = []
                     self.input_buffer.text = ''
+                    if full_message.strip():
+                        self._append_history(full_message)
 
                     if full_message.strip():
                         self._handle_user_message(full_message)
@@ -222,10 +226,13 @@ class LiteChatUI:
                     self._add_system_message("[Multi-line mode active. Type '\"\"\"' on a new line to send]")
                 elif text.startswith('/'):
                     # Command
+                    if text:
+                        self._append_history(text)
                     self.input_buffer.text = ''
                     self._handle_command(text)
                 elif text:
                     # Regular user message
+                    self._append_history(text)
                     self.input_buffer.text = ''
                     event.app.invalidate()  # Force redraw to show cleared input
                     self._handle_user_message(text)
@@ -258,6 +265,26 @@ class LiteChatUI:
             buff = event.current_buffer
             if buff.complete_state:
                 buff.complete_previous()
+
+        @kb.add('up')
+        def handle_up(event):
+            """Recall previous history entry when in input."""
+            buff = event.current_buffer
+            if buff == self.input_buffer and not self.multiline_mode and not self.pending_callback:
+                if buff.complete_state:
+                    buff.complete_previous()
+                else:
+                    self._history_previous()
+
+        @kb.add('down')
+        def handle_down(event):
+            """Recall next history entry when in input."""
+            buff = event.current_buffer
+            if buff == self.input_buffer and not self.multiline_mode and not self.pending_callback:
+                if buff.complete_state:
+                    buff.complete_next()
+                else:
+                    self._history_next()
 
         @kb.add('c-up')
         def handle_ctrl_up(event):
@@ -862,6 +889,52 @@ class LiteChatUI:
         """
         # Store callback - will be called when user presses Enter
         self.pending_callback = callback
+
+    def _append_history(self, entry: str):
+        """Append a line to the input history."""
+        entry = entry.strip()
+        if not entry:
+            return
+
+        self.input_history.append(entry)
+        self.input_history_index = None
+
+    def _history_previous(self):
+        """Move to previous history item."""
+        if not self.input_history:
+            return
+
+        if self.input_history_index is None:
+            self.input_history_index = len(self.input_history) - 1
+        else:
+            self.input_history_index = max(0, self.input_history_index - 1)
+
+        self._apply_history_at_index()
+
+    def _history_next(self):
+        """Move to next history item."""
+        if not self.input_history:
+            return
+
+        if self.input_history_index is None:
+            return
+
+        if self.input_history_index >= len(self.input_history) - 1:
+            # Past the newest entry -> clear
+            self.input_history_index = None
+            self.input_buffer.text = ''
+            self.input_buffer.cursor_position = 0
+        else:
+            self.input_history_index += 1
+            self._apply_history_at_index()
+
+    def _apply_history_at_index(self):
+        """Apply the current history index to the input buffer."""
+        if self.input_history_index is None:
+            return
+        entry = self.input_history[self.input_history_index]
+        # Replace buffer content with history entry and move cursor to end
+        self.input_buffer.set_document(Document(text=entry, cursor_position=len(entry)))
 
     def _set_system_prompt(self, prompt: Optional[str]):
         """Set or clear the system prompt for the current conversation."""
