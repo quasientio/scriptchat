@@ -85,7 +85,7 @@ All commands start with `/`:
 - `/model` - Switch to a different model
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message
-- `/clear` - Clear and delete the current conversation
+- `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
 - `/exit` - Exit lite-chat
 
 ### Multi-line Messages

@@ -1,6 +1,7 @@
 """Terminal UI for lite-chat using prompt_toolkit."""
 
 import threading
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,43 @@ from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
     branch_conversation, delete_conversation, Conversation, Message
 )
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_clear_target_from_args(
+    args: str,
+    conversations_root: Path,
+    current_conversation_id: Optional[str]
+) -> tuple[Optional[str], Optional[str], Optional[str], list, bool]:
+    """Resolve target id and prompt for /clear.
+
+    Returns (target_id, prompt_message, error_message, summaries_used, target_is_current).
+    """
+    arg = args.strip()
+    summaries_used = list_conversations(conversations_root)
+
+    if arg:
+        try:
+            idx = int(arg)
+            if idx < 0:
+                raise ValueError
+            if idx >= len(summaries_used):
+                return None, None, "Invalid conversation index.", summaries_used, False
+
+            target_id = summaries_used[idx].dir_name
+            prompt = f"Clear and delete conversation #{idx} ({summaries_used[idx].display_name})? (y/N):"
+            target_is_current = (current_conversation_id is not None and target_id == current_conversation_id)
+            return target_id, prompt, None, summaries_used, target_is_current
+        except ValueError:
+            return None, None, "Usage: /clear [index]", summaries_used, False
+
+    # No arg: clear current
+    target_id = current_conversation_id
+    target_label = target_id or "current (unsaved) conversation"
+    prompt = f"Clear and delete {target_label}? (y/N):"
+    target_is_current = True
+    return target_id, prompt, None, summaries_used, target_is_current
 
 
 class AnsiLexer(Lexer):
@@ -69,6 +107,9 @@ class LiteChatUI:
         self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
         self.script_queue: list[str] = []  # Pending script lines to execute
         self.running_script: bool = False
+        self.pending_clear_index: Optional[int] = None
+        self.pending_clear_target_id: Optional[str] = None
+        self.pending_clear_is_current: bool = False
 
         # Create command completer
         command_completer = WordCompleter(
@@ -481,7 +522,7 @@ class LiteChatUI:
             elif result.command_type == 'temp':
                 self._handle_temp(args)
             elif result.command_type == 'clear':
-                self._handle_clear()
+                self._handle_clear(args)
 
     def _handle_model(self, args: str = ""):
         """Handle /model command.
@@ -907,9 +948,30 @@ class LiteChatUI:
         except ValueError:
             self._add_system_message("Invalid temperature. Please enter a number.")
 
-    def _handle_clear(self):
+    def _handle_clear(self, args: str = ""):
         """Handle /clear command."""
-        self.prompt_message = "Clear and delete this conversation? (y/N):"
+        self.pending_clear_index = None
+        self.pending_clear_target_id = None
+        self.pending_clear_is_current = False
+
+        target_id, prompt, err, summaries, is_current = resolve_clear_target_from_args(
+            args,
+            self.state.conversations_root,
+            self.state.current_conversation.id
+        )
+        if err:
+            self._add_system_message(err)
+            return
+
+        if args.strip():
+            try:
+                self.pending_clear_index = int(args.strip())
+            except ValueError:
+                self.pending_clear_index = None
+        self.pending_clear_target_id = target_id
+        self.pending_clear_is_current = is_current
+        self.prompt_message = prompt
+
         self._prompt_for_input(self._clear_callback)
 
     def _clear_callback(self, confirm: str):
@@ -918,18 +980,29 @@ class LiteChatUI:
         Args:
             confirm: User input (y/N)
         """
-        if confirm.lower() == 'y':
-            # Delete directory if it exists
-            if self.state.current_conversation.id:
-                try:
-                    delete_conversation(
-                        self.state.conversations_root,
-                        self.state.current_conversation.id
-                    )
-                except Exception as e:
-                    self._add_system_message(f"Error deleting: {str(e)}")
+        if confirm.lower() != 'y':
+            self._add_system_message("Clear cancelled")
+            self.pending_clear_index = None
+            self.pending_clear_target_id = None
+            self.pending_clear_is_current = False
+            return
 
-            # Create new conversation
+        target_id = self.pending_clear_target_id
+        if target_id:
+            try:
+                delete_conversation(
+                    self.state.conversations_root,
+                    target_id
+                )
+            except Exception as e:
+                self._add_system_message(f"Error deleting: {str(e)}")
+                self.pending_clear_index = None
+                self.pending_clear_target_id = None
+                return
+
+        # Reset current conversation only if we cleared it (or if it's unsaved/no id)
+        cleared_current = self.pending_clear_is_current
+        if cleared_current:
             from ..core.commands import create_new_conversation
             self.state.current_conversation = create_new_conversation(self.state)
             self.message_queue.clear()
@@ -937,7 +1010,11 @@ class LiteChatUI:
             self._update_conversation_display()
             self._add_system_message("Conversation cleared")
         else:
-            self._add_system_message("Clear cancelled")
+            self._add_system_message(f"Conversation deleted: {target_id}")
+
+        self.pending_clear_index = None
+        self.pending_clear_target_id = None
+        self.pending_clear_is_current = False
 
     def _prompt_for_input(self, callback):
         """Prompt for user input and call callback with result.
