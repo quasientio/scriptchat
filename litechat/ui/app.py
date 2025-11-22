@@ -49,7 +49,7 @@ def resolve_clear_target_from_args(
                 return None, None, "Invalid conversation index.", summaries_used, False
 
             target_id = summaries_used[idx].dir_name
-            prompt = f"Clear and delete conversation #{idx} ({summaries_used[idx].display_name})? (y/N):"
+            prompt = f"Clear and delete conversation #{idx} ({summaries_used[idx].display_name})? (y/N)"
             target_is_current = (current_conversation_id is not None and target_id == current_conversation_id)
             return target_id, prompt, None, summaries_used, target_is_current
         except ValueError:
@@ -58,7 +58,7 @@ def resolve_clear_target_from_args(
     # No arg: clear current
     target_id = current_conversation_id
     target_label = target_id or "current (unsaved) conversation"
-    prompt = f"Clear and delete {target_label}? (y/N):"
+    prompt = f"Clear and delete {target_label}? (y/N)"
     target_is_current = True
     return target_id, prompt, None, summaries_used, target_is_current
 
@@ -100,6 +100,7 @@ class LiteChatUI:
         self.multiline_buffer = []
         self.prompt_message = ""  # Current prompt message for user input
         self.pending_callback = None  # Callback waiting for user input
+        self.expecting_single_key = False
         self.thinking = False  # Track if LLM is processing
         self.thinking_dots = 0  # Animation counter for thinking indicator
         self.current_inference_thread = None  # Track current LLM thread for cancellation
@@ -170,12 +171,6 @@ class LiteChatUI:
             height=1
         )
 
-        # Prompt line (shown when asking for input)
-        prompt_line_window = Window(
-            content=FormattedTextControl(text=self._get_prompt_line),
-            height=lambda: 1 if self.prompt_message else 0
-        )
-
         # Separator line between status and input
         separator_window = Window(
             char='─',
@@ -184,8 +179,8 @@ class LiteChatUI:
 
         # Input pane (bottom) - with prompt prefix
         prompt_window = Window(
-            content=FormattedTextControl(text='> '),
-            width=2,
+            content=FormattedTextControl(text=self._get_prompt_prefix),
+            width=lambda: len(self._get_prompt_prefix()),
             dont_extend_width=True
         )
 
@@ -204,7 +199,6 @@ class LiteChatUI:
             self.conversation_window,
             status_window,
             separator_window,
-            prompt_line_window,
             input_container
         ])
 
@@ -243,6 +237,7 @@ class LiteChatUI:
                 self.input_buffer.text = ''
                 self.prompt_message = ""
                 callback = self.pending_callback
+                self.expecting_single_key = False
                 self.pending_callback = None
                 callback(text)
                 return
@@ -330,6 +325,19 @@ class LiteChatUI:
             buff = event.current_buffer
             if buff.complete_state:
                 buff.complete_previous()
+
+        @kb.add('y', filter=Condition(lambda: self.pending_callback is not None and self.expecting_single_key))
+        @kb.add('n', filter=Condition(lambda: self.pending_callback is not None and self.expecting_single_key))
+        def handle_yes_no(event):
+            """Handle single-key confirmations when expected."""
+            key = event.key_sequence[0].key
+            self.input_buffer.text = ''
+            self.prompt_message = ""
+            callback = self.pending_callback
+            self.pending_callback = None
+            self.expecting_single_key = False
+            callback(key)
+            return
 
         @kb.add('up')
         def handle_up(event):
@@ -419,13 +427,9 @@ class LiteChatUI:
         # Return with reverse video (inverted colors)
         return [('reverse', text)]
 
-    def _get_prompt_line(self) -> str:
-        """Get prompt line text.
-
-        Returns:
-            Current prompt message or empty string
-        """
-        return self.prompt_message
+    def _get_prompt_prefix(self) -> str:
+        """Get prompt prefix text."""
+        return (self.prompt_message + " ") if self.prompt_message else "> "
 
     def _build_conversation_text(self) -> str:
         """Build conversation text with ANSI color codes.
@@ -1083,7 +1087,7 @@ class LiteChatUI:
         self.pending_clear_is_current = is_current
         self.prompt_message = prompt
 
-        self._prompt_for_input(self._clear_callback)
+        self._prompt_for_input(self._clear_callback, expect_single_key=True)
 
     def _clear_callback(self, confirm: str):
         """Callback for clear confirmation.
@@ -1128,14 +1132,16 @@ class LiteChatUI:
         self.pending_clear_target_id = None
         self.pending_clear_is_current = False
 
-    def _prompt_for_input(self, callback):
+    def _prompt_for_input(self, callback, expect_single_key: bool = False):
         """Prompt for user input and call callback with result.
 
         Args:
             callback: Function to call with user input
+            expect_single_key: If True, accept a single keypress without Enter
         """
         # Store callback - will be called when user presses Enter
         self.pending_callback = callback
+        self.expecting_single_key = expect_single_key
 
     def _append_history(self, entry: str):
         """Append a line to the input history."""
