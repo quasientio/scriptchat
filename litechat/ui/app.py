@@ -113,6 +113,7 @@ class LiteChatUI:
         self.pending_clear_index: Optional[int] = None
         self.pending_clear_target_id: Optional[str] = None
         self.pending_clear_is_current: bool = False
+        self.last_model_options: list[tuple[str, str]] = []
 
         # Create command completer
         command_completer = WordCompleter(
@@ -573,26 +574,39 @@ class LiteChatUI:
         """Handle /model command.
 
         Args:
-            args: Optional arguments (model index)
+            args: Optional arguments (model index or provider/model)
         """
         # If index provided as argument, use it directly
         if args.strip():
             self._model_callback(args.strip())
             return
 
-        # Display model list
-        lines = ["Available models:"]
-        models = self.state.config.list_models(self.state.current_conversation.provider_id)
-        if not models:
-            lines.append("  (no models listed for this provider; enter a model name manually)")
-        else:
-            for i, model in enumerate(models):
-                contexts_str = ', '.join(str(c) for c in model.contexts) if model.contexts else ''
-                ctx_display = f" (contexts: {contexts_str})" if contexts_str else ""
-                lines.append(f"  [{i}] {model.name}{ctx_display}")
+        # Build combined model list across providers
+        options = []
+        lines = ["Available models (all providers):"]
+        idx = 0
+        for provider in self.state.config.providers:
+            names = [m.name for m in (provider.models or [])]
+            if not names and provider.default_model:
+                names = [provider.default_model]
+            for name in names:
+                ctx_display = ""
+                models = provider.models or []
+                for m in models:
+                    if m.name == name and m.contexts:
+                        ctx_display = f" (contexts: {', '.join(str(c) for c in m.contexts)})"
+                        break
+                lines.append(f"  [{idx}] {provider.id}/{name}{ctx_display}")
+                options.append((provider.id, name))
+                idx += 1
+
+        if not options:
+            lines.append("  (no models listed; enter provider/model manually)")
+
+        self.last_model_options = options
 
         self._add_system_message('\n'.join(lines))
-        self.prompt_message = "Enter model index:"
+        self.prompt_message = "Enter model index or provider/model:"
 
         # Get user input
         self._prompt_for_input(self._model_callback)
@@ -603,24 +617,40 @@ class LiteChatUI:
         Args:
             index_str: User input (model index or name)
         """
+        # Try index
         try:
             index = int(index_str)
-            models = self.state.config.list_models(self.state.current_conversation.provider_id)
-            if 0 <= index < len(models):
-                model_name = models[index].name
-                result = set_model(self.state, model_name)
-                self._add_system_message(result.message)
-            else:
-                self._add_system_message("Invalid model index")
+            if 0 <= index < len(self.last_model_options):
+                provider_id, model_name = self.last_model_options[index]
+                self._apply_model_selection(provider_id, model_name)
+                return
         except ValueError:
-            # Try model name
-            model_name = index_str.strip()
-            model_names = [m.name for m in self.state.config.list_models(self.state.current_conversation.provider_id)]
-            if model_name in model_names or model_name:
-                result = set_model(self.state, model_name)
-                self._add_system_message(result.message)
-            else:
-                self._add_system_message("Invalid input. Enter model index or exact model name.")
+            pass
+
+        # Try provider/model
+        if '/' in index_str:
+            provider_id, model_name = index_str.split('/', 1)
+            provider_id = provider_id.strip()
+            model_name = model_name.strip()
+            self._apply_model_selection(provider_id, model_name)
+            return
+
+        # Fallback: model name on current provider
+        model_name = index_str.strip()
+        if model_name:
+            self._apply_model_selection(self.state.current_conversation.provider_id, model_name)
+        else:
+            self._add_system_message("Invalid input. Enter model index or provider/model.")
+
+    def _apply_model_selection(self, provider_id: str, model_name: str):
+        """Apply a model selection, switching provider if needed."""
+        try:
+            # Switch provider and set model
+            self.state.current_conversation.provider_id = provider_id
+            result = set_model(self.state, model_name)
+            self._add_system_message(f"{result.message} (provider: {provider_id})")
+        except Exception as e:
+            self._add_system_message(str(e))
 
     def _handle_provider(self, args: str = ""):
         """Handle /provider command (switch provider)."""
