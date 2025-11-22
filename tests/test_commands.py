@@ -1,0 +1,118 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature
+from litechat.core.config import Config, ModelConfig, ProviderConfig
+from litechat.core.conversations import Conversation
+
+
+def make_config(tmp_path: Path, system_prompt: str | None = "system says"):
+    provider = ProviderConfig(
+        id="ollama",
+        type="ollama",
+        api_url="http://localhost:11434/api",
+        api_key="",
+        models=[ModelConfig(name="llama3", contexts=[2048])],
+        streaming=True,
+        headers={},
+        default_model="llama3",
+    )
+    return Config(
+        api_url="http://localhost:11434/api",
+        api_key="",
+        conversations_dir=tmp_path,
+        exports_dir=None,
+        enable_streaming=False,
+        system_prompt=system_prompt,
+        default_provider="ollama",
+        default_model="llama3",
+        default_temperature=0.7,
+        timeout=30,
+        log_level="INFO",
+        log_file=None,
+        providers=[provider],
+    )
+
+
+def make_state(tmpdir: Path, system_prompt: str | None = "system says"):
+    cfg = make_config(tmpdir, system_prompt=system_prompt)
+    convo = Conversation(
+        id="existing",
+        provider_id="ollama",
+        model_name="llama3",
+        temperature=0.5,
+        system_prompt=system_prompt,
+        messages=[],
+        tokens_in=3,
+        tokens_out=4,
+    )
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmpdir)
+
+
+class CommandTests(unittest.TestCase):
+    def test_handle_new_injects_system_prompt(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/new", state)
+            self.assertIsInstance(result, CommandResult)
+            self.assertEqual(result.message, "Started new conversation")
+            self.assertIsNone(state.current_conversation.id)
+            self.assertEqual(state.current_conversation.provider_id, "ollama")
+            self.assertEqual([m.role for m in state.current_conversation.messages], ["system"])
+
+    def test_handle_exit_sets_flag(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/exit", state)
+            self.assertTrue(result.should_exit)
+            self.assertIn("Exiting", result.message)
+
+    def test_file_command_reads_content(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            file_path = Path(tmpdir) / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            result = handle_command(f"/file {file_path}", state)
+            self.assertEqual(result.file_content, "hello")
+            self.assertIn("Loaded file", result.message)
+
+    def test_set_model_resets_token_counters_and_validates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.tokens_in = 10
+            state.current_conversation.tokens_out = 5
+
+            ok = set_model(state, "llama3")
+            self.assertEqual(ok.message, "Switched to model: llama3")
+            self.assertEqual(state.current_conversation.tokens_in, 0)
+            self.assertEqual(state.current_conversation.tokens_out, 0)
+
+            missing = set_model(state, "unknown")
+            self.assertEqual(missing.message, "Switched to model: unknown")
+            self.assertEqual(state.current_conversation.model_name, "unknown")
+
+    def test_set_temperature_clamps_range(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            high = set_temperature(state, 3.5)
+            self.assertEqual(state.current_conversation.temperature, 2.0)
+            self.assertIn("2.00", high.message)
+
+            low = set_temperature(state, -1)
+            self.assertEqual(state.current_conversation.temperature, 0.0)
+            self.assertIn("0.00", low.message)
+
+    def test_unknown_and_send_usage_messages(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            unknown = handle_command("/doesnotexist", state)
+            self.assertIn("Unknown command", unknown.message)
+
+            send_usage = handle_command("/send", state)
+            self.assertIn("Usage: /send", send_usage.message)
+
+
+if __name__ == "__main__":
+    unittest.main()

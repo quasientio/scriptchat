@@ -41,6 +41,26 @@ models = "llama3.1,phi3"
             models = cfg.list_models("ollama")
             self.assertTrue(any(m.name == "llama3.1" for m in models))
 
+    def test_missing_default_provider_raises(self):
+        toml_text = """
+[general]
+default_provider = "missing"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            text = toml_text.format(conv=conv_dir.as_posix())
+            write_config(text, Path(tmpdir))
+            with self.assertRaises(ValueError):
+                load_config()
+
 
 if __name__ == "__main__":
     unittest.main()

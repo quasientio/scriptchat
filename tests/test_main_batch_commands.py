@@ -1,0 +1,92 @@
+import io
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+
+from litechat.__main__ import handle_batch_command
+from litechat.core.commands import AppState
+from litechat.core.config import Config, ModelConfig, ProviderConfig
+from litechat.core.conversations import Conversation
+
+
+def make_state(tmp_path: Path):
+    provider = ProviderConfig(
+        id="ollama",
+        type="ollama",
+        api_url="http://localhost:11434/api",
+        api_key="",
+        models=[ModelConfig(name="llama3", contexts=[512])],
+        streaming=True,
+        headers={},
+        default_model="llama3",
+    )
+    cfg = Config(
+        api_url="http://localhost:11434/api",
+        api_key="",
+        conversations_dir=tmp_path,
+        exports_dir=tmp_path,
+        enable_streaming=False,
+        system_prompt=None,
+        default_provider="ollama",
+        default_model="llama3",
+        default_temperature=0.7,
+        timeout=5,
+        log_level="INFO",
+        log_file=None,
+        providers=[provider],
+    )
+    # compatibility for /model index lookup
+    cfg.models = provider.models
+    convo = Conversation(
+        id=None,
+        provider_id="ollama",
+        model_name="llama3",
+        temperature=0.7,
+        messages=[],
+        tokens_in=0,
+        tokens_out=0,
+    )
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path)
+
+
+class MainBatchCommandBranches(unittest.TestCase):
+    def test_invalid_temp_stream_and_export(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            handle_batch_command("/temp not-a-number", state, 1)
+            handle_batch_command("/stream maybe", state, 2)
+            handle_batch_command("/export txt", state, 3)
+            output = buf.getvalue()
+        self.assertIn("Invalid temperature", output)
+        self.assertIn("expects 'on' or 'off'", output)
+        self.assertIn("requires 'md'", output)
+
+    def test_prompt_and_sleep_branches(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            handle_batch_command("/prompt", state, 1)
+            handle_batch_command("/sleep -1", state, 2)
+            output = buf.getvalue()
+        self.assertIn("requires an argument", output)
+        self.assertIn("must be positive", output)
+
+    def test_file_permission_and_invalid_command(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            protected = Path(tmpdir) / "protected.txt"
+            protected.write_text("content", encoding="utf-8")
+            try:
+                protected.chmod(0o000)
+                handle_batch_command(f"/file {protected}", state, 1)
+            finally:
+                # Restore permissions so tmpdir cleanup succeeds
+                protected.chmod(0o600)
+            handle_batch_command("/unknowncmd", state, 2)
+            output = buf.getvalue()
+        self.assertIn("Permission denied", output)
+        self.assertIn("not supported", output)
+
+
+if __name__ == "__main__":
+    unittest.main()
