@@ -61,6 +61,43 @@ models = "llama3"
             with self.assertRaises(ValueError):
                 load_config()
 
+    def test_invalid_provider_entry_and_legacy_model_contexts(self):
+        # Missing required provider fields
+        toml_text = """
+[general]
+default_provider = "ollama"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            write_config(toml_text.format(conv=conv_dir.as_posix()), Path(tmpdir))
+            with self.assertRaises(ValueError):
+                load_config()
+
+        # Legacy models missing contexts should raise
+        legacy_text = """
+[general]
+default_provider = "ollama"
+conversations_dir = "{conv}"
+
+[ollama]
+api_url = "http://localhost:11434/api"
+
+[[models]]
+name = "llama3"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            write_config(legacy_text.format(conv=conv_dir.as_posix()), Path(tmpdir))
+            with self.assertRaises(ValueError):
+                load_config()
+
 
 if __name__ == "__main__":
     unittest.main()

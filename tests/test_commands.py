@@ -4,7 +4,7 @@ from pathlib import Path
 
 from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature
 from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation
+from litechat.core.conversations import Conversation, Message
 
 
 def make_config(tmp_path: Path, system_prompt: str | None = "system says"):
@@ -112,6 +112,38 @@ class CommandTests(unittest.TestCase):
 
             send_usage = handle_command("/send", state)
             self.assertIn("Usage: /send", send_usage.message)
+
+    def test_assert_command_pass_fail(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.messages.append(Message(role="assistant", content="The capital is Paris"))
+
+            ok = handle_command("/assert Paris", state)
+            self.assertTrue(ok.assert_passed)
+            self.assertIn("PASSED", ok.message)
+
+            fail = handle_command("/assert London", state)
+            self.assertFalse(fail.assert_passed)
+            self.assertIn("FAILED", fail.message)
+
+            not_found = handle_command("/assert-not london", state)
+            self.assertTrue(not_found.assert_passed)
+
+            not_fail = handle_command("/assert-not paris", state)
+            self.assertFalse(not_fail.assert_passed)
+
+    def test_assert_without_assistant_and_non_commands(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            missing = handle_command("/assert anything", state)
+            self.assertFalse(missing.assert_passed)
+            self.assertIn("No assistant response", missing.message)
+
+            not_command = handle_command("hello", state)
+            self.assertIn("Commands must start with /", not_command.message)
+
+            empty = handle_command("/", state)
+            self.assertIn("Empty command", empty.message)
 
 
 if __name__ == "__main__":

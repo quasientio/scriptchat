@@ -93,6 +93,11 @@ Run lite-chat:
 ```bash
 python -m litechat
 ```
+In batch mode you can allow assertions to log but keep running using `--continue-on-error` (exit code will still be 1 if any assertion fails):
+
+```bash
+python -m litechat --run tests/demo.txt --continue-on-error
+```
 
 ### Commands
 
@@ -114,6 +119,8 @@ All commands start with `/`:
 - `/temp` - Change the temperature setting
 - `/file <path>` - Send the contents of a text file as your message
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
+- `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
+- `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat
 
 ### Multi-line Messages

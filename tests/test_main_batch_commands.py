@@ -57,10 +57,12 @@ class MainBatchCommandBranches(unittest.TestCase):
             handle_batch_command("/temp not-a-number", state, 1)
             handle_batch_command("/stream maybe", state, 2)
             handle_batch_command("/export txt", state, 3)
+            handle_batch_command("/assert-not", state, 4)
             output = buf.getvalue()
         self.assertIn("Invalid temperature", output)
         self.assertIn("expects 'on' or 'off'", output)
         self.assertIn("requires 'md'", output)
+        self.assertIn("requires a pattern", output)
 
     def test_prompt_and_sleep_branches(self):
         with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):

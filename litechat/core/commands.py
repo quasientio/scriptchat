@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+import re
 
 from .config import Config
 from .conversations import Conversation, Message
@@ -26,6 +27,7 @@ class CommandResult:
     needs_ui_interaction: bool = False
     command_type: Optional[str] = None  # For complex commands that need UI handling
     file_content: Optional[str] = None  # For /file command - content to send as user message
+    assert_passed: Optional[bool] = None  # For /assert results
 
 
 def create_new_conversation(state: AppState) -> Conversation:
@@ -56,6 +58,33 @@ def create_new_conversation(state: AppState) -> Conversation:
         tokens_in=0,
         tokens_out=0
     )
+
+
+def assert_last_response(convo: Conversation, pattern: str, negate: bool = False) -> tuple[bool, str]:
+    """Check whether the last assistant message matches (or does not match) the pattern."""
+    last_assistant = None
+    for msg in reversed(convo.messages):
+        if msg.role == 'assistant':
+            last_assistant = msg.content
+            break
+
+    if last_assistant is None:
+        return False, "No assistant response available to assert against."
+
+    try:
+        matched = re.search(pattern, last_assistant, flags=re.IGNORECASE) is not None
+    except re.error:
+        # Fallback to simple substring if regex is invalid
+        matched = pattern.lower() in last_assistant.lower()
+
+    if negate:
+        if matched:
+            return False, f"Assertion FAILED: pattern '{pattern}' should NOT appear in last response."
+        return True, f"Assertion PASSED: pattern '{pattern}' not found."
+    else:
+        if matched:
+            return True, f"Assertion PASSED: found pattern '{pattern}'."
+        return False, f"Assertion FAILED: pattern '{pattern}' not found in last response."
 
 
 def handle_command(line: str, state: AppState) -> CommandResult:
@@ -208,10 +237,22 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         message = parts[1] if len(parts) > 1 else ""
         return CommandResult(message=message)
 
+    elif command == 'assert':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /assert <pattern>")
+        passed, msg = assert_last_response(state.current_conversation, parts[1].strip())
+        return CommandResult(message=msg, assert_passed=passed)
+
+    elif command == 'assert-not':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /assert-not <pattern>")
+        passed, msg = assert_last_response(state.current_conversation, parts[1].strip(), negate=True)
+        return CommandResult(message=msg, assert_passed=passed)
+
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /echo, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /echo, /assert, /assert-not, /exit"
         )
 
 

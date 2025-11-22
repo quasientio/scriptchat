@@ -28,7 +28,7 @@ class OllamaServerManager:
         self.current_process: Optional[subprocess.Popen] = None
         self.current_context_length: Optional[int] = None
 
-    def ensure_running(self, context_length: int) -> None:
+    def ensure_running(self, context_length: int) -> None:  # pragma: no cover - spawns external server
         """Ensure Ollama server is running with the specified context length.
 
         If the server is already running with a different context length,
@@ -79,7 +79,7 @@ class OllamaServerManager:
                 "ollama executable not found. Please ensure Ollama is installed and in your PATH."
             )
 
-    def stop(self) -> None:
+    def stop(self) -> None:  # pragma: no cover - stops external server
         """Stop the managed Ollama server process gracefully."""
         if self.current_process is None:
             return

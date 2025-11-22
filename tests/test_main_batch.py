@@ -75,8 +75,9 @@ class MainBatchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
             state = make_state(Path(tmpdir))
             # stream toggle
-            should_continue, msg = handle_batch_command("/stream on", state, 1)
+            should_continue, msg, exit_code = handle_batch_command("/stream on", state, 1)
             self.assertTrue(should_continue)
+            self.assertIsNone(exit_code)
             self.assertTrue(state.config.enable_streaming)
             # prompt set
             handle_batch_command("/prompt hello", state, 2)
@@ -89,7 +90,7 @@ class MainBatchTests(unittest.TestCase):
             handle_batch_command("/model 0", state, 4)
             self.assertEqual(state.current_conversation.model_name, "llama3")
             # send returns message
-            cont, send_msg = handle_batch_command("/send hi", state, 5)
+            cont, send_msg, _ = handle_batch_command("/send hi", state, 5)
             self.assertTrue(cont)
             self.assertEqual(send_msg, "hi")
             # unsupported
@@ -117,6 +118,38 @@ class MainBatchTests(unittest.TestCase):
             self.assertIn("[User]: hello", output)
             self.assertIn("[Assistant]: ACK", output)
             self.assertEqual(state.client.calls, ["hello", "hi"])
+
+    def test_run_batch_assert_pass_fail(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            script = root / "assert.txt"
+            script.write_text("Q\n/assert fail\n", encoding="utf-8")
+            state = make_state(root)
+            state.client = FakeClient()
+            with io.StringIO() as buf, redirect_stdout(buf):
+                code = run_batch(str(script), state)
+                out = buf.getvalue()
+            self.assertEqual(code, 1)
+            self.assertIn("FAILED", out)
+
+            # Passing assertion
+            script.write_text("Q\n/assert ACK\n/assert-not nope\n", encoding="utf-8")
+            with io.StringIO() as buf, redirect_stdout(buf):
+                code = run_batch(str(script), state)
+            self.assertEqual(code, 0)
+
+    def test_run_batch_continue_on_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            script = root / "assert.txt"
+            script.write_text("hi\n/assert nope\n/assert-not ACK\n/exit\n", encoding="utf-8")
+            state = make_state(root)
+            state.client = FakeClient()
+            with io.StringIO() as buf, redirect_stdout(buf):
+                code = run_batch(str(script), state, continue_on_error=True)
+                out = buf.getvalue()
+            self.assertEqual(code, 1)
+            self.assertIn("FAILED", out)
 
     def test_run_batch_errors_and_file_command(self):
         with tempfile.TemporaryDirectory() as tmpdir:

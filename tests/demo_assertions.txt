@@ -1,0 +1,48 @@
+/model deepseek/deepseek-chat
+/temp 0.2
+
+/echo -----------------
+/echo basic exact match
+/echo -----------------
+/echo math test
+what is 2 + 2
+/assert 4
+
+/echo geography test
+What is the capital of France?
+/assert Paris
+
+/echo logic test
+What comes after Monday?
+/assert Tuesday
+
+/echo math + reasoning Test
+If I have 3 apples and buy 5 more, how many do I have?
+/assert 8
+
+/echo ------------------------------------
+/echo multiple assertions in same response
+/echo ------------------------------------
+Explain quantum computing in one sentence.
+/assert quantum
+/assert superposition
+
+/echo ----------------------------
+/echo regex pattern for variations
+/echo ----------------------------
+What's the best time to visit Japan?
+/assert spring|autumn|cherry blossom
+
+
+/echo ---------------
+/echo test assert-not
+/echo ---------------
+what's the fifth prime?
+/assert 11
+and the next one? (I don't want the sequence, just the next prime)
+/assert-not 17
+
+once upon a time in the [...] (dire straits)
+/assert-not east
+
+/echo we're done!

@@ -10,7 +10,7 @@ from .core.conversations import Conversation, Message, save_conversation
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
-from .core.commands import AppState, handle_command, set_model, set_temperature
+from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature
 from .ui.app import run_ui
 
 logger = logging.getLogger(__name__)
@@ -34,23 +34,19 @@ def parse_script_lines(lines: list[str]) -> list[str]:
     return parsed
 
 
-def handle_batch_command(line: str, state: AppState, line_num: int) -> tuple[bool, str | None]:
+def handle_batch_command(
+    line: str,
+    state: AppState,
+    line_num: int,
+    continue_on_error: bool = False
+) -> tuple[bool, str | None, int | None]:
     """Handle a command in batch mode.
 
-    Args:
-        line: Command line (starting with /)
-        state: Application state
-        line_num: Line number for error messages
-
-    Returns:
-        Tuple of (should_continue, message_to_send)
-        - should_continue: False if script should exit
-        - message_to_send: Message to send to chat (for /send and /file commands)
-    """
+    Returns (should_continue, message_to_send, exit_code_if_stopping)."""
     parts = line[1:].split(maxsplit=1)
     if not parts:
         print(f"[{line_num}] Empty command")
-        return True, None
+        return True, None, None
 
     command = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
@@ -58,20 +54,39 @@ def handle_batch_command(line: str, state: AppState, line_num: int) -> tuple[boo
     # Commands that work in batch mode
     if command == 'exit':
         logger.info("Script requested exit via /exit command")
-        return False, None
+        return False, None, 0
 
-    elif command == 'new':
-        # Create new conversation using handle_command
+    if command == 'assert':
+        pattern = args.strip()
+        if not pattern:
+            print(f"[{line_num}] Error: /assert requires a pattern")
+            return True, None, None
+        passed, msg = assert_last_response(state.current_conversation, pattern)
+        print(f"[{line_num}] {msg}")
+        if passed:
+            return True, None, None
+        return (True, None, 1) if continue_on_error else (False, None, 1)
+
+    if command == 'assert-not':
+        pattern = args.strip()
+        if not pattern:
+            print(f"[{line_num}] Error: /assert-not requires a pattern")
+            return True, None, None
+        passed, msg = assert_last_response(state.current_conversation, pattern, negate=True)
+        print(f"[{line_num}] {msg}")
+        if passed:
+            return True, None, None
+        return (True, None, 1) if continue_on_error else (False, None, 1)
+
+    if command == 'new':
         result = handle_command(line, state)
         print(f"[{line_num}] {result.message}")
-        return True, None
+        return True, None, None
 
-    elif command == 'model':
+    if command == 'model':
         if not args:
             print(f"[{line_num}] Error: /model requires an argument (model index or name)")
-            return True, None
-
-        # Try as index first, then as name
+            return True, None, None
         try:
             index = int(args)
             if 0 <= index < len(state.config.models):
@@ -81,64 +96,68 @@ def handle_batch_command(line: str, state: AppState, line_num: int) -> tuple[boo
             else:
                 print(f"[{line_num}] Error: Invalid model index: {index}")
         except ValueError:
-            # Try as model name
-            result = set_model(state, args)
+            # Accept provider/model or just model name
+            if '/' in args:
+                provider_id, model_name = args.split('/', 1)
+                provider_id = provider_id.strip()
+                model_name = model_name.strip()
+                if provider_id:
+                    state.current_conversation.provider_id = provider_id
+                result = set_model(state, model_name)
+                print(f"[{line_num}] {result.message} (provider: {provider_id})")
+            else:
+                result = set_model(state, args)
+                print(f"[{line_num}] {result.message}")
             print(f"[{line_num}] {result.message}")
-        return True, None
+        return True, None, None
 
-    elif command == 'temp':
+    if command == 'temp':
         if not args:
             print(f"[{line_num}] Error: /temp requires a temperature value")
-            return True, None
-
+            return True, None, None
         try:
             temp = float(args)
             result = set_temperature(state, temp)
             print(f"[{line_num}] {result.message}")
         except ValueError:
             print(f"[{line_num}] Error: Invalid temperature value: {args}")
-        return True, None
+        return True, None, None
 
-    elif command == 'stream':
+    if command == 'stream':
         arg = args.strip().lower()
         if arg in ('on', 'off'):
             state.config.enable_streaming = (arg == 'on')
             status = "enabled" if state.config.enable_streaming else "disabled"
             print(f"[{line_num}] Streaming {status}")
         elif not arg:
-            # Toggle
             state.config.enable_streaming = not state.config.enable_streaming
             status = "enabled" if state.config.enable_streaming else "disabled"
             print(f"[{line_num}] Streaming {status}")
         else:
             print(f"[{line_num}] Error: /stream expects 'on' or 'off'")
-        return True, None
+        return True, None, None
 
-    elif command == 'prompt':
+    if command == 'prompt':
         if not args:
             print(f"[{line_num}] Error: /prompt requires an argument")
-            return True, None
-
+            return True, None, None
         if args.lower() == 'clear':
-            # Clear system prompt
             if state.current_conversation.messages and state.current_conversation.messages[0].role == 'system':
                 state.current_conversation.messages.pop(0)
             state.current_conversation.system_prompt = None
             print(f"[{line_num}] System prompt cleared")
         else:
-            # Set system prompt
             if state.current_conversation.messages and state.current_conversation.messages[0].role == 'system':
                 state.current_conversation.messages.pop(0)
             state.current_conversation.system_prompt = args
             state.current_conversation.messages.insert(0, Message(role='system', content=args))
             print(f"[{line_num}] System prompt set")
-        return True, None
+        return True, None, None
 
-    elif command == 'save':
+    if command == 'save':
         if not args:
             print(f"[{line_num}] Error: /save requires a save name in batch mode")
-            return True, None
-
+            return True, None, None
         try:
             save_conversation(
                 state.conversations_root,
@@ -149,77 +168,67 @@ def handle_batch_command(line: str, state: AppState, line_num: int) -> tuple[boo
             print(f"[{line_num}] Conversation saved as: {args}")
         except Exception as e:
             print(f"[{line_num}] Error saving conversation: {e}")
-        return True, None
+        return True, None, None
 
-    elif command == 'send':
+    if command == 'send':
         if not args:
             print(f"[{line_num}] Error: /send requires a message")
-            return True, None
-        # Return the message to send
-        return True, args
+            return True, None, None
+        return True, args, None
 
-    elif command == 'file':
+    if command == 'file':
         result = handle_command(line, state)
         if result.file_content:
             print(f"[{line_num}] {result.message}")
-            return True, result.file_content
+            return True, result.file_content, None
         else:
             print(f"[{line_num}] {result.message}")
-            return True, None
+            return True, None, None
 
-    elif command == 'export':
-        # Export conversation to file
+    if command == 'export':
         format_arg = args.strip().lower()
         if not format_arg or format_arg != 'md':
             print(f"[{line_num}] Error: /export requires 'md' format (only supported format)")
-            return True, None
-
+            return True, None, None
         from .core.conversations import export_conversation_md
         target_dir = state.config.exports_dir or Path.cwd()
-
         try:
             path = export_conversation_md(state.current_conversation, target_dir)
             print(f"[{line_num}] Exported to: {path}")
         except Exception as e:
             print(f"[{line_num}] Error exporting: {e}")
-        return True, None
+        return True, None, None
 
-    elif command == 'echo':
-        # Print message without sending to LLM
+    if command == 'echo':
         if not args:
-            # Empty echo is valid (prints blank line)
             print()
         else:
             print(args)
-        return True, None
+        return True, None, None
 
-    elif command == 'sleep':
-        # Sleep for specified seconds
+    if command == 'sleep':
         if not args:
             print(f"[{line_num}] Error: /sleep requires duration in seconds")
-            return True, None
-
+            return True, None, None
         try:
             import time
             seconds = float(args)
             if seconds < 0:
                 print(f"[{line_num}] Error: Sleep duration must be positive")
-                return True, None
-
+                return True, None, None
             print(f"[{line_num}] Sleeping for {seconds} seconds...")
             time.sleep(seconds)
             print(f"[{line_num}] Sleep complete")
         except ValueError:
             print(f"[{line_num}] Error: Invalid sleep duration: {args}")
-        return True, None
+        return True, None, None
 
-    else:
-        print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-        print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /stream, /prompt, /save, /send, /file, /export, /echo, /sleep")
-        return True, None
+    print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /stream, /prompt, /save, /send, /file, /export, /echo, /sleep, /assert")
+    return True, None, None
 
 
-def run_batch(script_path: str, state: AppState) -> int:
+def run_batch(script_path: str, state: AppState, continue_on_error: bool = False) -> int:
     """Run a script file in batch mode (non-interactively).
 
     Args:
@@ -250,23 +259,31 @@ def run_batch(script_path: str, state: AppState) -> int:
 
     logger.info(f"Running script: {script_path} ({len(script_lines)} lines)")
 
+    pass_failures = 0
+
     # Execute each line
     for i, line in enumerate(script_lines, 1):
         logger.debug(f"Executing line {i}: {line}")
 
         message_to_send = None
+        exit_code = None
 
         if line.startswith('/'):
             # Handle as command
-            should_continue, msg = handle_batch_command(line, state, i)
+            result = handle_batch_command(line, state, i, continue_on_error=continue_on_error)
+            should_continue, msg, exit_code = result
 
             if not should_continue:
-                return 0
+                if exit_code is not None:
+                    return 1 if (exit_code == 0 and pass_failures > 0) else exit_code
+                return 1 if pass_failures > 0 else 0
 
             if msg:
                 # Command returned a message to send (e.g., /send or /file)
                 message_to_send = msg
             else:
+                if exit_code:
+                    pass_failures += 1
                 # Command handled, continue to next line
                 continue
         else:
@@ -298,11 +315,15 @@ def run_batch(script_path: str, state: AppState) -> int:
                 logger.exception(f"Error during chat: {e}")
                 return 1
 
+        if exit_code:
+            # Assert failed but continue_on_error allowed
+            pass_failures += 1
+
     logger.info("Script completed successfully")
-    return 0
+    return 0 if pass_failures == 0 else 1
 
 
-def main():
+def main():  # pragma: no cover - interactive entrypoint not exercised in unit tests
     """Main entry point for the application."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
@@ -313,6 +334,11 @@ def main():
         '--run',
         metavar='PATH',
         help='Run a script file in batch mode (non-interactively) and exit'
+    )
+    parser.add_argument(
+        '--continue-on-error',
+        action='store_true',
+        help='In batch mode, continue running after assertion failures (exit code 1 if any fail)'
     )
     args = parser.parse_args()
 
@@ -394,7 +420,7 @@ def main():
         # Check if running in batch mode
         if args.run:
             # Run script in batch mode
-            exit_code = run_batch(args.run, state)
+            exit_code = run_batch(args.run, state, continue_on_error=args.continue_on_error)
             # Cleanup
             try:
                 client.unload_model()

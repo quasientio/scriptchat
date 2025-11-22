@@ -150,7 +150,7 @@ class LiteChatUI:
         # Initialize conversation display (scroll to bottom initially)
         self.update_conversation_display()
 
-    def _create_layout(self) -> Layout:
+    def _create_layout(self) -> Layout:  # pragma: no cover - UI layout wiring
         """Create the application layout.
 
         Returns:
@@ -220,7 +220,7 @@ class LiteChatUI:
             focused_element=self.input_window
         )
 
-    def _create_key_bindings(self) -> KeyBindings:
+    def _create_key_bindings(self) -> KeyBindings:  # pragma: no cover - interactive key handling
         """Create key bindings for the application.
 
         Returns:
@@ -500,7 +500,7 @@ class LiteChatUI:
 
         self._send_message_now(message)
 
-    def _send_message_now(self, message: str):
+    def _send_message_now(self, message: str):  # pragma: no cover - threaded UI flow
         """Send a user message immediately (assumes LLM is free)."""
         from ..core.conversations import Message
 
@@ -570,7 +570,7 @@ class LiteChatUI:
         position = len(self.message_queue)
         self.add_system_message(f"Message queued (#{position}).")
 
-    def _process_queue(self):
+    def _process_queue(self):  # pragma: no cover - threaded UI flow
         """Send next queued message if available and not already thinking."""
         if self.thinking:
             return
@@ -581,7 +581,7 @@ class LiteChatUI:
         next_message = self.message_queue.pop(0)
         self._send_message_now(next_message)
 
-    def _handle_command(self, command_line: str):
+    def _handle_command(self, command_line: str):  # pragma: no cover - UI dispatch shim
         """Handle a command.
 
         Args:
@@ -692,7 +692,7 @@ class LiteChatUI:
         # Replace buffer content with history entry and move cursor to end
         self.input_buffer.set_document(Document(text=entry, cursor_position=len(entry)))
 
-    def _cancel_inference(self):
+    def _cancel_inference(self):  # pragma: no cover - interactive cancel path
         """Cancel the current LLM inference."""
         if not self.thinking:
             return
@@ -746,7 +746,7 @@ class LiteChatUI:
             self._cleanup()
 
 
-def run_ui(state: AppState):
+def run_ui(state: AppState):  # pragma: no cover - interactive UI loop
     """Run the terminal UI.
 
     Args:
