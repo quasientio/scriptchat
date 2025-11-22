@@ -24,6 +24,7 @@ from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
     branch_conversation, delete_conversation, Conversation, Message
 )
+from .command_handlers import CommandHandlers
 
 logger = logging.getLogger(__name__)
 
@@ -110,14 +111,13 @@ class LiteChatUI:
         self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
         self.script_queue: list[str] = []  # Pending script lines to execute
         self.running_script: bool = False
-        self.pending_clear_index: Optional[int] = None
-        self.pending_clear_target_id: Optional[str] = None
-        self.pending_clear_is_current: bool = False
-        self.last_model_options: list[tuple[str, str]] = []
+
+        # Create command handlers
+        self.handlers = CommandHandlers(self)
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/provider', '/model', '/temp', '/clear', '/file', '/echo', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/clear', '/file', '/echo', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -148,7 +148,7 @@ class LiteChatUI:
         )
 
         # Initialize conversation display (scroll to bottom initially)
-        self._update_conversation_display()
+        self.update_conversation_display()
 
     def _create_layout(self) -> Layout:
         """Create the application layout.
@@ -255,7 +255,7 @@ class LiteChatUI:
                         self._append_history(full_message)
 
                     if full_message.strip():
-                        self._handle_user_message(full_message)
+                        self.handle_user_message(full_message)
                 else:
                     # Add line to buffer and continue
                     self.multiline_buffer.append(text)
@@ -266,7 +266,7 @@ class LiteChatUI:
                     self.multiline_mode = True
                     self.multiline_buffer = []
                     self.input_buffer.text = ''
-                    self._add_system_message("[Multi-line mode active. Type '\"\"\"' on a new line to send]")
+                    self.add_system_message("[Multi-line mode active. Type '\"\"\"' on a new line to send]")
                 elif text.startswith('/'):
                     # Command
                     if text:
@@ -278,7 +278,7 @@ class LiteChatUI:
                     self._append_history(text)
                     self.input_buffer.text = ''
                     event.app.invalidate()  # Force redraw to show cleared input
-                    self._handle_user_message(text)
+                    self.handle_user_message(text)
 
         @kb.add('escape')
         def handle_escape(event):
@@ -297,7 +297,7 @@ class LiteChatUI:
                 else:
                     # First ESC - ask for confirmation
                     self.cancel_requested_at = current_time
-                    self._add_system_message("⚠ Press ESC again within 2 seconds to cancel inference")
+                    self.add_system_message("⚠ Press ESC again within 2 seconds to cancel inference")
                 return
 
             # Otherwise, return focus to input
@@ -463,7 +463,7 @@ class LiteChatUI:
 
         return '\n'.join(lines)
 
-    def _update_conversation_display(self):
+    def update_conversation_display(self):
         """Update the conversation display and scroll to bottom."""
         # Build text with ANSI colors
         text = self._build_conversation_text()
@@ -476,7 +476,7 @@ class LiteChatUI:
         # Force redraw
         self.app.invalidate()
 
-    def _add_system_message(self, text: str):
+    def add_system_message(self, text: str):
         """Add a system message to the conversation display.
 
         Args:
@@ -486,9 +486,9 @@ class LiteChatUI:
         self.state.current_conversation.messages.append(
             Message(role='system', content=text)
         )
-        self._update_conversation_display()
+        self.update_conversation_display()
 
-    def _handle_user_message(self, message: str):
+    def handle_user_message(self, message: str):
         """Handle a user message by sending it to the LLM.
 
         Args:
@@ -500,384 +500,6 @@ class LiteChatUI:
 
         self._send_message_now(message)
 
-    def _handle_command(self, command_line: str):
-        """Handle a command.
-
-        Args:
-            command_line: Command line starting with /
-        """
-        # Parse command and arguments
-        parts = command_line[1:].split(maxsplit=1)
-        cmd = parts[0].lower() if parts else ""
-        args = parts[1] if len(parts) > 1 else ""
-
-        # Handle /echo specially - display without adding to conversation
-        if cmd == 'echo':
-            message = args if args else ""
-            # Display echo message directly in conversation pane
-            if message:
-                # Temporarily add to display, but mark it somehow
-                from ..core.conversations import Message
-                # Add as a special message that won't be sent to LLM
-                # We'll use a marker to identify echo messages
-                self.state.current_conversation.messages.append(
-                    Message(role='echo', content=message)
-                )
-                self._update_conversation_display()
-            return
-
-        result = handle_command(command_line, self.state)
-
-        if result.message:
-            self._add_system_message(result.message)
-
-        if result.should_exit:
-            self.app.exit()
-
-        # Handle file content - send it as a user message
-        if result.file_content:
-            self._handle_user_message(result.file_content)
-            return
-
-        if result.needs_ui_interaction:
-            # Handle commands that need user interaction
-            if result.command_type == 'model':
-                self._handle_model(args)
-            elif result.command_type == 'save':
-                self._handle_save(args)
-            elif result.command_type == 'load':
-                self._handle_load(args)
-            elif result.command_type == 'branch':
-                self._handle_branch(args)
-            elif result.command_type == 'rename':
-                self._handle_rename(args)
-            elif result.command_type == 'chats':
-                self._handle_chats()
-            elif result.command_type == 'send':
-                self._handle_send(args)
-            elif result.command_type == 'export':
-                self._handle_export(args)
-            elif result.command_type == 'stream':
-                self._handle_stream(args)
-            elif result.command_type == 'prompt':
-                self._handle_prompt(args)
-            elif result.command_type == 'run':
-                self._handle_run(args)
-            elif result.command_type == 'temp':
-                self._handle_temp(args)
-            elif result.command_type == 'clear':
-                self._handle_clear(args)
-            elif result.command_type == 'provider':
-                self._handle_provider(args)
-
-    def _handle_model(self, args: str = ""):
-        """Handle /model command.
-
-        Args:
-            args: Optional arguments (model index or provider/model)
-        """
-        # If index provided as argument, use it directly
-        if args.strip():
-            self._model_callback(args.strip())
-            return
-
-        # Build combined model list across providers
-        options = []
-        lines = ["Available models (all providers):"]
-        idx = 0
-        for provider in self.state.config.providers:
-            names = [m.name for m in (provider.models or [])]
-            if not names and provider.default_model:
-                names = [provider.default_model]
-            for name in names:
-                ctx_display = ""
-                models = provider.models or []
-                for m in models:
-                    if m.name == name and m.contexts:
-                        ctx_display = f" (contexts: {', '.join(str(c) for c in m.contexts)})"
-                        break
-                lines.append(f"  [{idx}] {provider.id}/{name}{ctx_display}")
-                options.append((provider.id, name))
-                idx += 1
-
-        if not options:
-            lines.append("  (no models listed; enter provider/model manually)")
-
-        self.last_model_options = options
-
-        self._add_system_message('\n'.join(lines))
-        self.prompt_message = "Enter model index or provider/model:"
-
-        # Get user input
-        self._prompt_for_input(self._model_callback)
-
-    def _model_callback(self, index_str: str):
-        """Callback for model input.
-
-        Args:
-            index_str: User input (model index or name)
-        """
-        # Try index
-        try:
-            index = int(index_str)
-            if 0 <= index < len(self.last_model_options):
-                provider_id, model_name = self.last_model_options[index]
-                self._apply_model_selection(provider_id, model_name)
-                return
-        except ValueError:
-            pass
-
-        # Try provider/model
-        if '/' in index_str:
-            provider_id, model_name = index_str.split('/', 1)
-            provider_id = provider_id.strip()
-            model_name = model_name.strip()
-            self._apply_model_selection(provider_id, model_name)
-            return
-
-        # Fallback: model name on current provider
-        model_name = index_str.strip()
-        if model_name:
-            self._apply_model_selection(self.state.current_conversation.provider_id, model_name)
-        else:
-            self._add_system_message("Invalid input. Enter model index or provider/model.")
-
-    def _apply_model_selection(self, provider_id: str, model_name: str):
-        """Apply a model selection, switching provider if needed."""
-        try:
-            # Switch provider and set model
-            self.state.current_conversation.provider_id = provider_id
-            result = set_model(self.state, model_name)
-            self._add_system_message(f"{result.message} (provider: {provider_id})")
-        except Exception as e:
-            self._add_system_message(str(e))
-
-    def _handle_provider(self, args: str = ""):
-        """Handle /provider command (switch provider)."""
-        providers = self.state.config.providers
-        if args.strip():
-            arg = args.strip()
-            # Try index
-            try:
-                idx = int(arg)
-                if 0 <= idx < len(providers):
-                    provider = providers[idx]
-                    self._switch_provider(provider)
-                    return
-                else:
-                    self._add_system_message("Invalid provider index.")
-                    return
-            except ValueError:
-                # Try id match
-                for p in providers:
-                    if p.id == arg:
-                        self._switch_provider(p)
-                        return
-                self._add_system_message("Invalid provider. Use /provider to list.")
-                return
-
-        # List providers
-        lines = ["Available providers:"]
-        for i, p in enumerate(providers):
-            line = f"  [{i}] {p.id} ({p.type})"
-            if p.default_model:
-                line += f" default_model={p.default_model}"
-            lines.append(line)
-        self._add_system_message('\n'.join(lines))
-        self.prompt_message = "Enter provider index:"
-        self._prompt_for_input(self._provider_callback)
-
-    def _provider_callback(self, index_str: str):
-        try:
-            idx = int(index_str)
-            providers = self.state.config.providers
-            if 0 <= idx < len(providers):
-                self._switch_provider(providers[idx])
-            else:
-                self._add_system_message("Invalid provider index.")
-        except ValueError:
-            self._add_system_message("Invalid input. Enter provider index.")
-
-    def _switch_provider(self, provider):
-        """Switch current conversation to a new provider."""
-        self.state.current_conversation.provider_id = provider.id
-        # Choose model: provider.default_model or keep current if exists, else first model
-        new_model = provider.default_model or self.state.current_conversation.model_name
-        provider_models = [m.name for m in (provider.models or [])]
-        if provider_models:
-            if new_model not in provider_models:
-                new_model = provider_models[0]
-        self.state.current_conversation.model_name = new_model
-        # Reset token counts
-        self.state.current_conversation.tokens_in = 0
-        self.state.current_conversation.tokens_out = 0
-        self._add_system_message(f"Switched to provider: {provider.id} model: {new_model}")
-
-    def _handle_save(self, save_name: str = ""):
-        """Handle /save command.
-
-        Args:
-            save_name: Optional save name from command argument
-        """
-        if self.state.current_conversation.id:
-            # Already saved, just update
-            save_conversation(
-                self.state.conversations_root,
-                self.state.current_conversation,
-                system_prompt=self.state.current_conversation.system_prompt
-            )
-            self._add_system_message("Conversation saved")
-        else:
-            # Need save name
-            if save_name:
-                # Name provided as argument
-                self._save_callback(save_name)
-            else:
-                # Prompt for name
-                self.prompt_message = "Save as (short name, used in folder name):"
-                self._prompt_for_input(self._save_callback)
-
-    def _save_callback(self, save_name: str):
-        """Callback for save input.
-
-        Args:
-            save_name: User-provided save name
-        """
-        if not save_name.strip():
-            self._add_system_message("Save cancelled (empty name)")
-            return
-
-        try:
-            save_conversation(
-                self.state.conversations_root,
-                self.state.current_conversation,
-                save_name=save_name,
-                system_prompt=self.state.current_conversation.system_prompt
-            )
-            self._add_system_message(f"Conversation saved as: {self.state.current_conversation.id}")
-        except Exception as e:
-            self._add_system_message(f"Error saving: {str(e)}")
-
-    def _handle_load(self, args: str = ""):
-        """Handle /load command.
-
-        Args:
-            args: Optional arguments (conversation index)
-        """
-        summaries = list_conversations(self.state.conversations_root)
-
-        if not summaries:
-            self._add_system_message("No saved conversations found")
-            return
-
-        # If index provided as argument, use it directly
-        if args.strip():
-            self._load_callback(args.strip(), summaries)
-            return
-
-        lines = ["Saved conversations:"]
-        for i, summary in enumerate(summaries):
-            lines.append(
-                f"  [{i}] {summary.display_name} "
-                f"(model: {summary.model_name}, created: {summary.created_at[:10]})"
-            )
-
-        self._add_system_message('\n'.join(lines))
-        self.prompt_message = "Enter conversation index:"
-        self._prompt_for_input(lambda idx: self._load_callback(idx, summaries))
-
-    def _load_callback(self, index_str: str, summaries: list):
-        """Callback for load input.
-
-        Args:
-            index_str: User input (conversation index)
-            summaries: List of conversation summaries
-        """
-        try:
-            index = int(index_str)
-            if 0 <= index < len(summaries):
-                summary = summaries[index]
-                convo = load_conversation(self.state.conversations_root, summary.dir_name)
-                self.state.current_conversation = convo
-                self._update_conversation_display()
-                self._add_system_message(f"Loaded conversation: {summary.display_name}")
-            else:
-                self._add_system_message("Invalid conversation index")
-        except ValueError:
-            self._add_system_message("Invalid input. Please enter a number.")
-        except Exception as e:
-            self._add_system_message(f"Error loading: {str(e)}")
-
-    def _handle_branch(self, args: str = ""):
-        """Handle /branch command.
-
-        Args:
-            args: Optional arguments (new save name)
-        """
-        try:
-            # Use args as new save name if provided, otherwise None (auto-generate)
-            new_save_name = args if args else None
-            new_convo = branch_conversation(
-                self.state.conversations_root,
-                self.state.current_conversation,
-                new_save_name=new_save_name,
-                system_prompt=self.state.current_conversation.system_prompt
-            )
-            self.state.current_conversation = new_convo
-            self._add_system_message(f"Branched to: {new_convo.id}")
-        except Exception as e:
-            self._add_system_message(f"Error branching: {str(e)}")
-
-    def _handle_chats(self):
-        """Handle /chats command (list saved conversations)."""
-        summaries = list_conversations(self.state.conversations_root)
-
-        if not summaries:
-            self._add_system_message("No saved conversations found")
-            return
-
-        lines = ["Saved conversations:"]
-        for i, summary in enumerate(summaries):
-            lines.append(
-                f"  [{i}] {summary.display_name} "
-                f"(model: {summary.model_name}, created: {summary.created_at[:10]})"
-            )
-
-        self._add_system_message('\n'.join(lines))
-
-    def _handle_send(self, args: str):
-        """Handle /send command - enqueue or send immediately."""
-        msg = args.strip()
-        if not msg:
-            self._add_system_message("Usage: /send <message>")
-            return
-        self._handle_user_message(msg)
-
-    def _handle_run(self, args: str):
-        """Handle /run command to execute scripted commands/messages from a file."""
-        path = args.strip()
-        if not path:
-            self._add_system_message("Usage: /run <path>")
-            return
-
-        try:
-            with open(Path(path).expanduser(), 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            self._add_system_message(f"File not found: {path}")
-            return
-        except Exception as e:
-            self._add_system_message(f"Error reading {path}: {e}")
-            return
-
-        script_lines = self._parse_script_lines(lines)
-        if not script_lines:
-            self._add_system_message(f"No runnable lines in {path} (comments/empty only).")
-            return
-
-        self._add_system_message(f"Running script: {path} ({len(script_lines)} lines)")
-        self._run_script_queue(script_lines)
-
     def _send_message_now(self, message: str):
         """Send a user message immediately (assumes LLM is free)."""
         from ..core.conversations import Message
@@ -886,7 +508,7 @@ class LiteChatUI:
         self.state.current_conversation.messages.append(
             Message(role='user', content=message)
         )
-        self._update_conversation_display()
+        self.update_conversation_display()
 
         # Start thinking animation
         self.thinking = True
@@ -909,7 +531,7 @@ class LiteChatUI:
                 streaming = bool(self.state.config.enable_streaming)
 
                 def on_chunk(_):
-                    self._update_conversation_display()
+                    self.update_conversation_display()
                     self.app.invalidate()
 
                 self.state.client.chat(
@@ -927,14 +549,14 @@ class LiteChatUI:
 
                 self.thinking = False
                 self.cancel_requested_at = None
-                self._update_conversation_display()
-                self._add_system_message(duration_msg)
+                self.update_conversation_display()
+                self.add_system_message(duration_msg)
                 self.app.invalidate()
             except Exception as e:
                 logger.exception("Chat error")
                 self.thinking = False
                 self.cancel_requested_at = None
-                self._add_system_message(f"Error: {str(e)}")
+                self.add_system_message(f"Error: {str(e)}")
                 self.app.invalidate()
             finally:
                 # Process any queued messages
@@ -946,7 +568,7 @@ class LiteChatUI:
         """Queue a user message to send later."""
         self.message_queue.append(message)
         position = len(self.message_queue)
-        self._add_system_message(f"Message queued (#{position}).")
+        self.add_system_message(f"Message queued (#{position}).")
 
     def _process_queue(self):
         """Send next queued message if available and not already thinking."""
@@ -959,210 +581,32 @@ class LiteChatUI:
         next_message = self.message_queue.pop(0)
         self._send_message_now(next_message)
 
-    def _handle_export(self, args: str = ""):
-        """Handle /export command."""
-        format_arg = args.strip().lower()
-
-        if format_arg and format_arg != 'md':
-            self._add_system_message("Unsupported format. Available: md")
-            return
-
-        if format_arg == 'md':
-            self._export_md()
-        else:
-            self.prompt_message = "Export format (available: md):"
-            self._prompt_for_input(self._export_format_callback)
-
-    def _export_format_callback(self, fmt: str):
-        """Callback for export format prompt."""
-        fmt = fmt.strip().lower()
-        if not fmt:
-            self._add_system_message("Export cancelled (no format selected).")
-            return
-        if fmt != 'md':
-            self._add_system_message("Unsupported format. Available: md")
-            return
-        self._export_md()
-
-    def _export_md(self):
-        """Export conversation to Markdown."""
-        from pathlib import Path
-        from ..core.conversations import export_conversation_md
-
-        target_dir = self.state.config.exports_dir or Path.cwd()
-
-        try:
-            path = export_conversation_md(self.state.current_conversation, target_dir)
-            self._add_system_message(f"Exported to: {path}")
-        except Exception as e:
-            self._add_system_message(f"Error exporting: {str(e)}")
-
-    def _handle_stream(self, args: str = ""):
-        """Handle /stream command (toggle or set on/off)."""
-        arg = args.strip().lower()
-        if arg in ('on', 'off'):
-            self.state.config.enable_streaming = (arg == 'on')
-        elif not arg:
-            # Toggle when no arg
-            self.state.config.enable_streaming = not self.state.config.enable_streaming
-        else:
-            self._add_system_message("Usage: /stream [on|off]")
-            return
-
-        status = "enabled" if self.state.config.enable_streaming else "disabled"
-        self._add_system_message(f"Streaming {status}.")
-
-    def _handle_prompt(self, args: str = ""):
-        """Handle /prompt command (set/clear system prompt for this conversation)."""
-        arg = args.strip()
-
-        if arg:
-            if arg.lower() == 'clear':
-                self._set_system_prompt(None)
-                self._add_system_message("System prompt cleared for this conversation.")
-            else:
-                self._set_system_prompt(arg)
-                self._add_system_message("System prompt set for this conversation.")
-            return
-
-        self.prompt_message = "New system prompt (empty to clear):"
-        self._prompt_for_input(self._prompt_callback)
-
-    def _prompt_callback(self, prompt_text: str):
-        """Callback for system prompt input."""
-        text = prompt_text.strip()
-        if not text:
-            self._set_system_prompt(None)
-            self._add_system_message("System prompt cleared for this conversation.")
-        else:
-            self._set_system_prompt(text)
-            self._add_system_message("System prompt set for this conversation.")
-
-    def _handle_rename(self, args: str = ""):
-        """Handle /rename command."""
-        if not self.state.current_conversation.id:
-            self._add_system_message("Save the conversation first before renaming (/save).")
-            return
-
-        if args.strip():
-            self._rename_callback(args.strip())
-        else:
-            self.prompt_message = "New name for this conversation:"
-            self._prompt_for_input(self._rename_callback)
-
-    def _rename_callback(self, new_name: str):
-        """Callback for rename input."""
-        from ..core.conversations import rename_conversation
-
-        if not new_name.strip():
-            self._add_system_message("Rename cancelled (empty name).")
-            return
-
-        try:
-            rename_conversation(self.state.conversations_root, self.state.current_conversation, new_name)
-            self._add_system_message(f"Conversation renamed to: {self.state.current_conversation.id}")
-        except FileExistsError as e:
-            self._add_system_message(str(e))
-        except Exception as e:
-            self._add_system_message(f"Error renaming: {str(e)}")
-
-    def _handle_temp(self, args: str = ""):
-        """Handle /temp command.
+    def _handle_command(self, command_line: str):
+        """Handle a command.
 
         Args:
-            args: Optional arguments (temperature value)
+            command_line: Command line starting with /
         """
-        if args:
-            # Temperature provided as argument
-            self._temp_callback(args)
-        else:
-            # Prompt for temperature
-            self.prompt_message = "New temperature (0.0-2.0):"
-            self._prompt_for_input(self._temp_callback)
+        # Delegate to command handlers
+        self.handlers.handle_command(command_line)
 
-    def _temp_callback(self, temp_str: str):
-        """Callback for temp input.
+    def parse_script_lines(self, lines: list[str]) -> list[str]:
+        """Parse script lines, stripping comments/empties."""
+        parsed = []
+        for raw in lines:
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            parsed.append(line)
+        return parsed
 
-        Args:
-            temp_str: User input (temperature)
-        """
-        try:
-            temp = float(temp_str)
-            result = set_temperature(self.state, temp)
-            self._add_system_message(result.message)
-        except ValueError:
-            self._add_system_message("Invalid temperature. Please enter a number.")
+    def run_script_queue(self, lines: list[str]):
+        """Initialize and start running a script queue."""
+        self.script_queue = list(lines)
+        self.running_script = True
+        self._process_script_queue()
 
-    def _handle_clear(self, args: str = ""):
-        """Handle /clear command."""
-        self.pending_clear_index = None
-        self.pending_clear_target_id = None
-        self.pending_clear_is_current = False
-
-        target_id, prompt, err, summaries, is_current = resolve_clear_target_from_args(
-            args,
-            self.state.conversations_root,
-            self.state.current_conversation.id
-        )
-        if err:
-            self._add_system_message(err)
-            return
-
-        if args.strip():
-            try:
-                self.pending_clear_index = int(args.strip())
-            except ValueError:
-                self.pending_clear_index = None
-        self.pending_clear_target_id = target_id
-        self.pending_clear_is_current = is_current
-        self.prompt_message = prompt
-
-        self._prompt_for_input(self._clear_callback, expect_single_key=True)
-
-    def _clear_callback(self, confirm: str):
-        """Callback for clear confirmation.
-
-        Args:
-            confirm: User input (y/N)
-        """
-        if confirm.lower() != 'y':
-            self._add_system_message("Clear cancelled")
-            self.pending_clear_index = None
-            self.pending_clear_target_id = None
-            self.pending_clear_is_current = False
-            return
-
-        target_id = self.pending_clear_target_id
-        if target_id:
-            try:
-                delete_conversation(
-                    self.state.conversations_root,
-                    target_id
-                )
-            except Exception as e:
-                logger.exception("Error deleting conversation")
-                self._add_system_message(f"Error deleting: {str(e)}")
-                self.pending_clear_index = None
-                self.pending_clear_target_id = None
-                return
-
-        # Reset current conversation only if we cleared it (or if it's unsaved/no id)
-        cleared_current = self.pending_clear_is_current
-        if cleared_current:
-            from ..core.commands import create_new_conversation
-            self.state.current_conversation = create_new_conversation(self.state)
-            self.message_queue.clear()
-            self.script_queue.clear()
-            self._update_conversation_display()
-            self._add_system_message("Conversation cleared")
-        else:
-            self._add_system_message(f"Conversation deleted: {target_id}")
-
-        self.pending_clear_index = None
-        self.pending_clear_target_id = None
-        self.pending_clear_is_current = False
-
-    def _prompt_for_input(self, callback, expect_single_key: bool = False):
+    def prompt_for_input(self, callback, expect_single_key: bool = False):
         """Prompt for user input and call callback with result.
 
         Args:
@@ -1172,6 +616,35 @@ class LiteChatUI:
         # Store callback - will be called when user presses Enter
         self.pending_callback = callback
         self.expecting_single_key = expect_single_key
+
+    def _process_script_queue(self):
+        """Process pending script lines if idle and no queued messages."""
+        if self.thinking or self.message_queue:
+            return
+        if not self.script_queue:
+            if self.running_script:
+                self.running_script = False
+                self.add_system_message("Script completed.")
+            return
+
+        # Consume as many immediate lines as possible without blocking
+        while not self.thinking and not self.message_queue and self.script_queue:
+            line = self.script_queue.pop(0)
+            self._execute_script_line(line)
+            if self.thinking or self.message_queue:
+                break
+
+        # If done and nothing pending, announce completion
+        if not self.thinking and not self.message_queue and not self.script_queue and self.running_script:
+            self.running_script = False
+            self.add_system_message("Script completed.")
+
+    def _execute_script_line(self, line: str):
+        """Execute a single script line as command or message."""
+        if line.startswith('/'):
+            self._handle_command(line)
+        else:
+            self.handle_user_message(line)
 
     def _append_history(self, entry: str):
         """Append a line to the input history."""
@@ -1219,64 +692,6 @@ class LiteChatUI:
         # Replace buffer content with history entry and move cursor to end
         self.input_buffer.set_document(Document(text=entry, cursor_position=len(entry)))
 
-    def _set_system_prompt(self, prompt: Optional[str]):
-        """Set or clear the system prompt for the current conversation."""
-        # Remove existing leading system message if present
-        if self.state.current_conversation.messages and self.state.current_conversation.messages[0].role == 'system':
-            self.state.current_conversation.messages.pop(0)
-
-        self.state.current_conversation.system_prompt = prompt if prompt else None
-
-        if prompt:
-            self.state.current_conversation.messages.insert(0, Message(role='system', content=prompt))
-
-        self._update_conversation_display()
-
-    def _parse_script_lines(self, lines: list[str]) -> list[str]:
-        """Parse script lines, stripping comments/empties."""
-        parsed = []
-        for raw in lines:
-            line = raw.strip()
-            if not line or line.startswith('#'):
-                continue
-            parsed.append(line)
-        return parsed
-
-    def _run_script_queue(self, lines: list[str]):
-        """Initialize and start running a script queue."""
-        self.script_queue = list(lines)
-        self.running_script = True
-        self._process_script_queue()
-
-    def _process_script_queue(self):
-        """Process pending script lines if idle and no queued messages."""
-        if self.thinking or self.message_queue:
-            return
-        if not self.script_queue:
-            if self.running_script:
-                self.running_script = False
-                self._add_system_message("Script completed.")
-            return
-
-        # Consume as many immediate lines as possible without blocking
-        while not self.thinking and not self.message_queue and self.script_queue:
-            line = self.script_queue.pop(0)
-            self._execute_script_line(line)
-            if self.thinking or self.message_queue:
-                break
-
-        # If done and nothing pending, announce completion
-        if not self.thinking and not self.message_queue and not self.script_queue and self.running_script:
-            self.running_script = False
-            self._add_system_message("Script completed.")
-
-    def _execute_script_line(self, line: str):
-        """Execute a single script line as command or message."""
-        if line.startswith('/'):
-            self._handle_command(line)
-        else:
-            self._handle_user_message(line)
-
     def _cancel_inference(self):
         """Cancel the current LLM inference."""
         if not self.thinking:
@@ -1285,7 +700,7 @@ class LiteChatUI:
         logger.info("Cancelling inference")
 
         # Show cancelling message immediately
-        self._add_system_message("Cancelling...")
+        self.add_system_message("Cancelling...")
         self.app.invalidate()
 
         # Stop Ollama server to kill the running inference
@@ -1296,16 +711,16 @@ class LiteChatUI:
                 ollama_client = self.state.client.clients.get('ollama')
                 if ollama_client and hasattr(ollama_client, 'server_manager'):
                     ollama_client.server_manager.stop()
-                    self._add_system_message("⚠ Inference cancelled (Ollama stopped)")
+                    self.add_system_message("⚠ Inference cancelled (Ollama stopped)")
                 else:
-                    self._add_system_message("⚠ Inference cancelled (soft)")
+                    self.add_system_message("⚠ Inference cancelled (soft)")
             except Exception as e:
                 logger.error(f"Error stopping Ollama: {e}")
-                self._add_system_message(f"⚠ Error cancelling: {e}")
+                self.add_system_message(f"⚠ Error cancelling: {e}")
         else:
             # For non-Ollama providers, just set thinking to false
             # The request will complete in background but we ignore it
-            self._add_system_message("⚠ Inference cancelled (request continues in background)")
+            self.add_system_message("⚠ Inference cancelled (request continues in background)")
 
         self.thinking = False
         self.cancel_requested_at = None

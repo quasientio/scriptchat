@@ -155,12 +155,6 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='prompt'
         )
 
-    elif command == 'provider':
-        return CommandResult(
-            needs_ui_interaction=True,
-            command_type='provider'
-        )
-
     elif command == 'run':
         if len(parts) < 2 or not parts[1].strip():
             return CommandResult(message="Usage: /run <path>")
@@ -217,7 +211,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /provider, /model, /temp, /clear, /file, /echo, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /echo, /exit"
         )
 
 
