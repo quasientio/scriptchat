@@ -481,3 +481,47 @@ def export_conversation_md(convo: Conversation, export_dir: Path, filename: Opti
 
     export_path.write_text('\n'.join(lines), encoding='utf-8')
     return export_path
+
+
+def export_conversation_json(convo: Conversation, export_dir: Path, filename: Optional[str] = None) -> Path:
+    """Export a conversation to a JSON file.
+
+    Args:
+        convo: Conversation to export
+        export_dir: Directory to write the export file
+        filename: Optional filename (defaults to conversation id or a generated name)
+
+    Returns:
+        Path to the written JSON file
+    """
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    if not filename:
+        if convo.id:
+            filename = f"{convo.id}.json"
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            model_slug = _slugify_model_name(convo.model_name)
+            filename = f"chat_{timestamp}_{model_slug}.json"
+
+    export_path = export_dir / filename
+
+    payload = {
+        "id": convo.id,
+        "provider_id": convo.provider_id,
+        "model": convo.model_name,
+        "temperature": convo.temperature,
+        "system_prompt": convo.system_prompt,
+        "tokens_in": convo.tokens_in,
+        "tokens_out": convo.tokens_out,
+        "context_length_configured": convo.context_length_configured,
+        "context_length_used": convo.context_length_used,
+        "exported_at": datetime.now().isoformat(),
+        "messages": [
+            {"role": msg.role, "content": msg.content}
+            for msg in convo.messages
+        ],
+    }
+
+    export_path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    return export_path

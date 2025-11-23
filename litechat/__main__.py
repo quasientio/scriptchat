@@ -198,14 +198,17 @@ def handle_batch_command(
             return True, None, None
 
     if command == 'export':
-        format_arg = args.strip().lower()
-        if not format_arg or format_arg != 'md':
-            print(f"[{line_num}] Error: /export requires 'md' format (only supported format)")
+        format_arg = args.strip().lower() or "md"
+        if format_arg not in ('md', 'json'):
+            print(f"[{line_num}] Error: /export format must be 'md' or 'json'")
             return True, None, None
-        from .core.conversations import export_conversation_md
+        from .core.conversations import export_conversation_md, export_conversation_json
         target_dir = state.config.exports_dir or Path.cwd()
         try:
-            path = export_conversation_md(state.current_conversation, target_dir)
+            if format_arg == 'md':
+                path = export_conversation_md(state.current_conversation, target_dir)
+            else:
+                path = export_conversation_json(state.current_conversation, target_dir)
             print(f"[{line_num}] Exported to: {path}")
         except Exception as e:
             print(f"[{line_num}] Error exporting: {e}")

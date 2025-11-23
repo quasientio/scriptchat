@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,7 @@ from litechat.core.conversations import (
     load_conversation,
     rename_conversation,
     save_conversation,
+    export_conversation_json,
 )
 
 
@@ -120,6 +122,39 @@ class ConversationIoTests(unittest.TestCase):
             self.assertIn("## User", text)
             self.assertNotIn("keep it short", text)  # system prompt omitted
             self.assertIn("pong", text)
+
+    def test_export_conversation_json_includes_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id="202401010101_llama3_test",
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt="keep it short",
+                messages=[
+                    Message(role="system", content="keep it short"),
+                    Message(role="user", content="ping"),
+                    Message(role="assistant", content="pong"),
+                ],
+                tokens_in=12,
+                tokens_out=34,
+            )
+
+            export_path = export_conversation_json(convo, Path(tmpdir))
+            data = json.loads(export_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(export_path.name, "202401010101_llama3_test.json")
+            self.assertEqual(data["id"], convo.id)
+            self.assertEqual(data["provider_id"], "ollama")
+            self.assertEqual(data["model"], "llama3")
+            self.assertEqual(data["temperature"], 0.7)
+            self.assertEqual(data["system_prompt"], "keep it short")
+            self.assertEqual(data["tokens_in"], 12)
+            self.assertEqual(data["tokens_out"], 34)
+            self.assertEqual([m["role"] for m in data["messages"]], ["system", "user", "assistant"])
+            self.assertEqual(data["messages"][1]["content"], "ping")
+            self.assertTrue(data["exported_at"])
 
 
 if __name__ == "__main__":

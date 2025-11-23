@@ -392,14 +392,16 @@ class CommandHandlers:
         """Handle /export command."""
         format_arg = args.strip().lower()
 
-        if format_arg and format_arg != 'md':
-            self.app.add_system_message("Unsupported format. Available: md")
+        if format_arg and format_arg not in ('md', 'json'):
+            self.app.add_system_message("Unsupported format. Available: md, json")
             return
 
         if format_arg == 'md':
             self._export_md()
+        elif format_arg == 'json':
+            self._export_json()
         else:
-            self.app.prompt_message = "Export format (available: md):"
+            self.app.prompt_message = "Export format (available: md, json):"
             self.app.prompt_for_input(self._export_format_callback)
 
     def _export_format_callback(self, fmt: str):
@@ -408,10 +410,13 @@ class CommandHandlers:
         if not fmt:
             self.app.add_system_message("Export cancelled (no format selected).")
             return
-        if fmt != 'md':
-            self.app.add_system_message("Unsupported format. Available: md")
+        if fmt not in ('md', 'json'):
+            self.app.add_system_message("Unsupported format. Available: md, json")
             return
-        self._export_md()
+        if fmt == 'md':
+            self._export_md()
+        else:
+            self._export_json()
 
     def _export_md(self):
         """Export conversation to Markdown."""
@@ -419,6 +424,18 @@ class CommandHandlers:
 
         try:
             path = export_conversation_md(self.app.state.current_conversation, target_dir)
+            self.app.add_system_message(f"Exported to: {path}")
+        except Exception as e:
+            self.app.add_system_message(f"Error exporting: {str(e)}")
+
+    def _export_json(self):
+        """Export conversation to JSON."""
+        from ..core.conversations import export_conversation_json
+
+        target_dir = self.app.state.config.exports_dir or Path.cwd()
+
+        try:
+            path = export_conversation_json(self.app.state.current_conversation, target_dir)
             self.app.add_system_message(f"Exported to: {path}")
         except Exception as e:
             self.app.add_system_message(f"Error exporting: {str(e)}")
