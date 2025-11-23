@@ -146,6 +146,32 @@ class CommandTests(unittest.TestCase):
             empty = handle_command("/", state)
             self.assertIn("Empty command", empty.message)
 
+    def test_profile_command_outputs_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/profile", state)
+            msg = result.message or ""
+            self.assertIn("Provider: ollama", msg)
+            self.assertIn("Model: llama3", msg)
+            self.assertIn("Tokens:", msg)
+            self.assertIn("Timeout:", msg)
+            self.assertIn("convs)", msg.lower())
+
+    def test_profile_system_prompt_trimmed_and_none(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            long_prompt = "p" * 150
+            state = make_state(Path(tmpdir), system_prompt=long_prompt)
+
+            trimmed_result = handle_command("/profile", state)
+            msg = trimmed_result.message or ""
+            self.assertIn("System prompt:", msg)
+            self.assertIn("...", msg)
+            self.assertLess(len(msg), 400)  # ensure trimming applied
+
+            state.current_conversation.system_prompt = None
+            none_result = handle_command("/profile", state)
+            self.assertIn("(none)", none_result.message)
+
     def test_timeout_command_updates_config_and_clients(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))

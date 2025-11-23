@@ -130,6 +130,14 @@ class MainBatchCommandBranches(unittest.TestCase):
             dirs = [p for p in Path(tmpdir).iterdir() if p.is_dir()]
             self.assertTrue(dirs)
 
+    def test_profile_branch(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            handle_batch_command("/profile", state, 1)
+            output = buf.getvalue()
+            self.assertIn("Provider:", output)
+            self.assertIn("Model:", output)
+
 
 if __name__ == "__main__":
     unittest.main()

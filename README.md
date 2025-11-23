@@ -118,6 +118,7 @@ All commands start with `/`:
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
 - `/timeout <seconds>` - Override the request timeout for all providers at runtime
+- `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and paths
 - `/file <path>` - Send the contents of a text file as your message
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
 - `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder

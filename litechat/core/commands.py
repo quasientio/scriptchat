@@ -255,6 +255,43 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         message = parts[1] if len(parts) > 1 else ""
         return CommandResult(message=message)
 
+    elif command == 'profile':
+        convo = state.current_conversation
+        cfg = state.config
+        conv_count = 0
+        exp_count = 0
+        try:
+            if state.conversations_root.exists():
+                conv_count = sum(1 for p in state.conversations_root.iterdir() if p.is_dir())
+        except Exception:
+            conv_count = 0
+        exports_dir = cfg.exports_dir or Path.cwd()
+        try:
+            if exports_dir.exists():
+                exp_count = sum(1 for p in exports_dir.iterdir() if p.is_file())
+        except Exception:
+            exp_count = 0
+
+        lines = [
+            f"Provider: {convo.provider_id}",
+            f"Model: {convo.model_name}",
+            f"Temperature: {convo.temperature:.2f}",
+            f"Tokens: {convo.tokens_in} in / {convo.tokens_out} out",
+            f"Streaming: {'on' if cfg.enable_streaming else 'off'}",
+            f"Timeout: {cfg.timeout}s",
+            f"Conversations dir: {cfg.conversations_dir} ({conv_count} convs)",
+        ]
+        if cfg.exports_dir:
+            lines.append(f"Exports dir: {cfg.exports_dir} ({exp_count} files)")
+        if convo.system_prompt:
+            trimmed = convo.system_prompt.strip().replace("\n", " ")
+            if len(trimmed) > 100:
+                trimmed = trimmed[:97] + "..."
+            lines.append(f"System prompt: {trimmed}")
+        else:
+            lines.append("System prompt: (none)")
+        return CommandResult(message="\n".join(lines))
+
     elif command == 'assert':
         if len(parts) < 2 or not parts[1].strip():
             return CommandResult(message="Usage: /assert <pattern>")
@@ -270,7 +307,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /timeout, /clear, /file, /echo, /assert, /assert-not, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /timeout, /profile, /clear, /file, /echo, /assert, /assert-not, /exit"
         )
 
 

@@ -108,6 +108,9 @@ class CommandHandlers:
                 self.handle_temp(args)
             elif result.command_type == 'clear':
                 self.handle_clear(args)
+            elif result.command_type == 'profile':
+                # No UI interaction needed; already added system message
+                pass
 
     def handle_model(self, args: str = ""):
         """Handle /model command.
