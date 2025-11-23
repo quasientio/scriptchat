@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Optional
 from ..core.commands import handle_command, set_model, set_temperature
 from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
-    branch_conversation, delete_conversation, export_conversation_md
+    branch_conversation, delete_conversation
+)
+from ..core.exports import (
+    export_conversation_md,
+    export_conversation_json,
+    export_conversation_html,
+    import_conversation_from_file,
 )
 
 if TYPE_CHECKING:
@@ -394,16 +400,18 @@ class CommandHandlers:
         """Handle /export command."""
         format_arg = args.strip().lower()
 
-        if format_arg and format_arg not in ('md', 'json'):
-            self.app.add_system_message("Unsupported format. Available: md, json")
+        if format_arg and format_arg not in ('md', 'json', 'html'):
+            self.app.add_system_message("Unsupported format. Available: md, json, html")
             return
 
         if format_arg == 'md':
             self._export_md()
         elif format_arg == 'json':
             self._export_json()
+        elif format_arg == 'html':
+            self._export_html()
         else:
-            self.app.prompt_message = "Export format (available: md, json):"
+            self.app.prompt_message = "Export format (available: md, json, html):"
             self.app.prompt_for_input(self._export_format_callback)
 
     def _export_format_callback(self, fmt: str):
@@ -412,13 +420,16 @@ class CommandHandlers:
         if not fmt:
             self.app.add_system_message("Export cancelled (no format selected).")
             return
-        if fmt not in ('md', 'json'):
-            self.app.add_system_message("Unsupported format. Available: md, json")
+        if fmt not in ('md', 'json', 'html'):
+            self.app.add_system_message("Unsupported format. Available: md, json, html")
             return
         if fmt == 'md':
             self._export_md()
         else:
-            self._export_json()
+            if fmt == 'json':
+                self._export_json()
+            else:
+                self._export_html()
 
     def _export_md(self):
         """Export conversation to Markdown."""
@@ -432,8 +443,6 @@ class CommandHandlers:
 
     def _export_json(self):
         """Export conversation to JSON."""
-        from ..core.conversations import export_conversation_json
-
         target_dir = self.app.state.config.exports_dir or Path.cwd()
 
         try:
@@ -442,9 +451,18 @@ class CommandHandlers:
         except Exception as e:
             self.app.add_system_message(f"Error exporting: {str(e)}")
 
+    def _export_html(self):
+        """Export conversation to HTML."""
+        target_dir = self.app.state.config.exports_dir or Path.cwd()
+
+        try:
+            path = export_conversation_html(self.app.state.current_conversation, target_dir)
+            self.app.add_system_message(f"Exported to: {path}")
+        except Exception as e:
+            self.app.add_system_message(f"Error exporting: {str(e)}")
+
     def handle_import(self, args: str):
         """Handle /import command (load from exported file)."""
-        from ..core.conversations import import_conversation_from_file
         path = args.strip()
         if not path:
             self.app.add_system_message("Usage: /import <path>")

@@ -7,6 +7,12 @@ from pathlib import Path
 
 from .core.config import load_config
 from .core.conversations import Conversation, Message, save_conversation
+from .core.exports import (
+    export_conversation_md,
+    export_conversation_json,
+    export_conversation_html,
+    import_conversation_from_file,
+)
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
@@ -186,7 +192,6 @@ def handle_batch_command(
         if not args:
             print(f"[{line_num}] Error: /import requires a path")
             return True, None, None
-        from .core.conversations import import_conversation_from_file
         try:
             imported = import_conversation_from_file(Path(args), state.conversations_root)
             state.current_conversation = imported
@@ -212,16 +217,17 @@ def handle_batch_command(
 
     if command == 'export':
         format_arg = args.strip().lower() or "md"
-        if format_arg not in ('md', 'json'):
-            print(f"[{line_num}] Error: /export format must be 'md' or 'json'")
+        if format_arg not in ('md', 'json', 'html'):
+            print(f"[{line_num}] Error: /export format must be 'md', 'json', or 'html'")
             return True, None, None
-        from .core.conversations import export_conversation_md, export_conversation_json
         target_dir = state.config.exports_dir or Path.cwd()
         try:
             if format_arg == 'md':
                 path = export_conversation_md(state.current_conversation, target_dir)
-            else:
+            elif format_arg == 'json':
                 path = export_conversation_json(state.current_conversation, target_dir)
+            else:
+                path = export_conversation_html(state.current_conversation, target_dir)
             print(f"[{line_num}] Exported to: {path}")
         except Exception as e:
             print(f"[{line_num}] Error exporting: {e}")

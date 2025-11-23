@@ -110,7 +110,7 @@ All commands start with `/`:
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats` - List saved conversations
 - `/send <message>` - Queue a message (sends immediately if the model is idle)
-- `/export [format]` - Export the current conversation (formats: `md`, `json`; prompts if omitted). `json` includes full metadata; `md` is a minimal, human-friendly transcript.
+- `/export [format]` - Export the current conversation (formats: `md`, `json`, `html`; prompts if omitted). `json` includes full metadata; `md`/`html` are minimal, human-friendly transcripts.
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
 - `/provider [id|index]` - Switch provider (lists if omitted)

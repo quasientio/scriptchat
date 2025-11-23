@@ -61,7 +61,7 @@ class MainBatchCommandBranches(unittest.TestCase):
             output = buf.getvalue()
         self.assertIn("Invalid temperature", output)
         self.assertIn("expects 'on' or 'off'", output)
-        self.assertIn("format must be 'md' or 'json'", output)
+        self.assertIn("format must be 'md', 'json', or 'html'", output)
         self.assertIn("requires a pattern", output)
 
     def test_prompt_and_sleep_branches(self):
@@ -105,6 +105,15 @@ class MainBatchCommandBranches(unittest.TestCase):
             handle_batch_command("/export json", state, 1)
             output = buf.getvalue()
             files = list(Path(tmpdir).glob("*.json"))
+            self.assertTrue(files)
+            self.assertIn("Exported to:", output)
+
+    def test_export_html_succeeds(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            handle_batch_command("/export html", state, 1)
+            output = buf.getvalue()
+            files = list(Path(tmpdir).glob("*.html"))
             self.assertTrue(files)
             self.assertIn("Exported to:", output)
 
