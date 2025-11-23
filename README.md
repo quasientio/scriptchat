@@ -1,6 +1,7 @@
 # lite-chat
 
-A terminal-based chat client for interacting with local LLMs via Ollama.
+A terminal-based, scriptable chat client for interacting with local LLMs (via Ollama)
+and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...).
 
 ## Features
 
@@ -111,17 +112,17 @@ All commands start with `/`:
 - `/chats` - List saved conversations
 - `/send <message>` - Queue a message (sends immediately if the model is idle)
 - `/export [format]` - Export the current conversation (formats: `md`, `json`, `html`; prompts if omitted). `json` includes full metadata; `md`/`html` are minimal, human-friendly transcripts.
+- `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
-- `/provider [id|index]` - Switch provider (lists if omitted)
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
 - `/timeout <seconds>` - Override the request timeout for all providers at runtime
 - `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and paths
-- `/file <path>` - Send the contents of a text file as your message
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
-- `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder
+- `/file <path>` - Send the contents of a text file as your message
+- `/echo <text>` - Print a message to the console without sending to the model
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat
