@@ -8,6 +8,7 @@ import re
 from .config import Config
 from .conversations import Conversation, Message
 from .ollama_client import OllamaChatClient
+from .provider_dispatcher import ProviderDispatcher
 
 
 @dataclass
@@ -198,6 +199,15 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='temp'
         )
 
+    elif command == 'timeout':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message=f"Current timeout: {state.config.timeout} seconds\nUsage: /timeout <seconds>")
+        try:
+            seconds = float(parts[1].strip())
+        except ValueError:
+            return CommandResult(message="Invalid timeout. Usage: /timeout <seconds>")
+        return set_timeout(state, seconds)
+
     elif command == 'clear':
         return CommandResult(
             needs_ui_interaction=True,
@@ -252,7 +262,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /clear, /file, /echo, /assert, /assert-not, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /timeout, /clear, /file, /echo, /assert, /assert-not, /exit"
         )
 
 
@@ -291,3 +301,42 @@ def set_temperature(state: AppState, temperature: float) -> CommandResult:
     temperature = max(0.0, min(2.0, temperature))
     state.current_conversation.temperature = temperature
     return CommandResult(message=f"Temperature set to {temperature:.2f}")
+
+
+def set_timeout(state: AppState, seconds: float) -> CommandResult:
+    """Set the request timeout in seconds.
+
+    Args:
+        state: Application state
+        seconds: Timeout duration in seconds
+
+    Returns:
+        CommandResult with execution result
+    """
+    try:
+        timeout_val = float(seconds)
+    except (TypeError, ValueError):
+        return CommandResult(message="Invalid timeout. Please provide a number of seconds.")
+
+    if timeout_val <= 0:
+        return CommandResult(message="Timeout must be greater than zero seconds.")
+
+    timeout_int = int(timeout_val)
+    if timeout_int <= 0:
+        timeout_int = 1
+
+    state.config.timeout = timeout_int
+
+    # Propagate to provider clients that cache the timeout
+    client = state.client
+    if isinstance(client, ProviderDispatcher):
+        for provider_client in client.clients.values():
+            if hasattr(provider_client, "timeout"):
+                provider_client.timeout = timeout_int
+            if hasattr(provider_client, "config"):
+                try:
+                    provider_client.config.timeout = timeout_int
+                except Exception:
+                    pass
+
+    return CommandResult(message=f"Timeout set to {timeout_int} seconds")

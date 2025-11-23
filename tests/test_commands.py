@@ -5,6 +5,7 @@ from pathlib import Path
 from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature
 from litechat.core.config import Config, ModelConfig, ProviderConfig
 from litechat.core.conversations import Conversation, Message
+from litechat.core.provider_dispatcher import ProviderDispatcher
 
 
 def make_config(tmp_path: Path, system_prompt: str | None = "system says"):
@@ -144,6 +145,25 @@ class CommandTests(unittest.TestCase):
 
             empty = handle_command("/", state)
             self.assertIn("Empty command", empty.message)
+
+    def test_timeout_command_updates_config_and_clients(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            client = type("C", (), {"timeout": 5})()
+            dispatcher = ProviderDispatcher({"ollama": client})
+            state.client = dispatcher
+
+            result = handle_command("/timeout 45", state)
+            self.assertIn("Timeout set to 45", result.message)
+            self.assertEqual(state.config.timeout, 45)
+            self.assertEqual(dispatcher.clients["ollama"].timeout, 45)
+
+            current = handle_command("/timeout", state)
+            self.assertIn("Current timeout", current.message)
+
+            invalid = handle_command("/timeout 0", state)
+            self.assertIn("greater than zero", invalid.message)
+            self.assertEqual(state.config.timeout, 45)
 
 
 if __name__ == "__main__":

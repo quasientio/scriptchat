@@ -117,7 +117,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/clear', '/file', '/echo', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/stream', '/prompt', '/run', '/model', '/temp', '/timeout', '/clear', '/file', '/echo', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -442,6 +442,7 @@ class LiteChatUI:
 
         # ANSI color codes
         GRAY = '\033[90m'
+        RED = '\033[91m'
         CYAN = '\033[96m'
         GREEN = '\033[92m'
         YELLOW = '\033[93m'
@@ -449,8 +450,10 @@ class LiteChatUI:
 
         for msg in self.state.current_conversation.messages:
             if msg.role == 'system':
-                # System messages in dim gray
-                lines.append(f"{GRAY}[system] {msg.content}{RESET}")
+                content = msg.content or ""
+                is_error = content.strip().lower().startswith("error")
+                color = RED if is_error else GRAY
+                lines.append(f"{color}[system] {content}{RESET}")
             elif msg.role == 'user':
                 # User messages in cyan
                 lines.append(f"{CYAN}[user]{RESET} {msg.content}")

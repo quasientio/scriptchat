@@ -10,7 +10,7 @@ from .core.conversations import Conversation, Message, save_conversation
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
-from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature
+from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout
 from .ui.app import run_ui
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,18 @@ def handle_batch_command(
             print(f"[{line_num}] Error: Invalid temperature value: {args}")
         return True, None, None
 
+    if command == 'timeout':
+        if not args:
+            print(f"[{line_num}] Current timeout: {state.config.timeout} seconds")
+            return True, None, None
+        try:
+            seconds = float(args)
+            result = set_timeout(state, seconds)
+            print(f"[{line_num}] {result.message}")
+        except ValueError:
+            print(f"[{line_num}] Error: Invalid timeout value: {args}")
+        return True, None, None
+
     if command == 'stream':
         arg = args.strip().lower()
         if arg in ('on', 'off'):
@@ -224,7 +236,7 @@ def handle_batch_command(
         return True, None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /stream, /prompt, /save, /send, /file, /export, /echo, /sleep, /assert")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /stream, /prompt, /save, /send, /file, /export, /echo, /sleep, /assert")
     return True, None, None
 
 

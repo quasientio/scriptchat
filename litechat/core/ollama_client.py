@@ -227,7 +227,7 @@ class OllamaChatClient:
             raise TimeoutError(
                 f"Request to Ollama API timed out after {self.config.timeout} seconds. "
                 "The model may be taking too long to respond. "
-                "You can increase the timeout in your config.toml file."
+                "You can increase the timeout in your config.toml file or via /timeout."
             )
         except requests.exceptions.HTTPError as e:
             self._raise_http_error(e, response, url, payload)
@@ -274,7 +274,7 @@ class OllamaChatClient:
             raise TimeoutError(
                 f"Request to Ollama API timed out after {self.config.timeout} seconds. "
                 "The model may be taking too long to respond. "
-                "You can increase the timeout in your config.toml file."
+                "You can increase the timeout in your config.toml file or via /timeout."
             )
         except requests.exceptions.HTTPError as e:
             self._raise_http_error(e, response, url, payload)

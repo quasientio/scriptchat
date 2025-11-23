@@ -18,7 +18,7 @@ class OpenAIChatClient:
     def __init__(self, config: Config, provider: ProviderConfig, timeout: int):
         self.config = config
         self.provider = provider
-        self.timeout = timeout
+        self.timeout = timeout  # fallback; config.timeout preferred
         self.session = requests.Session()
         headers = {
             "Content-Type": "application/json",
@@ -145,18 +145,29 @@ class OpenAIChatClient:
 
     def _post_with_temperature_retry(self, url: str, payload: dict, stream: bool) -> requests.Response:
         """Post chat payload; retry once without temperature if model rejects it."""
+        timeout = getattr(self.config, "timeout", None) or self.timeout
         resp = None
         try:
-            resp = self.session.post(url, json=payload, timeout=self.timeout, stream=stream)
+            resp = self.session.post(url, json=payload, timeout=timeout, stream=stream)
             resp.raise_for_status()
             return resp
+        except requests.Timeout as e:
+            raise TimeoutError(
+                f"Request timed out after {timeout} seconds. "
+                "Increase the timeout in config.toml or with /timeout."
+            ) from e
+        except requests.ConnectionError as e:
+            raise ConnectionError(
+                f"Failed to connect to provider at {self.provider.api_url}. "
+                "Check your network or provider URL, or increase the timeout with /timeout."
+            ) from e
         except requests.HTTPError as e:
             # Check for temperature error, retry without temperature
             if resp is not None and self._is_temperature_error(resp):
                 payload_no_temp = dict(payload)
                 payload_no_temp.pop("temperature", None)
                 logger.info("Retrying without temperature for model %s due to temperature error", payload.get("model"))
-                resp = self.session.post(url, json=payload_no_temp, timeout=self.timeout, stream=stream)
+                resp = self.session.post(url, json=payload_no_temp, timeout=timeout, stream=stream)
                 resp.raise_for_status()
                 return resp
             raise self._http_error_with_body(resp, e)

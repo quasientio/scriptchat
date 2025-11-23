@@ -117,6 +117,7 @@ All commands start with `/`:
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
+- `/timeout <seconds>` - Override the request timeout for all providers at runtime
 - `/file <path>` - Send the contents of a text file as your message
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).

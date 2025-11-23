@@ -268,6 +268,169 @@ models = "gpt-4o"
         self.assertEqual(convo.tokens_in, 1)
         self.assertEqual(convo.tokens_out, 2)
 
+    def test_runtime_timeout_override_used_for_requests(self):
+        provider = ProviderConfig(
+            id="openai",
+            type="openai-compatible",
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="gpt-4o",
+        )
+        cfg = Config(
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="openai",
+            default_model="gpt-4o",
+            default_temperature=0.7,
+            timeout=1,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class RecordingSession:
+            def __init__(self):
+                self.timeouts = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.timeouts.append(timeout)
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = ""
+
+                    def json(self_inner):
+                        return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="openai",
+            model_name="gpt-4o",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = RecordingSession()
+
+        cfg.timeout = 7
+
+        reply = client.chat(convo, "hi")
+        self.assertEqual(reply, "ok")
+        self.assertEqual(client.session.timeouts, [7])
+
+    def test_timeout_errors_are_wrapped(self):
+        provider = ProviderConfig(
+            id="openai",
+            type="openai-compatible",
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="gpt-4o",
+        )
+        cfg = Config(
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="openai",
+            default_model="gpt-4o",
+            default_temperature=0.7,
+            timeout=2,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class TimeoutSession:
+            def post(self, url, json=None, timeout=None, stream=False):
+                raise requests.Timeout("boom")
+
+        convo = Conversation(
+            id=None,
+            provider_id="openai",
+            model_name="gpt-4o",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = TimeoutSession()
+
+        with self.assertRaises(TimeoutError) as ctx:
+            client.chat(convo, "hi")
+        self.assertIn("Request timed out after 2 seconds", str(ctx.exception))
+
+    def test_connection_errors_are_wrapped(self):
+        provider = ProviderConfig(
+            id="openai",
+            type="openai-compatible",
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="gpt-4o",
+        )
+        cfg = Config(
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="openai",
+            default_model="gpt-4o",
+            default_temperature=0.7,
+            timeout=2,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class FailSession:
+            def post(self, url, json=None, timeout=None, stream=False):
+                raise requests.ConnectionError("nope")
+
+        convo = Conversation(
+            id=None,
+            provider_id="openai",
+            model_name="gpt-4o",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = FailSession()
+
+        with self.assertRaises(ConnectionError) as ctx:
+            client.chat(convo, "hi")
+        self.assertIn("Failed to connect to provider at https://api.openai.com", str(ctx.exception))
+        self.assertIn("/timeout", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

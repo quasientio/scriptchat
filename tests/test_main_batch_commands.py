@@ -89,6 +89,16 @@ class MainBatchCommandBranches(unittest.TestCase):
         self.assertIn("Permission denied", output)
         self.assertIn("not supported", output)
 
+    def test_timeout_command_branch(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            handle_batch_command("/timeout 9", state, 1)
+            handle_batch_command("/timeout", state, 2)
+            output = buf.getvalue()
+        self.assertEqual(state.config.timeout, 9)
+        self.assertIn("Timeout set to 9", output)
+        self.assertIn("Current timeout: 9", output)
+
 
 if __name__ == "__main__":
     unittest.main()
