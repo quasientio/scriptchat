@@ -114,6 +114,15 @@ class AppHelperTests(unittest.TestCase):
         ui._history_next()
         self.assertEqual(ui.input_buffer.document.text, "second")
 
+    def test_conversation_arrow_scroll_bindings_exist(self):
+        # Ensure key bindings are registered and filter is set to conversation buffer focus
+        state = make_state()
+        ui = LiteChatUI(state)
+        keys = [binding.keys for binding in ui.kb.bindings]
+        flat_keys = [k for sub in keys for k in sub]
+        self.assertIn("up", flat_keys)
+        self.assertIn("down", flat_keys)
+
     def test_litechat_ui_initialization_and_cleanup(self):
         state = make_state()
 

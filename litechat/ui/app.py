@@ -385,6 +385,18 @@ class LiteChatUI:
             # Position slightly before end to allow scrolling
             self.conversation_buffer.cursor_position = max(0, len(doc.text) - 1)
 
+        @kb.add('up', filter=Condition(lambda: self.app.layout.has_focus(self.conversation_buffer)))
+        def handle_up(event):
+            """Scroll conversation up with Up arrow when focused."""
+            buff = self.conversation_buffer
+            buff.cursor_up(count=1)
+
+        @kb.add('down', filter=Condition(lambda: self.app.layout.has_focus(self.conversation_buffer)))
+        def handle_down(event):
+            """Scroll conversation down with Down arrow when focused."""
+            buff = self.conversation_buffer
+            buff.cursor_down(count=1)
+
         # Prevent typing in conversation buffer
         @kb.add('<any>', filter=Condition(lambda: self.app.layout.has_focus(self.conversation_buffer)))
         def handle_conversation_input(event):
