@@ -199,6 +199,14 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='temp'
         )
 
+    elif command == 'import':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /import <path>")
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='import'
+        )
+
     elif command == 'timeout':
         if len(parts) < 2 or not parts[1].strip():
             return CommandResult(message=f"Current timeout: {state.config.timeout} seconds\nUsage: /timeout <seconds>")
@@ -262,7 +270,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /stream, /prompt, /run, /model, /temp, /timeout, /clear, /file, /echo, /assert, /assert-not, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /timeout, /clear, /file, /echo, /assert, /assert-not, /exit"
         )
 
 

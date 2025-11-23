@@ -110,7 +110,7 @@ All commands start with `/`:
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats` - List saved conversations
 - `/send <message>` - Queue a message (sends immediately if the model is idle)
-- `/export [format]` - Export the current conversation (formats: `md`, `json`; prompts if omitted)
+- `/export [format]` - Export the current conversation (formats: `md`, `json`; prompts if omitted). `json` includes full metadata; `md` is a minimal, human-friendly transcript.
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
 - `/provider [id|index]` - Switch provider (lists if omitted)
@@ -120,6 +120,7 @@ All commands start with `/`:
 - `/timeout <seconds>` - Override the request timeout for all providers at runtime
 - `/file <path>` - Send the contents of a text file as your message
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
+- `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat

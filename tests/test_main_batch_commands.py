@@ -108,6 +108,19 @@ class MainBatchCommandBranches(unittest.TestCase):
             self.assertTrue(files)
             self.assertIn("Exported to:", output)
 
+    def test_import_command_branch(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            # create an export to import
+            export_path = Path(tmpdir) / "exp.json"
+            export_path.write_text('{"model": "llama3", "provider_id": "ollama", "temperature": 0.7, "messages": [{"role":"user","content":"hi"}]}', encoding="utf-8")
+            handle_batch_command(f"/import {export_path}", state, 1)
+            output = buf.getvalue()
+            self.assertIn("Imported conversation as:", output)
+            # ensure directory created
+            dirs = [p for p in Path(tmpdir).iterdir() if p.is_dir()]
+            self.assertTrue(dirs)
+
 
 if __name__ == "__main__":
     unittest.main()

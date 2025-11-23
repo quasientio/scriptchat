@@ -90,6 +90,8 @@ class CommandHandlers:
                 self.handle_send(args)
             elif result.command_type == 'export':
                 self.handle_export(args)
+            elif result.command_type == 'import':
+                self.handle_import(args)
             elif result.command_type == 'stream':
                 self.handle_stream(args)
             elif result.command_type == 'prompt':
@@ -439,6 +441,22 @@ class CommandHandlers:
             self.app.add_system_message(f"Exported to: {path}")
         except Exception as e:
             self.app.add_system_message(f"Error exporting: {str(e)}")
+
+    def handle_import(self, args: str):
+        """Handle /import command (load from exported file)."""
+        from ..core.conversations import import_conversation_from_file
+        path = args.strip()
+        if not path:
+            self.app.add_system_message("Usage: /import <path>")
+            return
+
+        try:
+            imported = import_conversation_from_file(Path(path), self.app.state.conversations_root)
+            self.app.state.current_conversation = imported
+            self.app.add_system_message(f"Imported conversation as: {imported.id}")
+            self.app.update_conversation_display()
+        except Exception as e:
+            self.app.add_system_message(f"Error importing: {e}")
 
     def handle_stream(self, args: str = ""):
         """Handle /stream command (toggle or set on/off)."""

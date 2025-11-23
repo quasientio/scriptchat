@@ -182,6 +182,19 @@ def handle_batch_command(
             print(f"[{line_num}] Error saving conversation: {e}")
         return True, None, None
 
+    if command == 'import':
+        if not args:
+            print(f"[{line_num}] Error: /import requires a path")
+            return True, None, None
+        from .core.conversations import import_conversation_from_file
+        try:
+            imported = import_conversation_from_file(Path(args), state.conversations_root)
+            state.current_conversation = imported
+            print(f"[{line_num}] Imported conversation as: {imported.id}")
+        except Exception as e:
+            print(f"[{line_num}] Error importing: {e}")
+        return True, None, None
+
     if command == 'send':
         if not args:
             print(f"[{line_num}] Error: /send requires a message")
@@ -239,7 +252,7 @@ def handle_batch_command(
         return True, None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /stream, /prompt, /save, /send, /file, /export, /echo, /sleep, /assert")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert")
     return True, None, None
 
 
