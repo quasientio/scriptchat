@@ -111,6 +111,7 @@ class LiteChatUI:
         self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
         self.script_queue: list[str] = []  # Pending script lines to execute
         self.running_script: bool = False
+        self.history_path = self.state.config.conversations_dir.expanduser().parent / "history.txt"
 
         # Create command handlers
         self.handlers = CommandHandlers(self)
@@ -149,6 +150,7 @@ class LiteChatUI:
 
         # Initialize conversation display (scroll to bottom initially)
         self.update_conversation_display()
+        self._load_history()
 
     def _create_layout(self) -> Layout:  # pragma: no cover - UI layout wiring
         """Create the application layout.
@@ -657,6 +659,25 @@ class LiteChatUI:
 
         self.input_history.append(entry)
         self.input_history_index = None
+        try:
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            # Keep file trimmed by rewriting if it grows large
+            if len(self.input_history) > 500:
+                self.input_history = self.input_history[-500:]
+            self.history_path.write_text("\n".join(self.input_history) + "\n", encoding="utf-8")
+        except Exception:
+            # Ignore persistence errors to avoid interrupting the session
+            pass
+
+    def _load_history(self):
+        """Load persisted input history."""
+        try:
+            if self.history_path.exists():
+                lines = [line.strip() for line in self.history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+                self.input_history = lines[-500:]
+        except Exception:
+            # Ignore load errors
+            self.input_history = []
 
     def _history_previous(self):
         """Move to previous history item."""

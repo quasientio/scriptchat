@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -129,6 +130,21 @@ class AppHelperTests(unittest.TestCase):
 
         ui._cleanup()
         self.assertTrue(hasattr(state.client, "cleaned"))
+
+    def test_input_history_persistence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            conv_dir = root / "conversations"
+            conv_dir.mkdir(parents=True, exist_ok=True)
+            state = make_state()
+            state.config.conversations_dir = conv_dir
+            ui = LiteChatUI(state)
+            ui._append_history("first")
+            ui._append_history("second")
+
+            # Reload UI and ensure history was persisted
+            ui2 = LiteChatUI(state)
+            self.assertEqual(ui2.input_history, ["first", "second"])
 
 
 if __name__ == "__main__":
