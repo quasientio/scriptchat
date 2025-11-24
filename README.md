@@ -100,6 +100,12 @@ In batch mode you can allow assertions to log but keep running using `--continue
 python -m litechat --run tests/demo.txt --continue-on-error
 ```
 
+You can also pipe a script via stdin (no `--run` needed):
+
+```bash
+cat tests/demo.txt | python -m litechat
+```
+
 ### Commands
 
 All commands start with `/`:

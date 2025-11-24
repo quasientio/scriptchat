@@ -268,36 +268,20 @@ def handle_batch_command(
     return True, None, None
 
 
-def run_batch(script_path: str, state: AppState, continue_on_error: bool = False) -> int:
-    """Run a script file in batch mode (non-interactively).
-
-    Args:
-        script_path: Path to script file
-        state: Application state
-
-    Returns:
-        Exit code (0 for success, 1 for error)
-    """
-    try:
-        path = Path(script_path).expanduser()
-        with open(path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        print(f"Error: File not found: {script_path}", file=sys.stderr)
-        return 1
-    except PermissionError:
-        print(f"Error: Permission denied: {script_path}", file=sys.stderr)
-        return 1
-    except Exception as e:
-        print(f"Error reading {script_path}: {e}", file=sys.stderr)
-        return 1
-
+def run_batch_lines(
+    lines: list[str],
+    state: AppState,
+    continue_on_error: bool = False,
+    source_label: str | None = None
+) -> int:
+    """Run already-loaded script lines in batch mode."""
     script_lines = parse_script_lines(lines)
+    label = source_label or "<stdin>"
     if not script_lines:
-        print(f"Error: No runnable lines in {script_path} (comments/empty only).", file=sys.stderr)
+        print(f"Error: No runnable lines in {label} (comments/empty only).", file=sys.stderr)
         return 1
 
-    logger.info(f"Running script: {script_path} ({len(script_lines)} lines)")
+    logger.info(f"Running script: {label} ({len(script_lines)} lines)")
 
     pass_failures = 0
 
@@ -361,6 +345,25 @@ def run_batch(script_path: str, state: AppState, continue_on_error: bool = False
 
     logger.info("Script completed successfully")
     return 0 if pass_failures == 0 else 1
+
+
+def run_batch(script_path: str, state: AppState, continue_on_error: bool = False) -> int:
+    """Run a script file in batch mode (non-interactively)."""
+    try:
+        path = Path(script_path).expanduser()
+        with open(path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        print(f"Error: File not found: {script_path}", file=sys.stderr)
+        return 1
+    except PermissionError:
+        print(f"Error: Permission denied: {script_path}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error reading {script_path}: {e}", file=sys.stderr)
+        return 1
+
+    return run_batch_lines(lines, state, continue_on_error=continue_on_error, source_label=str(script_path))
 
 
 def main():  # pragma: no cover - interactive entrypoint not exercised in unit tests
@@ -462,6 +465,17 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
             # Run script in batch mode
             exit_code = run_batch(args.run, state, continue_on_error=args.continue_on_error)
             # Cleanup
+            try:
+                client.unload_model()
+                client.server_manager.stop()
+            except Exception as e:
+                logger.error(f"Error during cleanup: {e}")
+            sys.exit(exit_code)
+
+        # If stdin is not a TTY and no --run provided, treat stdin as a script
+        if not sys.stdin.isatty():
+            stdin_lines = sys.stdin.read().splitlines()
+            exit_code = run_batch_lines(stdin_lines, state, continue_on_error=args.continue_on_error, source_label="<stdin>")
             try:
                 client.unload_model()
                 client.server_manager.stop()

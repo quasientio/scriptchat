@@ -1,4 +1,5 @@
 import sys
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -56,6 +57,7 @@ class MainEntrypointTests(unittest.TestCase):
                 mock.patch.object(__main__, "run_ui", return_value=None),
                 mock.patch.object(__main__, "OllamaChatClient") as mock_ollama_client,
                 mock.patch.object(__main__, "ProviderDispatcher") as mock_dispatcher,
+                mock.patch.object(sys.stdin, "isatty", return_value=True),
             ):
                 mock_ollama_client.return_value = object()
                 dispatcher = DummyDispatcher()
@@ -81,6 +83,35 @@ class MainEntrypointTests(unittest.TestCase):
                     __main__.main()
                 sys.argv = argv
                 self.assertEqual(exc.exception.code, 1)
+
+    def test_main_runs_batch_from_stdin(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = make_config(Path(tmpdir))
+            with (
+                mock.patch.object(__main__, "load_config", return_value=cfg),
+                mock.patch.object(__main__, "run_ui") as mock_run_ui,
+                mock.patch.object(__main__, "run_batch_lines", return_value=0) as mock_run_lines,
+                mock.patch.object(__main__, "OllamaChatClient") as mock_ollama_client,
+                mock.patch.object(__main__, "ProviderDispatcher") as mock_dispatcher,
+            ):
+                mock_ollama_client.return_value = object()
+                dispatcher = DummyDispatcher()
+                mock_dispatcher.return_value = dispatcher
+
+                argv = sys.argv
+                stdin_backup = sys.stdin
+                sys.argv = ["litechat"]
+                sys.stdin = io.StringIO("hello\n")
+                try:
+                    with self.assertRaises(SystemExit) as exc:
+                        __main__.main()
+                finally:
+                    sys.argv = argv
+                    sys.stdin = stdin_backup
+
+                self.assertEqual(exc.exception.code, 0)
+                mock_run_ui.assert_not_called()
+                mock_run_lines.assert_called_once()
 
 
 if __name__ == "__main__":

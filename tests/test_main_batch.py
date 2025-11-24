@@ -4,7 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from litechat.__main__ import handle_batch_command, parse_script_lines, run_batch
+from litechat.__main__ import handle_batch_command, parse_script_lines, run_batch, run_batch_lines
 from litechat.core.commands import AppState
 from litechat.core.config import Config, ModelConfig, ProviderConfig
 from litechat.core.conversations import Conversation, Message
@@ -172,6 +172,18 @@ class MainBatchTests(unittest.TestCase):
                 output = buf.getvalue()
             self.assertEqual(exit_code, 0)
             self.assertIn("File not found", output)
+
+    def test_run_batch_lines_handles_stdin_flow(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.client = FakeClient()
+            lines = ["hello", "/send hi", "/assert ACK"]
+            with io.StringIO() as buf, redirect_stdout(buf):
+                code = run_batch_lines(lines, state, continue_on_error=False, source_label="<stdin>")
+                output = buf.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("[User]: hello", output)
+            self.assertIn("ACK", output)
 
 
 if __name__ == "__main__":
