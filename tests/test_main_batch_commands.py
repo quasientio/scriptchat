@@ -151,6 +151,14 @@ class MainBatchCommandBranches(unittest.TestCase):
             self.assertTrue(cont)
             self.assertEqual(msg, "hi again")
 
+    def test_tag_command_batch(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            handle_batch_command("/tag topic=science", state, 1)
+            output = buf.getvalue()
+        self.assertIn("Tag set: topic=science", output)
+        self.assertEqual(state.current_conversation.tags.get("topic"), "science")
+
 
 if __name__ == "__main__":
     unittest.main()

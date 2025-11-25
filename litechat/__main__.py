@@ -275,8 +275,17 @@ def handle_batch_command(
             print(f"[{line_num}] {info}")
         return True, msg_to_send, None
 
+    if command == 'tag':
+        if not args or '=' not in args:
+            print(f"[{line_num}] Usage: /tag key=value")
+            return True, None, None
+        result = handle_command(line, state)
+        if result.message:
+            print(f"[{line_num}] {result.message}")
+        return True, None, None
+
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag")
     return True, None, None
 
 

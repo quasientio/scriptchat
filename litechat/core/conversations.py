@@ -29,6 +29,7 @@ class Conversation:
     tokens_out: int = 0
     context_length_configured: Optional[int] = None  # Max context length model is running with
     context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
+    tags: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -38,6 +39,8 @@ class ConversationSummary:
     created_at: str
     model_name: str
     display_name: str
+    last_modified: str = ""
+    tags: dict = field(default_factory=dict)
 
 
 def _slugify_model_name(model_name: str) -> str:
@@ -120,12 +123,18 @@ def list_conversations(root: Path) -> list[ConversationSummary]:
                     meta = json.load(f)
                 created_at = meta.get('created_at', '')
                 model_name = meta.get('model', 'unknown')
+                tags = meta.get('tags', {}) or {}
+                last_modified = meta.get('last_modified', '')
             except (json.JSONDecodeError, IOError):
                 created_at = ''
                 model_name = 'unknown'
+                tags = {}
+                last_modified = ''
         else:
             created_at = ''
             model_name = 'unknown'
+            tags = {}
+            last_modified = ''
 
         # Parse directory name for display
         dir_name = conv_dir.name
@@ -140,7 +149,9 @@ def list_conversations(root: Path) -> list[ConversationSummary]:
             dir_name=dir_name,
             created_at=created_at,
             model_name=model_name,
-            display_name=display_name
+            display_name=display_name,
+            last_modified=last_modified,
+            tags=tags
         ))
 
     # Sort by directory name (which starts with timestamp) in reverse
@@ -178,6 +189,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         context_length_configured = meta.get('context_length_configured', None)
         context_length_used = meta.get('context_length_used', None)
         system_prompt = meta.get('system_prompt') or meta.get('system_prompt_snapshot')
+        tags = meta.get('tags', {}) or {}
+        last_modified = meta.get('last_modified')
     else:
         # Try to infer from directory name
         parts = dir_name.split('_', 2)
@@ -190,6 +203,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         context_length_configured = None
         context_length_used = None
         system_prompt = None
+        tags = {}
+        last_modified = None
 
     # Load message files
     messages = []
@@ -233,7 +248,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         tokens_in=0,
         tokens_out=0,
         context_length_configured=context_length_configured,
-        context_length_used=context_length_used
+        context_length_used=context_length_used,
+        tags=tags
     )
 
 
@@ -274,11 +290,21 @@ def save_conversation(
             conv_dir.mkdir(parents=True, exist_ok=True)
 
     # Write meta.json
+    created_at_val = None
+    meta_path = conv_dir / 'meta.json'
+    if meta_path.exists():
+        try:
+            existing_meta = json.loads(meta_path.read_text())
+            created_at_val = existing_meta.get('created_at')
+        except Exception:
+            created_at_val = None
+    now = datetime.now()
     meta = {
         'model': convo.model_name,
         'provider_id': convo.provider_id,
         'temperature': convo.temperature,
-        'created_at': datetime.now().isoformat()
+        'created_at': created_at_val or now.isoformat(),
+        'last_modified': now.isoformat()
     }
     prompt_snapshot = system_prompt or convo.system_prompt
     if prompt_snapshot:
@@ -287,6 +313,8 @@ def save_conversation(
         meta['context_length_configured'] = convo.context_length_configured
     if convo.context_length_used is not None:
         meta['context_length_used'] = convo.context_length_used
+    if convo.tags:
+        meta['tags'] = convo.tags
 
     meta_path = conv_dir / 'meta.json'
     with open(meta_path, 'w') as f:
@@ -366,6 +394,7 @@ def branch_conversation(
         with open(meta_path, 'r') as f:
             meta = json.load(f)
         meta['created_at'] = datetime.now().isoformat()
+        meta['last_modified'] = datetime.now().isoformat()
         with open(meta_path, 'w') as f:
             json.dump(meta, f, indent=2)
 
@@ -378,7 +407,8 @@ def branch_conversation(
         messages=convo.messages.copy(),
         system_prompt=convo.system_prompt,
         tokens_in=convo.tokens_in,
-        tokens_out=convo.tokens_out
+        tokens_out=convo.tokens_out,
+        tags=convo.tags.copy()
     )
 
     return new_convo
@@ -436,5 +466,3 @@ def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> 
     old_dir.rename(new_dir)
     convo.id = new_dir_name
     return convo
-
-

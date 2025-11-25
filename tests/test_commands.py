@@ -264,6 +264,27 @@ class CommandTests(unittest.TestCase):
             res_one = handle_command("/undo 1", state)
             self.assertIn("Removed 1", res_one.message)
 
+    def test_tag_sets_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/tag topic=science", state)
+            self.assertIn("Tag set", result.message)
+            self.assertEqual(state.current_conversation.tags.get("topic"), "science")
+
+    def test_tag_auto_saves_when_conversation_has_id(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            # Save conversation to assign id and persist
+            from litechat.core.conversations import save_conversation
+            saved = save_conversation(root, state.current_conversation, save_name="test", system_prompt=state.current_conversation.system_prompt)
+            state.current_conversation = saved
+
+            result = handle_command("/tag topic=science", state)
+            self.assertIn("saved", result.message)
+            meta = (root / saved.id / "meta.json").read_text(encoding="utf-8")
+            self.assertIn("topic", meta)
+
 
 if __name__ == "__main__":
     unittest.main()

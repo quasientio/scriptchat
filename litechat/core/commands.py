@@ -6,7 +6,7 @@ from typing import Optional
 import re
 
 from .config import Config
-from .conversations import Conversation, Message
+from .conversations import Conversation, Message, save_conversation
 from .ollama_client import OllamaChatClient
 from .provider_dispatcher import ProviderDispatcher
 
@@ -58,7 +58,8 @@ def create_new_conversation(state: AppState) -> Conversation:
         messages=messages,
         system_prompt=state.current_conversation.system_prompt or state.config.system_prompt,
         tokens_in=0,
-        tokens_out=0
+        tokens_out=0,
+        tags=state.current_conversation.tags.copy() if state.current_conversation else {}
     )
 
 
@@ -255,6 +256,31 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         # Echo command - print message without sending to LLM
         message = parts[1] if len(parts) > 1 else ""
         return CommandResult(message=message)
+
+    elif command == 'tag':
+        if len(parts) < 2 or '=' not in parts[1]:
+            return CommandResult(message="Usage: /tag key=value")
+        key, value = parts[1].split('=', 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            return CommandResult(message="Usage: /tag key=value")
+        if state.current_conversation.tags is None:
+            state.current_conversation.tags = {}
+        state.current_conversation.tags[key] = value
+        # Auto-save if conversation has an id
+        saved_note = ""
+        try:
+            if state.current_conversation.id:
+                save_conversation(
+                    state.conversations_root,
+                    state.current_conversation,
+                    system_prompt=state.current_conversation.system_prompt
+                )
+                saved_note = " (saved)"
+        except Exception:
+            saved_note = " (not saved)"
+        return CommandResult(message=f"Tag set: {key}={value}{saved_note}")
 
     elif command == 'undo':
         count = 1
