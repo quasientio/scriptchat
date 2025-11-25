@@ -191,6 +191,79 @@ class CommandTests(unittest.TestCase):
             self.assertIn("greater than zero", invalid.message)
             self.assertEqual(state.config.timeout, 45)
 
+    def test_undo_removes_exchanges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.messages = [
+                Message(role="user", content="u1"),
+                Message(role="assistant", content="a1"),
+                Message(role="user", content="u2"),
+                Message(role="assistant", content="a2"),
+                Message(role="user", content="u3"),
+                Message(role="assistant", content="a3"),
+            ]
+            res = handle_command("/undo", state)
+            self.assertIn("Removed 1", res.message)
+            self.assertEqual([m.content for m in state.current_conversation.messages], ["u1", "a1", "u2", "a2"])
+
+            res2 = handle_command("/undo 2", state)
+            self.assertIn("Removed 2", res2.message)
+            self.assertEqual(state.current_conversation.messages, [])
+
+    def test_undo_skips_non_chat_roles(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.messages = [
+                Message(role="system", content="sys"),
+                Message(role="user", content="u1"),
+                Message(role="assistant", content="a1"),
+                Message(role="echo", content="note"),
+            ]
+            res = handle_command("/undo", state)
+            self.assertIn("Removed 1", res.message)
+            self.assertEqual([m.role for m in state.current_conversation.messages], ["system"])
+
+    def test_undo_repeated_single_steps(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.messages = [
+                Message(role="user", content="u1"),
+                Message(role="assistant", content="a1"),
+                Message(role="user", content="u2"),
+                Message(role="assistant", content="a2"),
+                Message(role="user", content="u3"),
+                Message(role="assistant", content="a3"),
+            ]
+
+            res1 = handle_command("/undo 1", state)
+            self.assertIn("Removed 1", res1.message)
+            self.assertEqual([m.content for m in state.current_conversation.messages], ["u1", "a1", "u2", "a2"])
+
+            res2 = handle_command("/undo 1", state)
+            self.assertIn("Removed 1", res2.message)
+            self.assertEqual([m.content for m in state.current_conversation.messages], ["u1", "a1"])
+
+            res3 = handle_command("/undo 1", state)
+            self.assertIn("Removed 1", res3.message)
+            self.assertEqual(state.current_conversation.messages, [])
+
+    def test_undo_default_equals_one(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.messages = [
+                Message(role="user", content="u1"),
+                Message(role="assistant", content="a1"),
+            ]
+            res_default = handle_command("/undo", state)
+            self.assertIn("Removed 1", res_default.message)
+            # Reset and compare with explicit 1
+            state.current_conversation.messages = [
+                Message(role="user", content="u1"),
+                Message(role="assistant", content="a1"),
+            ]
+            res_one = handle_command("/undo 1", state)
+            self.assertIn("Removed 1", res_one.message)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -255,6 +255,19 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         message = parts[1] if len(parts) > 1 else ""
         return CommandResult(message=message)
 
+    elif command == 'undo':
+        count = 1
+        if len(parts) > 1 and parts[1].strip():
+            try:
+                count = max(1, int(parts[1].strip()))
+            except ValueError:
+                return CommandResult(message="Usage: /undo [n]")
+        removed = undo_last_exchanges(state.current_conversation, count)
+        if removed == 0:
+            return CommandResult(message="Nothing to undo.")
+        plural = "exchange" if removed == 1 else "exchanges"
+        return CommandResult(message=f"Removed {removed} {plural}.")
+
     elif command == 'profile':
         convo = state.current_conversation
         cfg = state.config
@@ -385,3 +398,44 @@ def set_timeout(state: AppState, seconds: float) -> CommandResult:
                     pass
 
     return CommandResult(message=f"Timeout set to {timeout_int} seconds")
+
+
+def undo_last_exchanges(convo: Conversation, count: int) -> int:
+    """Remove the last N user+assistant exchanges from the conversation.
+
+    Args:
+        convo: Conversation to mutate
+        count: Number of exchanges to remove
+
+    Returns:
+        Number of exchanges actually removed
+    """
+    removed = 0
+    for _ in range(count):
+        # Find last assistant
+        idx = None
+        for i in range(len(convo.messages) - 1, -1, -1):
+            if convo.messages[i].role == 'assistant':
+                idx = i
+                break
+        if idx is None:
+            break
+
+        # Remove assistant
+        convo.messages.pop(idx)
+
+        # Find preceding user before idx (after removal idx is now position of next item)
+        user_idx = None
+        for j in range(idx - 1, -1, -1):
+            if convo.messages[j].role == 'user':
+                user_idx = j
+                break
+        if user_idx is not None:
+            convo.messages.pop(user_idx)
+
+        # Remove trailing non-chat roles (e.g., echo) that were after the assistant
+        while convo.messages and convo.messages[-1].role not in ('user', 'assistant', 'system'):
+            convo.messages.pop()
+
+        removed += 1
+    return removed

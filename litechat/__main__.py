@@ -206,6 +206,12 @@ def handle_batch_command(
             print(f"[{line_num}] {result.message}")
         return True, None, None
 
+    if command == 'undo':
+        result = handle_command(line, state)
+        if result.message:
+            print(f"[{line_num}] {result.message}")
+        return True, None, None
+
     if command == 'send':
         if not args:
             print(f"[{line_num}] Error: /send requires a message")
@@ -264,7 +270,7 @@ def handle_batch_command(
         return True, None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo")
     return True, None, None
 
 

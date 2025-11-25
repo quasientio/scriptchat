@@ -111,6 +111,9 @@ class CommandHandlers:
             elif result.command_type == 'profile':
                 # No UI interaction needed; already added system message
                 pass
+            elif result.command_type == 'undo':
+                # Already applied in core; nothing else to do
+                self.app.update_conversation_display()
 
     def handle_model(self, args: str = ""):
         """Handle /model command.
