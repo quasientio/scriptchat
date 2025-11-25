@@ -138,6 +138,19 @@ class MainBatchCommandBranches(unittest.TestCase):
             self.assertIn("Provider:", output)
             self.assertIn("Model:", output)
 
+    def test_retry_branch(self):
+        with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
+            state = make_state(Path(tmpdir))
+            state.current_conversation.messages.append(
+                type("M", (), {"role": "user", "content": "hi again"})()
+            )
+            state.current_conversation.messages.append(
+                type("M", (), {"role": "assistant", "content": "last"})()
+            )
+            cont, msg, _ = handle_batch_command("/retry", state, 1)
+            self.assertTrue(cont)
+            self.assertEqual(msg, "hi again")
+
 
 if __name__ == "__main__":
     unittest.main()

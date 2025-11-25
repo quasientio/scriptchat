@@ -70,6 +70,11 @@ class CommandHandlers:
         if result.message:
             self.app.add_system_message(result.message)
 
+        # Handle resend (retry)
+        if result.resend_message:
+            self.app.handle_user_message(result.resend_message)
+            return
+
         if result.should_exit:
             self.app.app.exit()
 

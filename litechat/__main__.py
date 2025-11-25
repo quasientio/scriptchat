@@ -16,7 +16,7 @@ from .core.exports import (
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
-from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout
+from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message
 from .ui.app import run_ui
 
 logger = logging.getLogger(__name__)
@@ -269,8 +269,14 @@ def handle_batch_command(
             print(f"[{line_num}] Error: Invalid sleep duration: {args}")
         return True, None, None
 
+    if command == 'retry':
+        msg_to_send, info = retry_last_user_message(state.current_conversation)
+        if info:
+            print(f"[{line_num}] {info}")
+        return True, msg_to_send, None
+
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry")
     return True, None, None
 
 

@@ -130,6 +130,7 @@ All commands start with `/`:
 - `/file <path>` - Send the contents of a text file as your message
 - `/echo <text>` - Print a message to the console without sending to the model
 - `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
+- `/retry` - Drop the last assistant message and resend the previous user message
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat

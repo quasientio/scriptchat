@@ -29,6 +29,7 @@ class CommandResult:
     command_type: Optional[str] = None  # For complex commands that need UI handling
     file_content: Optional[str] = None  # For /file command - content to send as user message
     assert_passed: Optional[bool] = None  # For /assert results
+    resend_message: Optional[str] = None  # For /retry to re-send a user message
 
 
 def create_new_conversation(state: AppState) -> Conversation:
@@ -268,6 +269,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         plural = "exchange" if removed == 1 else "exchanges"
         return CommandResult(message=f"Removed {removed} {plural}.")
 
+    elif command == 'retry':
+        msg_to_resend, info = retry_last_user_message(state.current_conversation)
+        if msg_to_resend is None:
+            return CommandResult(message=info)
+        return CommandResult(message=info, resend_message=msg_to_resend)
+
     elif command == 'profile':
         convo = state.current_conversation
         cfg = state.config
@@ -439,3 +446,29 @@ def undo_last_exchanges(convo: Conversation, count: int) -> int:
 
         removed += 1
     return removed
+
+
+def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
+    """Drop the last assistant message and return the preceding user message to resend."""
+    # Find last assistant index
+    last_assistant = None
+    for i in range(len(convo.messages) - 1, -1, -1):
+        if convo.messages[i].role == 'assistant':
+            last_assistant = i
+            break
+    if last_assistant is None:
+        return None, "No assistant response to retry."
+
+    # Find the user message before that assistant
+    last_user_content = None
+    for j in range(last_assistant - 1, -1, -1):
+        if convo.messages[j].role == 'user':
+            last_user_content = convo.messages[j].content
+            break
+
+    if last_user_content is None:
+        return None, "No user message found to retry."
+
+    # Remove the assistant message
+    convo.messages.pop(last_assistant)
+    return last_user_content, "Retrying last user message."
