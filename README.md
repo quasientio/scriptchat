@@ -199,4 +199,4 @@ Example: `model: llama3.2 | tokens: 1234 in / 567 out | convo: 202511180945_llam
 
 ## License
 
-MIT
+Apache License 2.0 (see `LICENSE`). Attribution details are in `NOTICE`.
