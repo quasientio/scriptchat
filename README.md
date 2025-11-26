@@ -125,14 +125,16 @@ All commands start with `/`:
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
 - `/timeout <seconds>` - Override the request timeout for all providers at runtime
-- `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and paths
+- `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and registered files
+- `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
-- `/file <path>` - Send the contents of a text file as your message
+- `/file <path>` - Register a file for use as `@path` in messages (content is expanded when sending, message stores `@path`). For large files above `file_confirm_threshold_bytes`, use `/file --force <path>`.
 - `/echo <text>` - Print a message to the console without sending to the model
 - `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
 - `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/load`)
 - `/retry` - Drop the last assistant message and resend the previous user message
 - `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
+- `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat
@@ -144,6 +146,16 @@ To enter a multi-line message:
 1. Type `"""` and press Enter
 2. Enter your message across multiple lines
 3. Type `"""` on a new line to send
+
+### File References
+
+`/file <path>` registers a file for use in messages. Include `@path` in any user message to inline the file contents when sending (the stored message keeps `@path` for readability). Examples:
+
+- Register: `/file docs/plan.md`
+- Send with inline file: `Summarize @docs/plan.md and list action items.` (you can also use `@{docs/plan.md}` or `@plan.md` if unique)
+- If an `@path` isn’t registered, the send will error and nothing is sent.
+
+You can register multiple files and mix references in one message. `/profile` lists full paths of registered files.
 
 ### Conversation Storage
 

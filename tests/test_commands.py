@@ -30,6 +30,7 @@ def make_config(tmp_path: Path, system_prompt: str | None = "system says"):
         default_model="llama3",
         default_temperature=0.7,
         timeout=30,
+        file_confirm_threshold_bytes=40_000,
         log_level="INFO",
         log_file=None,
         providers=[provider],
@@ -48,7 +49,7 @@ def make_state(tmpdir: Path, system_prompt: str | None = "system says"):
         tokens_in=3,
         tokens_out=4,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmpdir)
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmpdir, file_registry={})
 
 
 class CommandTests(unittest.TestCase):
@@ -76,8 +77,61 @@ class CommandTests(unittest.TestCase):
             file_path.write_text("hello", encoding="utf-8")
 
             result = handle_command(f"/file {file_path}", state)
-            self.assertEqual(result.file_content, "hello")
-            self.assertIn("Loaded file", result.message)
+            self.assertIsNone(result.file_content)
+            self.assertIn("Registered", result.message)
+            entry = state.file_registry[str(file_path)]
+            self.assertEqual(entry["content"], "hello")
+
+    def test_file_command_requires_force_above_threshold(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # set a tiny threshold
+            state.config.file_confirm_threshold_bytes = 1
+            big = Path(tmpdir) / "big.txt"
+            big.write_text("123456", encoding="utf-8")
+
+            result = handle_command(f"/file {big}", state)
+            self.assertIn("exceeds", result.message)
+            self.assertNotIn(str(big), state.file_registry)
+
+            force = handle_command(f"/file --force {big}", state)
+            self.assertIn("Registered", force.message)
+            self.assertIn(str(big), state.file_registry)
+
+    def test_files_command_lists_entries(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            file_path = Path(tmpdir) / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            handle_command(f"/file {file_path}", state)
+            result = handle_command("/files", state)
+
+            lines = (result.message or "").splitlines()
+            self.assertEqual(lines[0], "Registered files:")
+            expected_full = str(file_path.resolve())
+            expected_lines = {
+                f"@{file_path} -> {expected_full}",
+                f"@{file_path.name} -> {expected_full}",
+            }
+            self.assertSetEqual(set(lines[1:]), expected_lines)
+
+    def test_files_command_long_format(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            file_path = Path(tmpdir) / "note.txt"
+            file_path.write_text("hi", encoding="utf-8")
+
+            handle_command(f"/file {file_path}", state)
+            result = handle_command("/files --long", state)
+
+            lines = (result.message or "").splitlines()
+            self.assertEqual(lines[0], "Registered files:")
+            expected_full = str(file_path.resolve())
+            # content is "hi" -> len 2 and known sha256
+            digest = "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+            self.assertIn(f"@{file_path} -> {expected_full} (2 bytes) sha256:{digest}", lines[1:])
+            self.assertIn(f"@{file_path.name} -> {expected_full} (2 bytes) sha256:{digest}", lines[1:])
 
     def test_set_model_resets_token_counters_and_validates(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -93,6 +147,25 @@ class CommandTests(unittest.TestCase):
             missing = set_model(state, "unknown")
             self.assertIn("not found", missing.message)
             self.assertEqual(state.current_conversation.model_name, "llama3")
+
+    def test_set_model_switches_provider_if_model_found_elsewhere(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            other = ProviderConfig(
+                id="remote",
+                type="openai-compatible",
+                api_url="http://example",
+                api_key="",
+                models=[ModelConfig(name="gpt-5.1", contexts=[1024])],
+                streaming=True,
+                headers={},
+                default_model="gpt-5.1",
+            )
+            state.config.providers.append(other)
+            result = set_model(state, "gpt-5.1")
+            self.assertIn("provider: remote", result.message)
+            self.assertEqual(state.current_conversation.provider_id, "remote")
+            self.assertEqual(state.current_conversation.model_name, "gpt-5.1")
 
     def test_set_temperature_clamps_range(self):
         with tempfile.TemporaryDirectory() as tmpdir:

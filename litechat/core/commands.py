@@ -1,6 +1,6 @@
 """Command parsing and handling for lite-chat."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 import re
@@ -18,6 +18,7 @@ class AppState:
     current_conversation: Conversation
     client: object
     conversations_root: Path
+    file_registry: dict = field(default_factory=dict)  # key -> {"content": str, "full_path": str}
 
 
 @dataclass
@@ -225,24 +226,22 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         )
 
     elif command == 'file':
-        # Load file contents
         if len(parts) < 2:
-            return CommandResult(message="Usage: /file <path>")
+            return CommandResult(message="Usage: /file <path> [--force]")
 
-        file_path = parts[1].strip()
+        arg_str = parts[1].strip()
+        force = False
+        file_path = arg_str
+        if arg_str.startswith("--force "):
+            force = True
+            file_path = arg_str[len("--force "):].strip()
+        elif arg_str == "--force":
+            return CommandResult(message="Usage: /file <path> [--force]")
+
+        expanded_path = Path(file_path).expanduser()
         try:
-            # Expand user path (e.g., ~/file.txt)
-            expanded_path = Path(file_path).expanduser()
-
-            # Read file contents
-            with open(expanded_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            # Return the file contents to be sent as a user message
-            return CommandResult(
-                file_content=content,
-                message=f"Loaded file: {expanded_path}"
-            )
+            content = expanded_path.read_text(encoding='utf-8')
+            full_path_str = str(expanded_path.resolve())
         except FileNotFoundError:
             return CommandResult(message=f"File not found: {file_path}")
         except PermissionError:
@@ -251,6 +250,24 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             return CommandResult(message=f"Cannot read file (not UTF-8 text): {file_path}")
         except Exception as e:
             return CommandResult(message=f"Error reading file: {str(e)}")
+
+        size = len(content.encode("utf-8"))
+        threshold = getattr(state.config, "file_confirm_threshold_bytes", 40_000)
+        if not force and size > threshold:
+            return CommandResult(
+                message=f"File is {size} bytes; exceeds {threshold}. Re-run with /file --force {file_path} to register."
+            )
+
+        # Register by original path token
+        state.file_registry[file_path] = {"content": content, "full_path": full_path_str}
+        # Also register by basename if not already present
+        basename = expanded_path.name
+        alt = ""
+        if basename not in state.file_registry:
+            state.file_registry[basename] = {"content": content, "full_path": full_path_str}
+            alt = f" and @{basename}"
+
+        return CommandResult(message=f"Registered @{file_path}{alt} ({len(content)} chars)")
 
     elif command == 'echo':
         # Echo command - print message without sending to LLM
@@ -314,6 +331,25 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         state.config.log_level = level
         return CommandResult(message=f"Log level set to {level}")
 
+    elif command == 'files':
+        long = False
+        if len(parts) > 1 and parts[1].strip():
+            long = parts[1].strip() in ("--long", "-l")
+        if not state.file_registry:
+            return CommandResult(message="No files registered.")
+        lines = ["Registered files:"]
+        for key, entry in state.file_registry.items():
+            content = entry["content"] if isinstance(entry, dict) else ""
+            full_path = entry["full_path"] if isinstance(entry, dict) else str(key)
+            size = len(content)
+            if long:
+                import hashlib
+                h = hashlib.sha256(content.encode("utf-8")).hexdigest() if content else ""
+                lines.append(f"@{key} -> {full_path} ({size} bytes) sha256:{h}")
+            else:
+                lines.append(f"@{key} -> {full_path}")
+        return CommandResult(message="\n".join(lines))
+
     elif command == 'profile':
         convo = state.current_conversation
         cfg = state.config
@@ -331,6 +367,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         except Exception:
             exp_count = 0
 
+        file_keys = list(state.file_registry.keys()) if hasattr(state, "file_registry") else []
         lines = [
             f"Provider: {convo.provider_id}",
             f"Model: {convo.model_name}",
@@ -349,6 +386,16 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             lines.append(f"System prompt: {trimmed}")
         else:
             lines.append("System prompt: (none)")
+        if file_keys:
+            # Show unique full paths
+            full_paths = []
+            seen = set()
+            for entry in state.file_registry.values():
+                full_path = entry["full_path"] if isinstance(entry, dict) else str(entry)
+                if full_path not in seen:
+                    seen.add(full_path)
+                    full_paths.append(full_path)
+            lines.append("Files: " + ", ".join(full_paths))
         return CommandResult(message="\n".join(lines))
 
     elif command == 'assert':
@@ -385,10 +432,30 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
     except ValueError as e:
         return CommandResult(message=str(e))
 
+    model_name = model_name.strip()
     available_models = [m.name for m in (provider.models or [])]
+    if provider.default_model and provider.default_model not in available_models:
+        available_models.append(provider.default_model)
+
     if available_models and model_name not in available_models:
+        # Try to find the model in other providers
+        matches = []
+        for p in state.config.providers:
+            names = [m.name for m in (p.models or [])]
+            if p.default_model and p.default_model not in names:
+                names.append(p.default_model)
+            if model_name in names:
+                matches.append(p.id)
+        if len(matches) == 1:
+            # Switch provider and apply
+            state.current_conversation.provider_id = matches[0]
+            state.current_conversation.model_name = model_name
+            state.current_conversation.tokens_in = 0
+            state.current_conversation.tokens_out = 0
+            return CommandResult(message=f"Switched to model: {model_name} (provider: {matches[0]})")
+        options = available_models if available_models else []
         return CommandResult(
-            message=f"Model '{model_name}' not found for provider '{provider.id}'. Options: {available_models}"
+            message=f"Model '{model_name}' not found for provider '{provider.id}'. Options: {options}"
         )
 
     state.current_conversation.model_name = model_name
@@ -517,3 +584,26 @@ def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
     # Remove the assistant message
     convo.messages.pop(last_assistant)
     return last_user_content, "Retrying last user message."
+
+
+def resolve_placeholders(text: str, registry: dict) -> tuple[Optional[str], Optional[str]]:
+    """Expand @path placeholders using the file registry.
+
+    Supports @path or @{path}. If a placeholder is missing, returns (None, error).
+    """
+    import re
+    pattern = re.compile(r'@(?:\{([^}]+)\}|(\S+))')
+    missing = []
+
+    def repl(match):
+        key = match.group(1) or match.group(2)
+        if key not in registry:
+            missing.append(key)
+            return match.group(0)
+        entry = registry[key]
+        return entry["content"] if isinstance(entry, dict) else entry
+
+    expanded = pattern.sub(repl, text)
+    if missing:
+        return None, f"Unregistered file reference(s): {', '.join(missing)}"
+    return expanded, None

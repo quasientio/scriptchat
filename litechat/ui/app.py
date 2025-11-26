@@ -118,7 +118,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/timeout', '/profile', '/log-level', '/clear', '/file', '/echo', '/tag', '/assert', '/assert-not', '/undo', '/retry', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/assert', '/assert-not', '/undo', '/retry', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -520,13 +520,27 @@ class LiteChatUI:
     def _send_message_now(self, message: str):  # pragma: no cover - threaded UI flow
         """Send a user message immediately (assumes LLM is free)."""
         from ..core.conversations import Message
+        from ..core.commands import resolve_placeholders
 
-        # Add user message to conversation and show it
+        # Add user message to conversation and show it (store original)
         self.state.current_conversation.messages.append(
             Message(role='user', content=message)
         )
         self.update_conversation_display()
 
+        # Expand placeholders in current history and new message for sending
+        expanded_messages = []
+        for msg in self.state.current_conversation.messages:
+            if msg.role in ('user', 'system'):
+                expanded, err = resolve_placeholders(msg.content, self.state.file_registry)
+                if err:
+                    self.add_system_message(err)
+                    self.state.current_conversation.messages.pop()
+                    return
+                expanded_messages.append(Message(role=msg.role, content=expanded))
+            else:
+                expanded_messages.append(msg)
+        # Note: assistant messages are passed through unchanged
         # Start thinking animation
         self.thinking = True
         self.thinking_dots = 0
@@ -553,9 +567,10 @@ class LiteChatUI:
 
                 self.state.client.chat(
                     self.state.current_conversation,
-                    message,
+                    expanded_messages[-1].content,
                     streaming=streaming,
-                    on_chunk=on_chunk if streaming else None
+                    on_chunk=on_chunk if streaming else None,
+                    expanded_history=expanded_messages[:-1]
                 )
 
                 end_time = time.time()

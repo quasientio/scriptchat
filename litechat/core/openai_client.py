@@ -34,13 +34,15 @@ class OpenAIChatClient:
         convo: Conversation,
         new_user_message: str,
         streaming: bool = False,
-        on_chunk=None
+        on_chunk=None,
+        expanded_history: list = None
     ) -> str:
         if convo.provider_id != self.provider.id:
             raise ValueError(f"Provider mismatch: expected {self.provider.id} got {convo.provider_id}")
 
         messages_payload = []
-        for msg in convo.messages:
+        history = expanded_history if expanded_history is not None else convo.messages
+        for msg in history:
             messages_payload.append({
                 "role": msg.role,
                 "content": msg.content

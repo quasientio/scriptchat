@@ -16,7 +16,7 @@ from .core.exports import (
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
-from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message
+from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message, resolve_placeholders
 from .ui.app import run_ui
 
 logger = logging.getLogger(__name__)
@@ -269,14 +269,14 @@ def handle_batch_command(
             print(f"[{line_num}] Error: Invalid sleep duration: {args}")
         return True, None, None
 
-    if command in ('retry', 'tag', 'log-level'):
+    if command in ('retry', 'tag', 'log-level', 'files'):
         result = handle_command(line, state)
         if result.message:
             print(f"[{line_num}] {result.message}")
         return True, result.resend_message if command == 'retry' else None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag")
     return True, None, None
 
 
@@ -330,17 +330,32 @@ def run_batch_lines(
         if message_to_send:
             print(f"\n[User]: {message_to_send}")
 
-            # Add user message to conversation
+            # Add user message to conversation (store original with @ refs)
             state.current_conversation.messages.append(Message(
                 role='user',
                 content=message_to_send
             ))
 
+            # Expand placeholders for sending
+            expanded_messages = []
+            for msg in state.current_conversation.messages:
+                if msg.role in ('user', 'system'):
+                    expanded, err = resolve_placeholders(msg.content, state.file_registry)
+                    if err:
+                        print(f"[{i}] {err}", file=sys.stderr)
+                        # remove the appended user message on error
+                        state.current_conversation.messages.pop()
+                        return 1
+                    expanded_messages.append(Message(role=msg.role, content=expanded))
+                else:
+                    expanded_messages.append(msg)
+
             # Get response from model (non-streaming)
             try:
                 response = state.client.chat(
                     convo=state.current_conversation,
-                    new_user_message=message_to_send,
+                    new_user_message=expanded_messages[-1].content,
+                    expanded_history=expanded_messages[:-1],
                     streaming=False
                 )
 
@@ -469,7 +484,8 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
             config=config,
             current_conversation=initial_conversation,
             client=dispatcher,
-            conversations_root=config.conversations_dir
+            conversations_root=config.conversations_dir,
+            file_registry={}
         )
 
         # Check if running in batch mode

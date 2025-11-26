@@ -13,8 +13,8 @@ class DummyClient:
         self.server_manager = self
         self.stop_called = False
 
-    def chat(self, convo, message, streaming=False, on_chunk=None):
-        self.calls.append((convo.id, message, streaming))
+    def chat(self, convo, message, streaming=False, on_chunk=None, expanded_history=None):
+        self.calls.append((convo.id, message, streaming, expanded_history))
         return self.response
 
     def unload_model(self):

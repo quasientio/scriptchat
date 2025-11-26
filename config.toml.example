@@ -34,6 +34,9 @@ default_temperature = 0.7
 # Increase this if you get timeout errors with large models or long conversations
 timeout = 1200
 
+# File registration confirmation threshold in bytes. Above this size, use /file --force.
+file_confirm_threshold_bytes = 40000
+
 # Provider definitions. Add as many as you need.
 
 # Ollama provider with contexts

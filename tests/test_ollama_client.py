@@ -42,6 +42,7 @@ class OllamaClientTests(unittest.TestCase):
             default_model="llama3",
             default_temperature=0.7,
             timeout=5,
+            file_confirm_threshold_bytes=40_000,
             log_level="INFO",
             log_file=None,
             providers=[provider],

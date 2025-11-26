@@ -238,7 +238,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
     if system_prompt:
         messages.insert(0, Message(role='system', content=system_prompt))
 
-    return Conversation(
+    convo = Conversation(
         id=dir_name,
         provider_id=provider_id,
         model_name=model_name,
@@ -251,6 +251,33 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         context_length_used=context_length_used,
         tags=tags
     )
+
+    # Rehydrate file registry hints from messages (placeholders) by checking existing files
+    file_paths = set()
+    pattern = re.compile(r'@(?:\{([^}]+)\}|(\S+))')
+    for msg in messages:
+        if msg.role in ('user', 'system'):
+            for m in pattern.finditer(msg.content):
+                key = m.group(1) or m.group(2)
+                if key:
+                    file_paths.add(key)
+    file_registry = {}
+    for key in file_paths:
+        p = Path(key).expanduser()
+        if p.exists() and p.is_file():
+            try:
+                content = p.read_text(encoding='utf-8')
+                full_path = str(p.resolve())
+                file_registry[key] = {"content": content, "full_path": full_path}
+                basename = p.name
+                file_registry.setdefault(basename, {"content": content, "full_path": full_path})
+            except Exception:
+                continue
+        else:
+            file_registry[key] = {"content": "", "full_path": str(p), "missing": True}
+
+    convo.file_registry = file_registry  # type: ignore[attr-defined]
+    return convo
 
 
 def save_conversation(

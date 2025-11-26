@@ -115,6 +115,8 @@ class CommandHandlers:
                 self.app.update_conversation_display()
             elif result.command_type == 'tag':
                 self.app.update_conversation_display()
+            elif result.command_type == 'files':
+                pass
 
     def handle_model(self, args: str = ""):
         if args.strip():
@@ -177,6 +179,20 @@ class CommandHandlers:
 
     def handle_save(self, args: str = ""):
         save_name = args.strip()
+        # If conversation already has an id and no new name provided, save in place
+        if self.app.state.current_conversation.id and not save_name:
+            try:
+                save_conversation(
+                    self.app.state.conversations_root,
+                    self.app.state.current_conversation,
+                    save_name=None,
+                    system_prompt=self.app.state.current_conversation.system_prompt
+                )
+                self.app.add_system_message(f"Conversation saved: {self.app.state.current_conversation.id}")
+            except Exception as e:
+                self.app.add_system_message(f"Error saving: {str(e)}")
+            return
+
         if not save_name:
             self.app.prompt_message = "Save name:"
             self.app.prompt_for_input(self._save_callback)
@@ -221,8 +237,18 @@ class CommandHandlers:
                     summaries[index].dir_name
                 )
                 self.app.state.current_conversation = conversation
+                # Rehydrate file registry for placeholder expansion
+                self.app.state.file_registry = getattr(conversation, "file_registry", {})
+                missing = [
+                    key for key, entry in self.app.state.file_registry.items()
+                    if isinstance(entry, dict) and entry.get("missing")
+                ]
                 self.app.update_conversation_display()
                 self.app.add_system_message(f"Loaded: {summaries[index].display_name}")
+                if missing:
+                    self.app.add_system_message(
+                        "Warning: missing file(s) referenced: " + ", ".join(sorted(missing))
+                    )
             else:
                 self.app.add_system_message("Invalid conversation index")
         except ValueError:

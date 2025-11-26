@@ -35,6 +35,7 @@ def make_config(root: Path, system_prompt: str | None = None):
         log_level="INFO",
         log_file=None,
         providers=[provider],
+        file_confirm_threshold_bytes=40_000,
     )
 
 
@@ -79,7 +80,7 @@ def make_state(tmp_path: Path, system_prompt: str | None = None):
         tokens_in=0,
         tokens_out=0,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path)
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path, file_registry={})
 
 
 class CommandHandlersUiTests(unittest.TestCase):
@@ -183,6 +184,63 @@ class CommandHandlersUiTests(unittest.TestCase):
             exported = list(Path(root).glob("*.md"))
             self.assertTrue(exported)
             self.assertIn("exported", app.messages[-1].lower())
+
+    def test_load_registers_file_references(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            file_path = root / "note.txt"
+            file_path.write_text("hello world", encoding="utf-8")
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content=f"See @{file_path}")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+            from litechat.core.conversations import save_conversation
+            saved = save_conversation(root, convo, save_name="withfile", system_prompt=None)
+
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_load("0")
+
+            self.assertEqual(state.current_conversation.id, saved.id)
+            self.assertIn(str(file_path), state.file_registry)
+            self.assertIn(file_path.name, state.file_registry)
+            self.assertEqual(state.file_registry[str(file_path)]["content"], "hello world")
+
+    def test_load_warns_missing_file_references(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="Missing @{absent.txt}")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+            from litechat.core.conversations import save_conversation
+            save_conversation(root, convo, save_name="missing", system_prompt=None)
+
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_load("0")
+
+            combined = " ".join(app.messages).lower()
+            self.assertIn("missing file", combined)
+            self.assertIn("absent.txt", combined)
+            self.assertIn("absent.txt", state.file_registry)
+            self.assertTrue(state.file_registry["absent.txt"]["missing"])
 
     def test_model_and_prompt_callbacks(self):
         with tempfile.TemporaryDirectory() as tmpdir:

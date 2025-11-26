@@ -2,7 +2,7 @@
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -42,9 +42,10 @@ class Config:
     default_model: str
     default_temperature: float
     timeout: int  # API request timeout in seconds
-    log_level: str  # Logging level: DEBUG, INFO, WARNING, ERROR
-    log_file: Optional[Path]  # Path to log file (None = stderr)
-    providers: list[ProviderConfig]
+    log_level: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR
+    log_file: Optional[Path] = None  # Path to log file (None = stderr)
+    providers: list[ProviderConfig] = field(default_factory=list)
+    file_confirm_threshold_bytes: int = 40_000  # Require explicit confirmation above this size
 
     def get_provider(self, provider_id: str) -> ProviderConfig:
         """Get provider configuration by id."""
@@ -176,6 +177,7 @@ def load_config() -> Config:
     default_model = general_section.get('default_model') or ollama_section.get('default_model')
     default_temperature = general_section.get('default_temperature', ollama_section.get('default_temperature', 0.7))
     timeout = general_section.get('timeout', ollama_section.get('timeout', 1200))  # Default: 20 minutes
+    file_confirm_threshold_bytes = int(general_section.get('file_confirm_threshold_bytes', 40_000))
 
     default_provider = general_section.get('default_provider', 'ollama')
 
@@ -296,6 +298,7 @@ def load_config() -> Config:
         default_model=default_model,
         default_temperature=default_temperature,
         timeout=timeout,
+        file_confirm_threshold_bytes=file_confirm_threshold_bytes,
         log_level=log_level,
         log_file=log_file,
         providers=providers

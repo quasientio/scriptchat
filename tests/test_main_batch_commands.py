@@ -32,6 +32,7 @@ def make_state(tmp_path: Path):
         default_model="llama3",
         default_temperature=0.7,
         timeout=5,
+        file_confirm_threshold_bytes=40_000,
         log_level="INFO",
         log_file=None,
         providers=[provider],
@@ -47,7 +48,7 @@ def make_state(tmp_path: Path):
         tokens_in=0,
         tokens_out=0,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path)
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path, file_registry={})
 
 
 class MainBatchCommandBranches(unittest.TestCase):

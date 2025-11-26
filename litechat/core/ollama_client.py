@@ -140,7 +140,8 @@ class OllamaChatClient:
         convo: Conversation,
         new_user_message: str,
         streaming: bool = False,
-        on_chunk=None
+        on_chunk=None,
+        expanded_history: list = None
     ) -> str:
         """Send a chat message and get response from Ollama.
 
@@ -174,7 +175,8 @@ class OllamaChatClient:
         # Build messages array from conversation
         # Filter out 'echo' messages - they're display-only
         messages = []
-        for msg in convo.messages:
+        history = expanded_history if expanded_history is not None else convo.messages
+        for msg in history:
             if msg.role != 'echo':
                 messages.append({
                     'role': msg.role,

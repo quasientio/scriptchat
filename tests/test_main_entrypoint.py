@@ -32,6 +32,7 @@ def make_config(tmp_path: Path):
         default_model="llama3",
         default_temperature=0.7,
         timeout=10,
+        file_confirm_threshold_bytes=40_000,
         log_level="INFO",
         log_file=None,
         providers=[provider],
@@ -93,6 +94,7 @@ class MainEntrypointTests(unittest.TestCase):
                 mock.patch.object(__main__, "run_batch_lines", return_value=0) as mock_run_lines,
                 mock.patch.object(__main__, "OllamaChatClient") as mock_ollama_client,
                 mock.patch.object(__main__, "ProviderDispatcher") as mock_dispatcher,
+                mock.patch.object(sys.stdin, "isatty", return_value=True),
             ):
                 mock_ollama_client.return_value = object()
                 dispatcher = DummyDispatcher()
