@@ -17,7 +17,7 @@ and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...).
 ## Requirements
 
 - Python 3.10+
-- [Ollama](https://ollama.ai) installed and accessible in your PATH
+- Optional: [Ollama](https://ollama.com) installed and accessible in your PATH
 
 ## Installation
 
@@ -132,6 +132,7 @@ All commands start with `/`:
 - `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
 - `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/load`)
 - `/retry` - Drop the last assistant message and resend the previous user message
+- `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat

@@ -285,6 +285,22 @@ class CommandTests(unittest.TestCase):
             meta = (root / saved.id / "meta.json").read_text(encoding="utf-8")
             self.assertIn("topic", meta)
 
+    def test_log_level_command(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            res = handle_command("/log-level debug", state)
+            self.assertIn("Log level set to DEBUG", res.message)
+            res_bad = handle_command("/log-level nope", state)
+            self.assertIn("Usage", res_bad.message)
+
+    def test_log_level_all_levels(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            levels = ["debug", "info", "warn", "error", "critical"]
+            for lvl in levels:
+                res = handle_command(f"/log-level {lvl}", state)
+                self.assertIn("Log level set", res.message)
+
 
 if __name__ == "__main__":
     unittest.main()

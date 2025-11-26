@@ -167,7 +167,10 @@ class CommandHandlers:
         try:
             self.app.state.current_conversation.provider_id = provider_id
             result = set_model(self.app.state, model_name)
-            self.app.add_system_message(result.message)
+            msg = result.message or ""
+            if provider_id:
+                msg = f"{msg} (provider: {provider_id})"
+            self.app.add_system_message(msg.strip())
         except Exception as e:
             self.app.add_system_message(f"Error setting model: {e}")
         self.app.update_conversation_display()

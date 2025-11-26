@@ -5,7 +5,7 @@
 
 # Log file path (optional, defaults to stderr if not specified)
 # Use an absolute path or ~ for home directory
-log_level = "INFO"
+log_level = "INFO"  # Options: DEBUG, INFO, WARN, ERROR, CRITICAL
 
 # Log file path (optional, defaults to stderr if not specified)
 # Use an absolute path or ~ for home directory

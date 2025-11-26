@@ -269,23 +269,14 @@ def handle_batch_command(
             print(f"[{line_num}] Error: Invalid sleep duration: {args}")
         return True, None, None
 
-    if command == 'retry':
-        msg_to_send, info = retry_last_user_message(state.current_conversation)
-        if info:
-            print(f"[{line_num}] {info}")
-        return True, msg_to_send, None
-
-    if command == 'tag':
-        if not args or '=' not in args:
-            print(f"[{line_num}] Usage: /tag key=value")
-            return True, None, None
+    if command in ('retry', 'tag', 'log-level'):
         result = handle_command(line, state)
         if result.message:
             print(f"[{line_num}] {result.message}")
-        return True, None, None
+        return True, result.resend_message if command == 'retry' else None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag")
     return True, None, None
 
 

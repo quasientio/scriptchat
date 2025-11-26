@@ -301,6 +301,19 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             return CommandResult(message=info)
         return CommandResult(message=info, resend_message=msg_to_resend)
 
+    elif command == 'log-level':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /log-level <debug|info|warn>")
+        level = parts[1].strip().upper()
+        if level == "WARN":
+            level = "WARNING"
+        if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+            return CommandResult(message="Usage: /log-level <debug|info|warn|error|critical>")
+        import logging
+        logging.getLogger().setLevel(level)
+        state.config.log_level = level
+        return CommandResult(message=f"Log level set to {level}")
+
     elif command == 'profile':
         convo = state.current_conversation
         cfg = state.config
