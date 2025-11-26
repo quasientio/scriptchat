@@ -381,14 +381,20 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
         CommandResult with execution result
     """
     try:
-        state.config.get_model(state.current_conversation.provider_id, model_name)
-        state.current_conversation.model_name = model_name
-        # Reset token counters when changing model
-        state.current_conversation.tokens_in = 0
-        state.current_conversation.tokens_out = 0
-        return CommandResult(message=f"Switched to model: {model_name}")
+        provider = state.config.get_provider(state.current_conversation.provider_id)
     except ValueError as e:
         return CommandResult(message=str(e))
+
+    available_models = [m.name for m in (provider.models or [])]
+    if available_models and model_name not in available_models:
+        return CommandResult(
+            message=f"Model '{model_name}' not found for provider '{provider.id}'. Options: {available_models}"
+        )
+
+    state.current_conversation.model_name = model_name
+    state.current_conversation.tokens_in = 0
+    state.current_conversation.tokens_out = 0
+    return CommandResult(message=f"Switched to model: {model_name}")
 
 
 def set_temperature(state: AppState, temperature: float) -> CommandResult:

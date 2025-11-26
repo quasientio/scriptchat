@@ -91,8 +91,8 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(state.current_conversation.tokens_out, 0)
 
             missing = set_model(state, "unknown")
-            self.assertEqual(missing.message, "Switched to model: unknown")
-            self.assertEqual(state.current_conversation.model_name, "unknown")
+            self.assertIn("not found", missing.message)
+            self.assertEqual(state.current_conversation.model_name, "llama3")
 
     def test_set_temperature_clamps_range(self):
         with tempfile.TemporaryDirectory() as tmpdir:
