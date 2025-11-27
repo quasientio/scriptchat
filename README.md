@@ -136,6 +136,8 @@ All commands start with `/`:
 - `/echo <text>` - Print a message to the console without sending to the model
 - `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
 - `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/load`)
+- `/untag <key>` - Remove a metadata tag from the conversation
+- `/tags` - List tags on the current conversation
 - `/retry` - Drop the last assistant message and resend the previous user message
 - `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).

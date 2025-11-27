@@ -358,6 +358,32 @@ class CommandTests(unittest.TestCase):
             self.assertIn("Tag set", result.message)
             self.assertEqual(state.current_conversation.tags.get("topic"), "science")
 
+    def test_untag_removes_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            handle_command("/tag topic=science", state)
+            result = handle_command("/untag topic", state)
+            self.assertIn("removed", result.message.lower())
+            self.assertNotIn("topic", state.current_conversation.tags)
+
+    def test_untag_missing_key(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/untag missing", state)
+            self.assertIn("not found", result.message.lower())
+
+    def test_tags_lists_current_tags(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            no_tags = handle_command("/tags", state)
+            self.assertIn("no tags", no_tags.message.lower())
+            handle_command("/tag topic=science", state)
+            handle_command("/tag owner=alice", state)
+            listed = handle_command("/tags", state)
+            self.assertIn("Tags:", listed.message)
+            self.assertIn("owner=alice", listed.message)
+            self.assertIn("topic=science", listed.message)
+
     def test_tag_auto_saves_when_conversation_has_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

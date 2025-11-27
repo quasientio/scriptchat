@@ -318,6 +318,37 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             saved_note = " (not saved)"
         return CommandResult(message=f"Tag set: {key}={value}{saved_note}")
 
+    elif command == 'tags':
+        tags = state.current_conversation.tags or {}
+        if not tags:
+            return CommandResult(message="No tags set.")
+        items = [f"{k}={v}" for k, v in sorted(tags.items())]
+        return CommandResult(message="Tags: " + ", ".join(items))
+
+    elif command == 'untag':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /untag <key>")
+        key = parts[1].strip()
+        if not state.current_conversation.tags or key not in state.current_conversation.tags:
+            return CommandResult(message=f"Tag not found: {key}")
+        try:
+            del state.current_conversation.tags[key]
+        except Exception:
+            state.current_conversation.tags = {k: v for k, v in state.current_conversation.tags.items() if k != key}
+
+        saved_note = ""
+        try:
+            if state.current_conversation.id:
+                save_conversation(
+                    state.conversations_root,
+                    state.current_conversation,
+                    system_prompt=state.current_conversation.system_prompt
+                )
+                saved_note = " (saved)"
+        except Exception:
+            saved_note = " (not saved)"
+        return CommandResult(message=f"Tag removed: {key}{saved_note}")
+
     elif command == 'undo':
         count = 1
         if len(parts) > 1 and parts[1].strip():
@@ -433,7 +464,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /reason, /timeout, /profile, /clear, /file, /echo, /assert, /assert-not, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /reason, /timeout, /profile, /clear, /file, /echo, /tag, /untag, /tags, /assert, /assert-not, /exit"
         )
 
 
