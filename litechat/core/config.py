@@ -28,6 +28,8 @@ class ModelConfig:
     """Configuration for a single model."""
     name: str
     contexts: list[int] = None  # Optional; used for Ollama/ctx-length
+    reasoning_levels: list[str] | None = None  # Optional; available reasoning levels for this model
+    reasoning_default: str | None = None  # Optional; default reasoning level for this model
 
 
 @dataclass
@@ -87,7 +89,7 @@ class Config:
                 if model.name == name:
                     return model
         # If models not specified, allow dynamic model names
-        return ModelConfig(name=name, contexts=None)
+        return ModelConfig(name=name, contexts=None, reasoning_levels=None)
 
     def list_models(self, provider_id: str) -> list[ModelConfig]:
         provider = self.get_provider(provider_id)
@@ -130,6 +132,49 @@ def _setup_logging(config: Config) -> None:
 
     # Log the configuration
     logging.info(f"Logging initialized: level={config.log_level}, file={config.log_file}")
+
+
+def infer_reasoning_levels(model_name: str) -> list[str]:
+    """Best-effort inference of reasoning levels for known models."""
+    name = model_name.lower()
+    if "gpt-5.1" in name or "gpt5.1" in name:
+        return ["none", "low", "medium", "high"]
+    if "gpt-5" in name:
+        return ["minimal", "medium", "high"]
+    return []
+
+
+def reasoning_levels_for_model(config: Config, provider_id: str, model_name: str) -> list[str]:
+    """Return supported reasoning levels for a provider/model combination."""
+    try:
+        model_cfg = config.get_model(provider_id, model_name)
+    except ValueError:
+        return []
+
+    if model_cfg.reasoning_levels:
+        return [lvl.lower() for lvl in model_cfg.reasoning_levels]
+
+    try:
+        provider = config.get_provider(provider_id)
+    except ValueError:
+        provider = None
+
+    if provider and provider.type.startswith("openai"):
+        return infer_reasoning_levels(model_name)
+
+    return []
+
+
+def reasoning_default_for_model(config: Config, provider_id: str, model_name: str) -> str | None:
+    """Return configured default reasoning level for a model, if any."""
+    try:
+        model_cfg = config.get_model(provider_id, model_name)
+    except ValueError:
+        return None
+
+    if model_cfg.reasoning_default:
+        return model_cfg.reasoning_default.lower()
+    return None
 
 
 def load_config() -> Config:
@@ -202,7 +247,7 @@ def load_config() -> Config:
             return []
         if isinstance(value, str):
             names = [n.strip() for n in value.split(',') if n.strip()]
-            return [ModelConfig(name=n, contexts=None) for n in names]
+            return [ModelConfig(name=n, contexts=None, reasoning_levels=None, reasoning_default=None) for n in names]
         if isinstance(value, list):
             result = []
             for entry in value:
@@ -217,9 +262,24 @@ def load_config() -> Config:
                             contexts = [int(c.strip()) for c in str(contexts_val).split(',')]
                         except Exception:
                             contexts = None
-                    result.append(ModelConfig(name=name, contexts=contexts))
+                    reasoning_levels = None
+                    levels_val = entry.get('reasoning_levels')
+                    if levels_val:
+                        if isinstance(levels_val, str):
+                            reasoning_levels = [lvl.strip().lower() for lvl in levels_val.split(',') if lvl.strip()]
+                        elif isinstance(levels_val, list):
+                            reasoning_levels = [str(lvl).strip().lower() for lvl in levels_val if str(lvl).strip()]
+                    reasoning_default = None
+                    if entry.get('reasoning_default'):
+                        reasoning_default = str(entry.get('reasoning_default')).strip().lower()
+                    result.append(ModelConfig(
+                        name=name,
+                        contexts=contexts,
+                        reasoning_levels=reasoning_levels,
+                        reasoning_default=reasoning_default,
+                    ))
                 elif isinstance(entry, str):
-                    result.append(ModelConfig(name=entry.strip(), contexts=None))
+                    result.append(ModelConfig(name=entry.strip(), contexts=None, reasoning_levels=None, reasoning_default=None))
             return result
         return []
 

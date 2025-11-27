@@ -132,7 +132,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/assert', '/assert-not', '/undo', '/retry', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/assert', '/assert-not', '/undo', '/retry', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -447,8 +447,10 @@ class LiteChatUI:
             percentage = (convo.context_length_used / convo.context_length_configured * 100) if convo.context_length_configured > 0 else 0
             context_display = f" | {convo.context_length_used}/{convo.context_length_configured} ({percentage:.1f}%)"
 
+        reasoning_display = f" ({convo.reasoning_level})" if getattr(convo, "reasoning_level", None) else ""
+
         text = (
-            f"{convo.provider_id}/{convo.model_name} | "
+            f"{convo.provider_id}/{convo.model_name}{reasoning_display} | "
             f"{convo.tokens_in} in / {convo.tokens_out} out{context_display} | "
             f"{conv_id}{thinking_indicator}"
         )

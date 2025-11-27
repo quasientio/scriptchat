@@ -31,6 +31,7 @@ from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
 from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message, resolve_placeholders
+from .core.config import reasoning_default_for_model
 from .ui.app import run_ui
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,12 @@ def handle_batch_command(
             print(f"[{line_num}] {result.message}")
         except ValueError:
             print(f"[{line_num}] Error: Invalid temperature value: {args}")
+        return True, None, None
+
+    if command == 'reason':
+        result = handle_command(line, state)
+        if result.message:
+            print(f"[{line_num}] {result.message}")
         return True, None, None
 
     if command == 'timeout':
@@ -490,7 +497,8 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
             messages=messages,
             system_prompt=config.system_prompt,
             tokens_in=0,
-            tokens_out=0
+            tokens_out=0,
+            reasoning_level=reasoning_default_for_model(config, config.default_provider, initial_model) if initial_model else None,
         )
 
         # Create application state

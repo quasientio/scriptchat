@@ -41,6 +41,7 @@ class Conversation:
     messages: list[Message] = field(default_factory=list)
     tokens_in: int = 0
     tokens_out: int = 0
+    reasoning_level: Optional[str] = None
     context_length_configured: Optional[int] = None  # Max context length model is running with
     context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
     tags: dict = field(default_factory=dict)
@@ -205,6 +206,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         system_prompt = meta.get('system_prompt') or meta.get('system_prompt_snapshot')
         tags = meta.get('tags', {}) or {}
         last_modified = meta.get('last_modified')
+        reasoning_level = meta.get('reasoning_level')
     else:
         # Try to infer from directory name
         parts = dir_name.split('_', 2)
@@ -219,6 +221,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         system_prompt = None
         tags = {}
         last_modified = None
+        reasoning_level = None
 
     # Load message files
     messages = []
@@ -261,6 +264,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         messages=messages,
         tokens_in=0,
         tokens_out=0,
+        reasoning_level=reasoning_level,
         context_length_configured=context_length_configured,
         context_length_used=context_length_used,
         tags=tags
@@ -347,6 +351,8 @@ def save_conversation(
         'created_at': created_at_val or now.isoformat(),
         'last_modified': now.isoformat()
     }
+    if convo.reasoning_level:
+        meta['reasoning_level'] = convo.reasoning_level
     prompt_snapshot = system_prompt or convo.system_prompt
     if prompt_snapshot:
         meta['system_prompt'] = prompt_snapshot
@@ -449,6 +455,7 @@ def branch_conversation(
         system_prompt=convo.system_prompt,
         tokens_in=convo.tokens_in,
         tokens_out=convo.tokens_out,
+        reasoning_level=convo.reasoning_level,
         tags=convo.tags.copy()
     )
 

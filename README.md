@@ -58,7 +58,7 @@ Key configuration options:
 - `conversations_dir`: Where to store conversations (set in `[general]`)
 - `exports_dir`: Where to write exports (defaults to current working directory if not set)
 - `enable_streaming`: Enable token streaming (default: false)
-- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama` or `openai-compatible` for now), `api_url`, optional `api_key`, `models` (comma-separated), optional `default_model`, and optional `streaming`/`headers`.
+- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama` or `openai-compatible` for now), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `contexts` (for Ollama), `reasoning_levels` (for `/reason` on reasoning-capable models such as GPT-5/GPT-5.1), and `reasoning_default` to pick the level applied when you select that model.
 
 Example providers:
 ```toml
@@ -77,7 +77,10 @@ id = "openai"
 type = "openai-compatible"
 api_url = "https://api.openai.com"
 api_key = "sk-..."
-models = "gpt-4o,gpt-4o-mini"
+models = [
+  { name = "gpt-5-mini", reasoning_levels = ["minimal", "medium", "high"], reasoning_default = "medium" },
+  { name = "gpt-5.1-mini", reasoning_levels = ["none", "low", "medium", "high"], reasoning_default = "none" }
+]
 
 [[providers]]
 id = "deepseek"
@@ -124,6 +127,7 @@ All commands start with `/`:
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
+- `/reason [level]` - Show or set the reasoning effort for the current model (supported models only, e.g., `none|low|medium|high` on GPT-5.1). `/reason` alone lists available levels.
 - `/timeout <seconds>` - Override the request timeout for all providers at runtime
 - `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and registered files
 - `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
@@ -134,7 +138,6 @@ All commands start with `/`:
 - `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/load`)
 - `/retry` - Drop the last assistant message and resend the previous user message
 - `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
-- `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/exit` - Exit lite-chat

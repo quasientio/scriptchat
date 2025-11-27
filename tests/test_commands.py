@@ -388,6 +388,45 @@ class CommandTests(unittest.TestCase):
                 res = handle_command(f"/log-level {lvl}", state)
                 self.assertIn("Log level set", res.message)
 
+    def test_reason_command_sets_and_clears_level(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Enable reasoning on the configured model
+            state.config.providers[0].models[0].reasoning_levels = ["none", "medium", "high"]
+
+            show = handle_command("/reason", state)
+            self.assertIn("Available", show.message)
+
+            bad = handle_command("/reason low", state)
+            self.assertIn("Unsupported", bad.message)
+            self.assertIsNone(state.current_conversation.reasoning_level)
+
+            res = handle_command("/reason medium", state)
+            self.assertIn("Reasoning level set", res.message)
+            self.assertEqual(state.current_conversation.reasoning_level, "medium")
+
+            cleared = handle_command("/reason clear", state)
+            self.assertIsNone(state.current_conversation.reasoning_level)
+
+    def test_reason_command_not_available_when_unsupported(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            res = handle_command("/reason", state)
+            self.assertIn("not available", res.message.lower())
+
+    def test_set_model_applies_reasoning_default(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Add another model with a default reasoning level
+            state.config.providers[0].models.append(
+                ModelConfig(name="llama-reason", contexts=None, reasoning_levels=["none", "high"], reasoning_default="high")
+            )
+
+            res = set_model(state, "llama-reason")
+            self.assertIn("Switched to model", res.message)
+            self.assertEqual(state.current_conversation.model_name, "llama-reason")
+            self.assertEqual(state.current_conversation.reasoning_level, "high")
+
 
 if __name__ == "__main__":
     unittest.main()

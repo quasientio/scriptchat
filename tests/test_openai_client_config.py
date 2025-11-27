@@ -282,8 +282,197 @@ models = "gpt-4o"
         content = client.chat(convo, "stream me", streaming=True, on_chunk=on_chunk)
         self.assertEqual(content, "Hello")
         self.assertEqual(collected[-1], "Hello")
-        self.assertEqual(convo.tokens_in, 1)
+        # Each chunk included usage; total prompt/completion accumulate
+        self.assertEqual(convo.tokens_in, 2)
         self.assertEqual(convo.tokens_out, 2)
+
+    def test_reasoning_effort_included_when_set(self):
+        provider = ProviderConfig(
+            id="openai",
+            type="openai-compatible",
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="gpt-5.1",
+        )
+        cfg = Config(
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="openai",
+            default_model="gpt-5.1",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class CaptureSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json, "timeout": timeout, "stream": stream})
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "choices": [{"message": {"content": "done"}}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="openai",
+            model_name="gpt-5.1",
+            temperature=0.7,
+            reasoning_level="medium",
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = CaptureSession()
+
+        reply = client.chat(convo, "hello")
+        self.assertEqual(reply, "done")
+        self.assertIn("reasoning", client.session.calls[0]["json"])
+        self.assertEqual(client.session.calls[0]["json"]["reasoning"], {"effort": "medium"})
+        self.assertTrue(client.session.calls[0]["url"].endswith("/v1/responses"))
+
+    def test_responses_api_streaming_and_nonstream_content_extraction(self):
+        provider = ProviderConfig(
+            id="openai",
+            type="openai-compatible",
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="gpt-5.1",
+        )
+        cfg = Config(
+            api_url="https://api.openai.com",
+            api_key="sk-test",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=True,
+            system_prompt=None,
+            default_provider="openai",
+            default_model="gpt-5.1",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class StreamResponse:
+            status_code = 200
+            reason = "OK"
+
+            def __init__(self, lines):
+                self.lines = lines
+                self.text = ""
+
+            def raise_for_status(self):
+                return None
+
+            def iter_lines(self):
+                return iter(self.lines)
+
+            def json(self):
+                return {}
+
+        class StreamSession:
+            def __init__(self, lines):
+                self.lines = lines
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json, "stream": stream})
+                if stream:
+                    return StreamResponse(self.lines)
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "output_text": ["nonstream text"],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        # Streaming path
+        lines = [
+            b'data: {"output_text": ["Hel"]}\n',
+            b'data: {"output_text": ["lo"]}\n',
+            b"[DONE]",
+        ]
+
+        convo = Conversation(
+            id=None,
+            provider_id="openai",
+            model_name="gpt-5.1",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = StreamSession(lines)
+
+        collected = []
+
+        def on_chunk(text):
+            collected.append(text)
+
+        streamed = client.chat(convo, "hi", streaming=True, on_chunk=on_chunk)
+        self.assertEqual(streamed, "Hello")
+        self.assertEqual(collected[-1], "Hello")
+
+        # Non-streaming path uses same session with a fresh conversation
+        convo2 = Conversation(
+            id=None,
+            provider_id="openai",
+            model_name="gpt-5.1",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        non_stream = client.chat(convo2, "hi", streaming=False)
+        self.assertEqual(non_stream, "nonstream text")
 
     def test_runtime_timeout_override_used_for_requests(self):
         provider = ProviderConfig(

@@ -217,8 +217,15 @@ class OllamaChatClient:
         # Send POST request
         url = f"{self.api_url.rstrip('/')}/chat"
 
-        logger.debug(f"Sending chat request to {url} with model={convo.model_name}, "
-                     f"temperature={convo.temperature}, num_ctx={context_length}")
+        logger.debug(
+            "POST %s model=%s stream=%s messages=%s temp=%s num_ctx=%s",
+            url,
+            payload.get('model'),
+            payload.get('stream'),
+            len(payload.get('messages', [])),
+            payload['options'].get('temperature'),
+            payload['options'].get('num_ctx'),
+        )
 
         if streaming:
             payload['stream'] = True

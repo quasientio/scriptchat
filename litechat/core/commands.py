@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 import re
 
-from .config import Config
+from .config import Config, reasoning_levels_for_model, reasoning_default_for_model
 from .conversations import Conversation, Message, save_conversation
 from .ollama_client import OllamaChatClient
 from .provider_dispatcher import ProviderDispatcher
@@ -70,6 +70,7 @@ def create_new_conversation(state: AppState) -> Conversation:
         provider_id=state.current_conversation.provider_id if state.current_conversation else state.config.default_provider,
         model_name=state.current_conversation.model_name,
         temperature=state.current_conversation.temperature,
+        reasoning_level=getattr(state.current_conversation, "reasoning_level", None) if state.current_conversation else None,
         messages=messages,
         system_prompt=state.current_conversation.system_prompt or state.config.system_prompt,
         tokens_in=0,
@@ -215,6 +216,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             needs_ui_interaction=True,
             command_type='temp'
         )
+
+    elif command == 'reason':
+        level_arg = parts[1].strip() if len(parts) > 1 else ""
+        return set_reasoning_level(state, level_arg)
 
     elif command == 'import':
         if len(parts) < 2 or not parts[1].strip():
@@ -385,6 +390,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         lines = [
             f"Provider: {convo.provider_id}",
             f"Model: {convo.model_name}",
+            f"Reasoning: {convo.reasoning_level or '(default)'}",
             f"Temperature: {convo.temperature:.2f}",
             f"Tokens: {convo.tokens_in} in / {convo.tokens_out} out",
             f"Streaming: {'on' if cfg.enable_streaming else 'off'}",
@@ -427,7 +433,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     else:
         return CommandResult(
             message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /timeout, /profile, /clear, /file, /echo, /assert, /assert-not, /exit"
+                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /reason, /timeout, /profile, /clear, /file, /echo, /assert, /assert-not, /exit"
         )
 
 
@@ -451,6 +457,10 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
     if provider.default_model and provider.default_model not in available_models:
         available_models.append(provider.default_model)
 
+    def _apply_reasoning_default():
+        default_reason = reasoning_default_for_model(state.config, state.current_conversation.provider_id, state.current_conversation.model_name)
+        state.current_conversation.reasoning_level = default_reason
+
     if available_models and model_name not in available_models:
         # Try to find the model in other providers
         matches = []
@@ -466,6 +476,7 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
             state.current_conversation.model_name = model_name
             state.current_conversation.tokens_in = 0
             state.current_conversation.tokens_out = 0
+            _apply_reasoning_default()
             return CommandResult(message=f"Switched to model: {model_name} (provider: {matches[0]})")
         options = available_models if available_models else []
         return CommandResult(
@@ -475,6 +486,7 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
     state.current_conversation.model_name = model_name
     state.current_conversation.tokens_in = 0
     state.current_conversation.tokens_out = 0
+    _apply_reasoning_default()
     return CommandResult(message=f"Switched to model: {model_name}")
 
 
@@ -492,6 +504,33 @@ def set_temperature(state: AppState, temperature: float) -> CommandResult:
     temperature = max(0.0, min(2.0, temperature))
     state.current_conversation.temperature = temperature
     return CommandResult(message=f"Temperature set to {temperature:.2f}")
+
+
+def set_reasoning_level(state: AppState, level: str) -> CommandResult:
+    """Set or show the reasoning level for the current model/provider."""
+    convo = state.current_conversation
+    available = reasoning_levels_for_model(state.config, convo.provider_id, convo.model_name)
+    if not level.strip():
+        if not available:
+            return CommandResult(message="Reasoning controls not available for this model/provider.")
+        current = convo.reasoning_level or "(default)"
+        return CommandResult(
+            message=f"Reasoning level: {current}\nAvailable: {', '.join(available)}\nUsage: /reason <level>"
+        )
+
+    desired = level.strip().lower()
+    if desired in ("default", "clear", "reset"):
+        convo.reasoning_level = None
+        return CommandResult(message="Reasoning level cleared (provider default).")
+
+    if not available:
+        return CommandResult(message="Reasoning controls not available for this model/provider.")
+
+    if desired not in available:
+        return CommandResult(message=f"Unsupported reasoning level for {convo.model_name}. Available: {', '.join(available)}")
+
+    convo.reasoning_level = desired
+    return CommandResult(message=f"Reasoning level set to {desired}")
 
 
 def set_timeout(state: AppState, seconds: float) -> CommandResult:

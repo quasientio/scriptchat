@@ -54,6 +54,8 @@ class OpenAIChatClient:
         if convo.provider_id != self.provider.id:
             raise ValueError(f"Provider mismatch: expected {self.provider.id} got {convo.provider_id}")
 
+        use_responses_api = self.provider.id == "openai"
+
         messages_payload = []
         history = expanded_history if expanded_history is not None else convo.messages
         for msg in history:
@@ -63,18 +65,60 @@ class OpenAIChatClient:
             })
         messages_payload.append({"role": "user", "content": new_user_message})
 
-        payload = {
-            "model": convo.model_name,
-            "messages": messages_payload,
-            "stream": streaming and self.provider.streaming,
-            "temperature": convo.temperature,
-        }
-
-        url = f"{self.provider.api_url.rstrip('/')}/v1/chat/completions"
+        if use_responses_api:
+            payload = {
+                "model": convo.model_name,
+                "input": messages_payload,
+                "stream": streaming and self.provider.streaming,
+                "temperature": convo.temperature,
+            }
+            if getattr(convo, "reasoning_level", None):
+                payload["reasoning"] = {"effort": convo.reasoning_level}
+            url = f"{self.provider.api_url.rstrip('/')}/v1/responses"
+        else:
+            payload = {
+                "model": convo.model_name,
+                "messages": messages_payload,
+                "stream": streaming and self.provider.streaming,
+                "temperature": convo.temperature,
+            }
+            if getattr(convo, "reasoning_level", None):
+                payload["reasoning"] = {"effort": convo.reasoning_level}
+            url = f"{self.provider.api_url.rstrip('/')}/v1/chat/completions"
 
         if streaming:
             return self._chat_stream(url, payload, convo, on_chunk)
         return self._chat_single(url, payload, convo)
+
+    def _extract_responses_text(self, data: dict) -> str:
+        """Extract text from Responses API payloads (non-stream or stream chunk)."""
+        if not isinstance(data, dict):
+            return ""
+        # Prefer aggregated output_text when present
+        if data.get("output_text"):
+            try:
+                return "".join(data.get("output_text") or [])
+            except Exception:
+                pass
+        text_parts: list[str] = []
+        # Some payloads embed content in output -> content list
+        for item in data.get("output", []) or []:
+            for content in item.get("content", []) or []:
+                if isinstance(content, dict):
+                    text = content.get("text")
+                    if text:
+                        text_parts.append(str(text))
+        # Streaming deltas may arrive under "delta" similarly
+        delta = data.get("delta") or {}
+        if isinstance(delta, dict):
+            for content in delta.get("content", []) or []:
+                if isinstance(content, dict):
+                    text = content.get("text")
+                    if text:
+                        text_parts.append(str(text))
+        elif isinstance(delta, str):
+            text_parts.append(delta)
+        return "".join(text_parts)
 
     def _http_error_with_body(self, resp, exc: requests.HTTPError) -> RuntimeError:
         body = ""
@@ -109,10 +153,15 @@ class OpenAIChatClient:
         return err
 
     def _chat_single(self, url: str, payload: dict, convo: Conversation) -> str:
-        resp = self._post_with_temperature_retry(url, payload, stream=False)
+        resp = self._post_with_temperature_retry(url, payload, stream=False, convo=convo)
         data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        usage = data.get("usage", {})
+        if "choices" in data:
+            content = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+        else:
+            # Responses API
+            content = self._extract_responses_text(data)
+            usage = data.get("usage", {})
 
         # Update conversation
         convo.messages.append(Message(role='assistant', content=content))
@@ -124,31 +173,44 @@ class OpenAIChatClient:
         resp = self._post_with_temperature_retry(
             url,
             payload,
-            stream=bool(payload.get("stream", False))
+            stream=bool(payload.get("stream", False)),
+            convo=convo,
         )
         assistant_msg = Message(role='assistant', content="")
         convo.messages.append(assistant_msg)
 
         last_data = None
+        total_prompt = 0
+        total_completion = 0
+        usage_added = False
         for line in resp.iter_lines():
             if not line:
                 continue
             if line.startswith(b"data: "):
                 line = line[len(b"data: "):]
             if line == b"[DONE]":
-                # Capture usage if present in last chunk
-                if last_data:
-                    usage = last_data.get("usage", {})
-                    convo.tokens_in += usage.get("prompt_tokens", 0)
-                    convo.tokens_out += usage.get("completion_tokens", 0)
                 break
             try:
                 data = json.loads(line)
                 last_data = data
             except json.JSONDecodeError:
                 continue
-            delta = data.get("choices", [{}])[0].get("delta", {})
-            content_piece = delta.get("content", "")
+            if "choices" in data:
+                delta = data.get("choices", [{}])[0].get("delta", {})
+                content_piece = delta.get("content", "")
+                usage = data.get("usage", {})
+                total_prompt += usage.get("prompt_tokens", 0)
+                total_completion += usage.get("completion_tokens", 0)
+                if usage:
+                    usage_added = True
+            else:
+                # Responses API streaming
+                content_piece = self._extract_responses_text(data)
+                usage = data.get("usage", {})
+                total_prompt += usage.get("prompt_tokens", 0)
+                total_completion += usage.get("completion_tokens", 0)
+                if usage:
+                    usage_added = True
             if content_piece:
                 assistant_msg.content += content_piece
                 if on_chunk:
@@ -157,14 +219,31 @@ class OpenAIChatClient:
                     except Exception:
                         pass
 
+        if not usage_added and last_data:
+            usage = last_data.get("usage", {})
+            total_prompt += usage.get("prompt_tokens", 0)
+            total_completion += usage.get("completion_tokens", 0)
+        convo.tokens_in += total_prompt
+        convo.tokens_out += total_completion
         return assistant_msg.content
 
-    def _post_with_temperature_retry(self, url: str, payload: dict, stream: bool) -> requests.Response:
+    def _post_with_temperature_retry(self, url: str, payload: dict, stream: bool, convo: Conversation | None) -> requests.Response:
         """Post chat payload; retry once without temperature if model rejects it."""
         timeout = getattr(self.config, "timeout", None) or self.timeout
         resp = None
         try:
-            resp = self.session.post(url, json=payload, timeout=timeout, stream=stream)
+            logger.debug(
+                "POST %s model=%s stream=%s messages=%s reasoning=%s temp=%s",
+                url,
+                payload.get("model"),
+                payload.get("stream"),
+                len(payload.get("messages", []) or payload.get("input", [])),
+                payload.get("reasoning"),
+                payload.get("temperature"),
+            )
+            send_payload = dict(payload)
+            send_payload.pop("_convo_ref", None)
+            resp = self.session.post(url, json=send_payload, timeout=timeout, stream=stream)
             resp.raise_for_status()
             return resp
         except requests.Timeout as e:
@@ -183,6 +262,15 @@ class OpenAIChatClient:
                 payload_no_temp = dict(payload)
                 payload_no_temp.pop("temperature", None)
                 logger.info("Retrying without temperature for model %s due to temperature error", payload.get("model"))
+                logger.debug(
+                    "POST %s model=%s stream=%s messages=%s reasoning=%s temp=%s (retry sans temp)",
+                    url,
+                    payload_no_temp.get("model"),
+                    payload_no_temp.get("stream"),
+                    len(payload_no_temp.get("messages", [])),
+                    payload_no_temp.get("reasoning"),
+                    payload_no_temp.get("temperature"),
+                )
                 resp = self.session.post(url, json=payload_no_temp, timeout=timeout, stream=stream)
                 resp.raise_for_status()
                 return resp
