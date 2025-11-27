@@ -91,6 +91,7 @@ def export_conversation_json(convo: Conversation, export_dir: Path, filename: Op
         "tokens_out": convo.tokens_out,
         "context_length_configured": convo.context_length_configured,
         "context_length_used": convo.context_length_used,
+        "file_references": getattr(convo, "file_references", None) or {},
         "exported_at": datetime.now().isoformat(),
         "messages": [
             {"role": msg.role, "content": msg.content}
@@ -376,6 +377,7 @@ def _conversation_from_json_export(path: Path) -> tuple[Conversation, Optional[s
         tokens_out=data.get("tokens_out", 0),
         context_length_configured=data.get("context_length_configured"),
         context_length_used=data.get("context_length_used"),
+        file_references=data.get("file_references", {}),
     )
     desired_id = data.get("id")
     if desired_id == "unsaved":

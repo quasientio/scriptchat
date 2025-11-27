@@ -45,6 +45,7 @@ class Conversation:
     context_length_configured: Optional[int] = None  # Max context length model is running with
     context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
     tags: dict = field(default_factory=dict)
+    file_references: dict[str, str] = field(default_factory=dict)  # key -> full_path
 
 
 @dataclass
@@ -207,6 +208,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         tags = meta.get('tags', {}) or {}
         last_modified = meta.get('last_modified')
         reasoning_level = meta.get('reasoning_level')
+        file_references = meta.get('file_references', {}) or {}
     else:
         # Try to infer from directory name
         parts = dir_name.split('_', 2)
@@ -222,6 +224,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         tags = {}
         last_modified = None
         reasoning_level = None
+        file_references = {}
 
     # Load message files
     messages = []
@@ -267,30 +270,24 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         reasoning_level=reasoning_level,
         context_length_configured=context_length_configured,
         context_length_used=context_length_used,
-        tags=tags
+        tags=tags,
+        file_references=file_references
     )
 
-    # Rehydrate file registry hints from messages (placeholders) by checking existing files
-    file_paths = set()
-    pattern = re.compile(r'@(?:\{([^}]+)\}|(\S+))')
-    for msg in messages:
-        if msg.role in ('user', 'system'):
-            for m in pattern.finditer(msg.content):
-                key = m.group(1) or m.group(2)
-                if key:
-                    file_paths.add(key)
-    file_registry = {}
-    for key in file_paths:
-        p = Path(key).expanduser()
+    # Rehydrate file registry strictly from meta file references
+    file_registry: dict = {}
+    for key, path_str in file_references.items():
+        p = Path(path_str).expanduser()
         if p.exists() and p.is_file():
             try:
                 content = p.read_text(encoding='utf-8')
                 full_path = str(p.resolve())
                 file_registry[key] = {"content": content, "full_path": full_path}
-                basename = p.name
-                file_registry.setdefault(basename, {"content": content, "full_path": full_path})
+                basename = Path(full_path).name
+                if basename not in file_registry:
+                    file_registry[basename] = {"content": content, "full_path": full_path}
             except Exception:
-                continue
+                file_registry[key] = {"content": "", "full_path": str(p), "missing": True}
         else:
             file_registry[key] = {"content": "", "full_path": str(p), "missing": True}
 
@@ -353,6 +350,8 @@ def save_conversation(
     }
     if convo.reasoning_level:
         meta['reasoning_level'] = convo.reasoning_level
+    if convo.file_references:
+        meta['file_references'] = convo.file_references
     prompt_snapshot = system_prompt or convo.system_prompt
     if prompt_snapshot:
         meta['system_prompt'] = prompt_snapshot

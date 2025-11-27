@@ -213,6 +213,7 @@ class CommandHandlersUiTests(unittest.TestCase):
                 messages=[Message(role="user", content=f"See @{file_path}")],
                 tokens_in=0,
                 tokens_out=0,
+                file_references={str(file_path): str(file_path)}
             )
             from litechat.core.conversations import save_conversation
             saved = save_conversation(root, convo, save_name="withfile", system_prompt=None)
@@ -240,6 +241,7 @@ class CommandHandlersUiTests(unittest.TestCase):
                 messages=[Message(role="user", content="Missing @{absent.txt}")],
                 tokens_in=0,
                 tokens_out=0,
+                file_references={"absent.txt": str(root / "absent.txt")},
             )
             from litechat.core.conversations import save_conversation
             save_conversation(root, convo, save_name="missing", system_prompt=None)

@@ -75,7 +75,8 @@ def create_new_conversation(state: AppState) -> Conversation:
         system_prompt=state.current_conversation.system_prompt or state.config.system_prompt,
         tokens_in=0,
         tokens_out=0,
-        tags=state.current_conversation.tags.copy() if state.current_conversation else {}
+        tags=state.current_conversation.tags.copy() if state.current_conversation else {},
+        file_references={}
     )
 
 
@@ -285,6 +286,23 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         if basename not in state.file_registry:
             state.file_registry[basename] = {"content": content, "full_path": full_path_str}
             alt = f" and @{basename}"
+
+        # Persist references on the conversation for future loads
+        if not hasattr(state.current_conversation, "file_references") or state.current_conversation.file_references is None:
+            state.current_conversation.file_references = {}
+        state.current_conversation.file_references[file_path] = full_path_str
+        if basename not in state.current_conversation.file_references:
+            state.current_conversation.file_references[basename] = full_path_str
+        # Auto-save meta if conversation already saved
+        try:
+            if state.current_conversation.id:
+                save_conversation(
+                    state.conversations_root,
+                    state.current_conversation,
+                    system_prompt=state.current_conversation.system_prompt
+                )
+        except Exception:
+            pass
 
         return CommandResult(message=f"Registered @{file_path}{alt} ({len(content)} chars)")
 

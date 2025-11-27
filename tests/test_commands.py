@@ -16,6 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import json
+
 from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature
 from litechat.core.config import Config, ModelConfig, ProviderConfig
 from litechat.core.conversations import Conversation, Message
@@ -383,6 +385,19 @@ class CommandTests(unittest.TestCase):
             self.assertIn("Tags:", listed.message)
             self.assertIn("owner=alice", listed.message)
             self.assertIn("topic=science", listed.message)
+
+    def test_file_command_persists_references_in_meta(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            file_path = root / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            handle_command(f"/file {file_path}", state)
+            from litechat.core.conversations import save_conversation
+            saved = save_conversation(root, state.current_conversation, save_name="save", system_prompt=None)
+            meta = json.loads((root / saved.id / "meta.json").read_text(encoding="utf-8"))
+            self.assertIn(str(file_path), meta.get("file_references", {}))
 
     def test_tag_auto_saves_when_conversation_has_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:
