@@ -32,6 +32,7 @@ from prompt_toolkit.filters import Condition
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.formatted_text import ANSI, to_formatted_text
+from prompt_toolkit.mouse_events import MouseEventType
 
 from ..core.commands import AppState, handle_command, set_model, set_temperature
 from ..core.conversations import (
@@ -159,7 +160,7 @@ class LiteChatUI:
             layout=self.layout,
             key_bindings=self.kb,
             full_screen=True,
-            mouse_support=True  # Enable mouse scrolling
+            mouse_support=False  # Disabled to allow terminal-native mouse selection
         )
 
         # Initialize conversation display (scroll to bottom initially)
@@ -425,6 +426,7 @@ class LiteChatUI:
             event.app.exit()
 
         return kb
+
 
     def _get_status_bar(self):
         """Get status bar text with styling.
