@@ -23,7 +23,9 @@ from litechat.core.exports import (
     export_conversation_json,
     export_conversation_html,
     import_conversation_from_file,
+    generate_html_index,
 )
+from litechat.core.conversations import save_conversation, branch_conversation
 
 
 class ExportImportTests(unittest.TestCase):
@@ -115,6 +117,41 @@ class ExportImportTests(unittest.TestCase):
             self.assertIn("<a href=\"http://example.com\">link</a>", html)
             self.assertIn("hi there", html)
 
+    def test_export_conversation_html_nested_lists(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            nested_list_md = """- Level 1 item A
+  - Level 2 item A1
+  - Level 2 item A2
+    - Level 3 item A2a
+- Level 1 item B
+  - Level 2 item B1"""
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[
+                    Message(role="user", content=nested_list_md),
+                ],
+                tokens_in=0,
+                tokens_out=0,
+            )
+
+            export_path = export_conversation_html(convo, root)
+            html = export_path.read_text(encoding="utf-8")
+
+            # Should have nested <ul> elements
+            self.assertIn("<ul>", html)
+            # Check for nested structure: <li>...<ul>...</ul></li>
+            self.assertIn("<li>Level 1 item A<ul>", html)
+            self.assertIn("<li>Level 2 item A2<ul>", html)
+            self.assertIn("<li>Level 3 item A2a</li>", html)
+            # Count nested ul tags - should have more than 1
+            ul_count = html.count("<ul>")
+            self.assertGreaterEqual(ul_count, 3)  # At least 3 levels
+
     def test_import_conversation_from_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -204,6 +241,139 @@ class ExportImportTests(unittest.TestCase):
             loaded = load_conversation(root / "imported", imported.id)
             self.assertEqual([m.role for m in loaded.messages], ["user", "assistant", "user", "assistant"])
             self.assertEqual([m.content for m in loaded.messages], ["turn1", "reply1", "turn2", "reply2"])
+
+
+class HtmlIndexTests(unittest.TestCase):
+    def test_generate_html_index_creates_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_dir = Path(tmpdir) / "exports"
+            convos_dir = Path(tmpdir) / "conversations"
+            export_dir.mkdir()
+            convos_dir.mkdir()
+
+            # Create a conversation and export it
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="hello")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+            saved = save_conversation(convos_dir, convo, save_name="test")
+            export_conversation_html(saved, export_dir)
+
+            # Generate index
+            index_path = generate_html_index(export_dir, convos_dir)
+
+            self.assertEqual(index_path, export_dir / "index.html")
+            self.assertTrue(index_path.exists())
+
+            content = index_path.read_text(encoding="utf-8")
+            self.assertIn("Conversation Exports", content)
+            self.assertIn("test", content)  # display name
+            self.assertIn(".html", content)  # link to export
+
+    def test_generate_html_index_shows_tags(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_dir = Path(tmpdir) / "exports"
+            convos_dir = Path(tmpdir) / "conversations"
+            export_dir.mkdir()
+            convos_dir.mkdir()
+
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="hello")],
+                tokens_in=0,
+                tokens_out=0,
+                tags={"topic": "science", "project": "alpha"},
+            )
+            saved = save_conversation(convos_dir, convo, save_name="tagged")
+            export_conversation_html(saved, export_dir)
+
+            index_path = generate_html_index(export_dir, convos_dir)
+            content = index_path.read_text(encoding="utf-8")
+
+            # Should have tag sections
+            self.assertIn("topic=science", content)
+            self.assertIn("project=alpha", content)
+            # Conversation should appear in tag sections
+            self.assertIn("<h2>project=alpha</h2>", content)
+            self.assertIn("<h2>topic=science</h2>", content)
+
+    def test_generate_html_index_shows_branches(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_dir = Path(tmpdir) / "exports"
+            convos_dir = Path(tmpdir) / "conversations"
+            export_dir.mkdir()
+            convos_dir.mkdir()
+
+            # Create parent and child conversations
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="hello")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+            parent = save_conversation(convos_dir, convo, save_name="parent")
+            child = branch_conversation(convos_dir, parent, new_save_name="child")
+
+            # Export both
+            export_conversation_html(parent, export_dir)
+            export_conversation_html(child, export_dir)
+
+            index_path = generate_html_index(export_dir, convos_dir)
+            content = index_path.read_text(encoding="utf-8")
+
+            # Both should be in the index
+            self.assertIn("parent", content)
+            self.assertIn("child", content)
+            # Child should be in a branches section (nested under parent)
+            self.assertIn('class="branches"', content)
+
+    def test_generate_html_index_cleans_orphaned_entries(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_dir = Path(tmpdir) / "exports"
+            convos_dir = Path(tmpdir) / "conversations"
+            export_dir.mkdir()
+            convos_dir.mkdir()
+
+            # Create and export a conversation
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="hello")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+            saved = save_conversation(convos_dir, convo, save_name="test")
+            export_path = export_conversation_html(saved, export_dir)
+
+            # Generate index - should have the export
+            index_path = generate_html_index(export_dir, convos_dir)
+            content = index_path.read_text(encoding="utf-8")
+            self.assertIn("test", content)
+
+            # Delete the export file
+            export_path.unlink()
+
+            # Regenerate index - orphaned entry should be gone
+            index_path = generate_html_index(export_dir, convos_dir)
+            content = index_path.read_text(encoding="utf-8")
+            self.assertNotIn(export_path.name, content)
 
 
 if __name__ == "__main__":

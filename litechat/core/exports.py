@@ -23,9 +23,11 @@ from typing import Optional
 
 from .conversations import (
     Conversation,
+    ConversationSummary,
     Message,
     _slugify_model_name,
     _slugify_save_name,
+    list_conversations,
     save_conversation,
 )
 
@@ -147,6 +149,45 @@ def export_conversation_html(convo: Conversation, export_dir: Path, filename: Op
                 return
             out.append("<ul>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>")
 
+        def parse_nested_list(lines: list[str], start_idx: int) -> tuple[str, int]:
+            """Parse a potentially nested list starting at start_idx.
+
+            Returns (html_string, next_index).
+            """
+            result = []
+            i = start_idx
+            base_indent = None
+
+            while i < len(lines):
+                line = lines[i]
+                match = re.match(r'^(\s*)([\*\-+])\s+(.*)$', line)
+                if not match:
+                    break
+
+                indent = len(match.group(1))
+                content = match.group(3)
+
+                if base_indent is None:
+                    base_indent = indent
+
+                if indent < base_indent:
+                    # Dedented - end of this list level
+                    break
+                elif indent > base_indent:
+                    # Nested list - recurse
+                    nested_html, i = parse_nested_list(lines, i)
+                    # Append nested list to last item
+                    if result:
+                        result[-1] = result[-1][:-5] + nested_html + "</li>"  # Insert before </li>
+                    else:
+                        result.append(f"<li>{nested_html}</li>")
+                else:
+                    # Same level
+                    result.append(f"<li>{inline(content)}</li>")
+                    i += 1
+
+            return "<ul>" + "".join(result) + "</ul>", i
+
         paragraph_buf: list[str] = []
         list_buf: list[str] = []
 
@@ -213,21 +254,13 @@ def export_conversation_html(convo: Conversation, export_dir: Path, filename: Op
                     out.append("".join(table_html))
                     continue
 
-            # Unordered list items
+            # Unordered list items (with nested list support)
             list_match = re.match(r"^\s*[\*\-+]\s+(.*)$", line)
             if list_match:
                 flush_paragraph(paragraph_buf)
                 paragraph_buf = []
-                list_buf.append(inline(list_match.group(1)))
-                i += 1
-                while i < len(lines):
-                    lm = re.match(r"^\s*[\*\-+]\s+(.*)$", lines[i])
-                    if not lm:
-                        break
-                    list_buf.append(inline(lm.group(1)))
-                    i += 1
-                flush_list(list_buf)
-                list_buf = []
+                list_html, i = parse_nested_list(lines, i)
+                out.append(list_html)
                 continue
 
             # Blank line -> paragraph break
@@ -444,3 +477,167 @@ def _conversation_from_md_export(path: Path) -> tuple[Conversation, Optional[str
         tokens_out=0,
     )
     return convo, desired_id
+
+
+def generate_html_index(export_dir: Path, conversations_root: Path) -> Path:
+    """Generate index.html linking all exported HTML conversations.
+
+    Scans the export directory for .html files (excluding index.html),
+    cross-references with conversation metadata for tags and branch info,
+    and generates an index with:
+    - All conversations as a tree (showing branch hierarchy)
+    - Sections for each tag=value pair
+
+    Args:
+        export_dir: Directory containing HTML exports
+        conversations_root: Directory containing conversation metadata
+
+    Returns:
+        Path to the generated index.html
+    """
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get all HTML exports (excluding index.html)
+    html_files = sorted(
+        [f for f in export_dir.glob("*.html") if f.name != "index.html"],
+        reverse=True  # Newest first by filename
+    )
+
+    # Load conversation summaries for metadata
+    summaries = list_conversations(conversations_root) if conversations_root.exists() else []
+    summary_by_id: dict[str, ConversationSummary] = {s.dir_name: s for s in summaries}
+
+    # Build export info list with metadata
+    exports: list[dict] = []
+    for html_file in html_files:
+        # Try to match with conversation by filename (without .html)
+        convo_id = html_file.stem
+        summary = summary_by_id.get(convo_id)
+
+        export_info = {
+            "filename": html_file.name,
+            "convo_id": convo_id,
+            "display_name": summary.display_name if summary else convo_id,
+            "model": summary.model_name if summary else "unknown",
+            "tags": summary.tags if summary else {},
+            "parent_id": summary.parent_id if summary else None,
+            "last_modified": summary.last_modified if summary else "",
+        }
+        exports.append(export_info)
+
+    # Build parent->children map for tree display
+    children_map: dict[str, list[dict]] = {}
+    for exp in exports:
+        if exp["parent_id"]:
+            if exp["parent_id"] not in children_map:
+                children_map[exp["parent_id"]] = []
+            children_map[exp["parent_id"]].append(exp)
+
+    # Collect all unique tag=value pairs
+    tag_values: dict[str, list[dict]] = {}  # "tag=value" -> list of exports
+    for exp in exports:
+        for tag_key, tag_val in exp["tags"].items():
+            tag_str = f"{tag_key}={tag_val}"
+            if tag_str not in tag_values:
+                tag_values[tag_str] = []
+            tag_values[tag_str].append(exp)
+
+    def esc(text: str) -> str:
+        return html.escape(str(text), quote=False)
+
+    def render_export_link(exp: dict, indent: str = "") -> str:
+        """Render a single export as a list item with optional tree indent."""
+        date_str = exp["last_modified"].split("T")[0] if exp["last_modified"] else ""
+        meta = f"{exp['model']}"
+        if date_str:
+            meta += f" - {date_str}"
+        tag_str = ""
+        if exp["tags"]:
+            tag_str = " <span class=\"tags\">" + ", ".join(f"{k}={v}" for k, v in exp["tags"].items()) + "</span>"
+        return f'{indent}<li><a href="{esc(exp["filename"])}">{esc(exp["display_name"])}</a> <span class="meta">({meta})</span>{tag_str}</li>'
+
+    def render_tree(exp: dict, depth: int = 0) -> list[str]:
+        """Recursively render an export and its children."""
+        lines = []
+        indent = "  " * depth
+        lines.append(render_export_link(exp, indent))
+
+        # Render children if any
+        if exp["convo_id"] in children_map:
+            lines.append(f'{indent}<ul class="branches">')
+            for child in children_map[exp["convo_id"]]:
+                lines.extend(render_tree(child, depth + 1))
+            lines.append(f'{indent}</ul>')
+
+        return lines
+
+    # Render all conversations section (as tree)
+    all_convos_html = []
+    rendered_ids = set()
+    export_by_id = {exp["convo_id"]: exp for exp in exports}
+
+    # Find root exports (no parent, or parent not in exports)
+    for exp in exports:
+        if exp["convo_id"] in rendered_ids:
+            continue
+        # Root if no parent or parent not exported
+        if not exp["parent_id"] or exp["parent_id"] not in export_by_id:
+            all_convos_html.extend(render_tree(exp))
+            # Mark all descendants as rendered
+            def mark_rendered(e: dict):
+                rendered_ids.add(e["convo_id"])
+                for child in children_map.get(e["convo_id"], []):
+                    mark_rendered(child)
+            mark_rendered(exp)
+
+    # Render tag sections
+    tag_sections_html = []
+    for tag_str in sorted(tag_values.keys()):
+        tag_exports = tag_values[tag_str]
+        section_items = [render_export_link(exp) for exp in tag_exports]
+        tag_sections_html.append(f"""
+    <h2>{esc(tag_str)}</h2>
+    <ul class="conversation-list">
+      {''.join(section_items)}
+    </ul>
+""")
+
+    # Generate the full HTML
+    index_html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Conversation Exports</title>
+  <style>
+    body {{ font-family: sans-serif; margin: 2rem; max-width: 900px; }}
+    h1 {{ margin-top: 0; color: #333; }}
+    h2 {{ color: #555; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem; margin-top: 2rem; }}
+    .conversation-list {{ list-style: none; padding: 0; }}
+    .conversation-list li {{ margin: 0.5rem 0; padding: 0.25rem 0; }}
+    .conversation-list a {{ color: #0a66c2; text-decoration: none; font-weight: 500; }}
+    .conversation-list a:hover {{ text-decoration: underline; }}
+    .meta {{ color: #666; font-size: 0.9em; }}
+    .tags {{ color: #888; font-size: 0.85em; font-style: italic; }}
+    .branches {{ list-style: none; padding-left: 1.5rem; border-left: 2px solid #e0e0e0; margin: 0.25rem 0; }}
+    .branches li::before {{ content: "└─ "; color: #999; }}
+    .generated {{ color: #999; font-size: 0.8em; margin-top: 3rem; border-top: 1px solid #eee; padding-top: 1rem; }}
+  </style>
+</head>
+<body>
+  <h1>Conversation Exports</h1>
+
+  <h2>All Conversations</h2>
+  <ul class="conversation-list">
+    {''.join(all_convos_html) if all_convos_html else '<li><em>No exports found</em></li>'}
+  </ul>
+
+  {''.join(tag_sections_html) if tag_sections_html else ''}
+
+  <p class="generated">Generated: {datetime.now().isoformat()}</p>
+</body>
+</html>
+"""
+
+    index_path = export_dir / "index.html"
+    index_path.write_text(index_html, encoding="utf-8")
+    return index_path

@@ -223,6 +223,44 @@ class ConversationIoTests(unittest.TestCase):
             parent_summary = next(s for s in summaries if s.dir_name == original.id)
             self.assertIsNone(parent_summary.parent_id)
 
+    def test_recursive_branching(self):
+        """Branching from a branch creates correct parent chain."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="root message")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+
+            # Create: root -> branch1 -> branch2
+            root_convo = save_conversation(root, convo, save_name="root")
+            root_convo.messages.append(Message(role="assistant", content="root reply"))
+            save_conversation(root, root_convo)
+
+            branch1 = branch_conversation(root, root_convo, new_save_name="branch1")
+            branch1.messages.append(Message(role="user", content="branch1 message"))
+            save_conversation(root, branch1)
+
+            branch2 = branch_conversation(root, branch1, new_save_name="branch2")
+
+            # Verify parent chain
+            self.assertIsNone(root_convo.parent_id)
+            self.assertEqual(branch1.parent_id, root_convo.id)
+            self.assertEqual(branch2.parent_id, branch1.id)  # Parent is branch1, not root
+
+            # Verify branch2 has all messages from branch1
+            self.assertEqual(len(branch2.messages), 3)  # root msg + root reply + branch1 msg
+
+            # Verify loaded conversations maintain parent chain
+            loaded_branch2 = load_conversation(root, branch2.id)
+            self.assertEqual(loaded_branch2.parent_id, branch1.id)
+
 
 if __name__ == "__main__":
     unittest.main()

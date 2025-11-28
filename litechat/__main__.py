@@ -26,6 +26,7 @@ from .core.exports import (
     export_conversation_json,
     export_conversation_html,
     import_conversation_from_file,
+    generate_html_index,
 )
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
@@ -261,6 +262,8 @@ def handle_batch_command(
                 path = export_conversation_json(state.current_conversation, target_dir)
             else:
                 path = export_conversation_html(state.current_conversation, target_dir)
+                # Regenerate index.html for HTML exports
+                generate_html_index(target_dir, state.conversations_root)
             print(f"[{line_num}] Exported to: {path}")
         except Exception as e:
             print(f"[{line_num}] Error exporting: {e}")

@@ -28,6 +28,7 @@ from ..core.exports import (
     export_conversation_json,
     export_conversation_html,
     import_conversation_from_file,
+    generate_html_index,
 )
 
 if TYPE_CHECKING:
@@ -433,6 +434,8 @@ class CommandHandlers:
         target_dir = self.app.state.config.exports_dir or Path.cwd()
         try:
             path = export_conversation_html(self.app.state.current_conversation, target_dir)
+            # Regenerate index.html
+            generate_html_index(target_dir, self.app.state.conversations_root)
             self.app.add_system_message(f"Exported to: {path}")
         except Exception as e:
             self.app.add_system_message(f"Error exporting: {str(e)}")
