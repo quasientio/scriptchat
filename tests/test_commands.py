@@ -246,6 +246,32 @@ class CommandTests(unittest.TestCase):
             self.assertIn("Timeout:", msg)
             self.assertIn("convs)", msg.lower())
 
+    def test_profile_shows_reasoning_unavailable_when_not_configured(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Model has no reasoning_levels configured
+            result = handle_command("/profile", state)
+            msg = result.message or ""
+            self.assertIn("Reasoning: (unavailable)", msg)
+
+    def test_profile_shows_reasoning_default_when_available(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Enable reasoning on the model
+            state.config.providers[0].models[0].reasoning_levels = ["low", "medium", "high"]
+            result = handle_command("/profile", state)
+            msg = result.message or ""
+            self.assertIn("Reasoning: (default)", msg)
+
+    def test_profile_shows_reasoning_level_when_set(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.config.providers[0].models[0].reasoning_levels = ["low", "medium", "high"]
+            state.current_conversation.reasoning_level = "high"
+            result = handle_command("/profile", state)
+            msg = result.message or ""
+            self.assertIn("Reasoning: high", msg)
+
     def test_profile_system_prompt_trimmed_and_none(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             long_prompt = "p" * 150

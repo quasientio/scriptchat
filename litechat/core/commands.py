@@ -436,10 +436,15 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             exp_count = 0
 
         file_keys = list(state.file_registry.keys()) if hasattr(state, "file_registry") else []
+        available_reasoning = reasoning_levels_for_model(cfg, convo.provider_id, convo.model_name)
+        if available_reasoning:
+            reasoning_display = convo.reasoning_level or "(default)"
+        else:
+            reasoning_display = "(unavailable)"
         lines = [
             f"Provider: {convo.provider_id}",
             f"Model: {convo.model_name}",
-            f"Reasoning: {convo.reasoning_level or '(default)'}",
+            f"Reasoning: {reasoning_display}",
             f"Temperature: {convo.temperature:.2f}",
             f"Tokens: {convo.tokens_in} in / {convo.tokens_out} out",
             f"Streaming: {'on' if cfg.enable_streaming else 'off'}",
