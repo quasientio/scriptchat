@@ -165,8 +165,10 @@ class OpenAIChatClient:
 
         # Update conversation
         convo.messages.append(Message(role='assistant', content=content))
-        convo.tokens_in += usage.get("prompt_tokens", 0)
-        convo.tokens_out += usage.get("completion_tokens", 0)
+        # Chat Completions API uses prompt_tokens/completion_tokens
+        # Responses API uses input_tokens/output_tokens
+        convo.tokens_in += usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+        convo.tokens_out += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
         return content
 
     def _chat_stream(self, url: str, payload: dict, convo: Conversation, on_chunk=None) -> str:
@@ -199,16 +201,17 @@ class OpenAIChatClient:
                 delta = data.get("choices", [{}])[0].get("delta", {})
                 content_piece = delta.get("content", "")
                 usage = data.get("usage", {})
+                # Chat Completions API uses prompt_tokens/completion_tokens
                 total_prompt += usage.get("prompt_tokens", 0)
                 total_completion += usage.get("completion_tokens", 0)
                 if usage:
                     usage_added = True
             else:
-                # Responses API streaming
+                # Responses API streaming - uses input_tokens/output_tokens
                 content_piece = self._extract_responses_text(data)
                 usage = data.get("usage", {})
-                total_prompt += usage.get("prompt_tokens", 0)
-                total_completion += usage.get("completion_tokens", 0)
+                total_prompt += usage.get("input_tokens", 0)
+                total_completion += usage.get("output_tokens", 0)
                 if usage:
                     usage_added = True
             if content_piece:
@@ -221,8 +224,9 @@ class OpenAIChatClient:
 
         if not usage_added and last_data:
             usage = last_data.get("usage", {})
-            total_prompt += usage.get("prompt_tokens", 0)
-            total_completion += usage.get("completion_tokens", 0)
+            # Handle both Chat Completions and Responses API token keys
+            total_prompt += usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+            total_completion += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
         convo.tokens_in += total_prompt
         convo.tokens_out += total_completion
         return assistant_msg.content
