@@ -14,6 +14,7 @@
 
 """Terminal UI for lite-chat using prompt_toolkit."""
 
+import shutil
 import threading
 import logging
 from pathlib import Path
@@ -202,15 +203,24 @@ class LiteChatUI:
             dont_extend_width=True
         )
 
+        def get_input_height():
+            text = self.input_buffer.text
+            if not text:
+                return 1
+            term_width = shutil.get_terminal_size().columns
+            prompt_len = len(self._get_prompt_prefix())
+            available_width = max(1, term_width - prompt_len)
+            return max(1, (len(text) + available_width - 1) // available_width)
+
         self.input_window = Window(
             content=BufferControl(buffer=self.input_buffer),
-            height=1
+            wrap_lines=True
         )
 
         input_container = VSplit([
             prompt_window,
             self.input_window
-        ], height=1)
+        ], height=get_input_height)
 
         # Main container
         root_container = HSplit([
