@@ -18,7 +18,7 @@ from pathlib import Path
 
 import json
 
-from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature
+from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature, resolve_placeholders
 from litechat.core.config import Config, ModelConfig, ProviderConfig
 from litechat.core.conversations import Conversation, Message
 from litechat.core.provider_dispatcher import ProviderDispatcher
@@ -467,6 +467,72 @@ class CommandTests(unittest.TestCase):
             self.assertIn("Switched to model", res.message)
             self.assertEqual(state.current_conversation.model_name, "llama-reason")
             self.assertEqual(state.current_conversation.reasoning_level, "high")
+
+
+class ResolvePlaceholdersTests(unittest.TestCase):
+    """Tests for the resolve_placeholders function."""
+
+    def test_expands_registered_file_reference(self):
+        registry = {"myfile.txt": {"content": "file contents here", "full_path": "/tmp/myfile.txt"}}
+        result, err = resolve_placeholders("Please review @myfile.txt for issues", registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Please review file contents here for issues")
+
+    def test_expands_braced_reference(self):
+        registry = {"path/to/file.py": {"content": "def foo(): pass", "full_path": "/home/user/path/to/file.py"}}
+        result, err = resolve_placeholders("Check @{path/to/file.py} now", registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Check def foo(): pass now")
+
+    def test_leaves_java_annotations_untouched(self):
+        registry = {}
+        text = """public class Foo {
+    @Override
+    public String toString() { return "foo"; }
+
+    @Nullable
+    private String name;
+}"""
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, text)
+
+    def test_leaves_unregistered_at_tokens_untouched(self):
+        registry = {"registered.txt": {"content": "CONTENT", "full_path": "/tmp/registered.txt"}}
+        text = "See @registered.txt and also @unregistered.txt"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "See CONTENT and also @unregistered.txt")
+
+    def test_multiple_registered_references(self):
+        registry = {
+            "a.txt": {"content": "AAA", "full_path": "/a.txt"},
+            "b.txt": {"content": "BBB", "full_path": "/b.txt"},
+        }
+        result, err = resolve_placeholders("First @a.txt then @b.txt", registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "First AAA then BBB")
+
+    def test_mixed_registered_and_annotations(self):
+        registry = {"code.java": {"content": "System.out.println();", "full_path": "/code.java"}}
+        text = "File @code.java has @Override annotation"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "File System.out.println(); has @Override annotation")
+
+    def test_empty_registry_leaves_all_untouched(self):
+        registry = {}
+        text = "Email me @user@example.com or check @Override"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, text)
+
+    def test_no_at_symbols_unchanged(self):
+        registry = {"file.txt": {"content": "X", "full_path": "/file.txt"}}
+        text = "No references here"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, text)
 
 
 if __name__ == "__main__":

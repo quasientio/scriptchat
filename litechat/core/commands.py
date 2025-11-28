@@ -691,21 +691,19 @@ def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
 def resolve_placeholders(text: str, registry: dict) -> tuple[Optional[str], Optional[str]]:
     """Expand @path placeholders using the file registry.
 
-    Supports @path or @{path}. If a placeholder is missing, returns (None, error).
+    Supports @path or @{path}. Only expands references that exist in the registry;
+    other @-prefixed tokens (e.g., Java annotations like @Override) are left untouched.
     """
     import re
     pattern = re.compile(r'@(?:\{([^}]+)\}|(\S+))')
-    missing = []
 
     def repl(match):
         key = match.group(1) or match.group(2)
         if key not in registry:
-            missing.append(key)
+            # Not a registered file reference; leave as-is
             return match.group(0)
         entry = registry[key]
         return entry["content"] if isinstance(entry, dict) else entry
 
     expanded = pattern.sub(repl, text)
-    if missing:
-        return None, f"Unregistered file reference(s): {', '.join(missing)}"
     return expanded, None
