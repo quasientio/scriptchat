@@ -254,6 +254,23 @@ class CommandTests(unittest.TestCase):
             msg = result.message or ""
             self.assertIn("Reasoning: (unavailable)", msg)
 
+    def test_profile_shows_context_length_when_configured(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Model already has contexts=[2048] from make_config
+            result = handle_command("/profile", state)
+            msg = result.message or ""
+            self.assertIn("Context: 2048", msg)
+
+    def test_profile_shows_context_not_configured_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Remove contexts from model
+            state.config.providers[0].models[0].contexts = None
+            result = handle_command("/profile", state)
+            msg = result.message or ""
+            self.assertIn("Context: (not configured)", msg)
+
     def test_profile_shows_reasoning_default_when_available(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))

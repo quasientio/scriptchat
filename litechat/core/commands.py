@@ -441,9 +441,22 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             reasoning_display = convo.reasoning_level or "(default)"
         else:
             reasoning_display = "(unavailable)"
+
+        # Get context length from model config
+        try:
+            model_cfg = cfg.get_model(convo.provider_id, convo.model_name)
+            if model_cfg.contexts:
+                context_display = ", ".join(str(c) for c in model_cfg.contexts)
+            else:
+                context_display = "(not configured)"
+        except ValueError:
+            context_display = "(not configured)"
+
         lines = [
+            "",  # Start on new line after [system] prefix
             f"Provider: {convo.provider_id}",
             f"Model: {convo.model_name}",
+            f"Context: {context_display}",
             f"Reasoning: {reasoning_display}",
             f"Temperature: {convo.temperature:.2f}",
             f"Tokens: {convo.tokens_in} in / {convo.tokens_out} out",
