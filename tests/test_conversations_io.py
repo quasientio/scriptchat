@@ -109,6 +109,35 @@ class ConversationIoTests(unittest.TestCase):
             summaries = list_conversations(root)
             self.assertEqual([s.dir_name for s in summaries], ["202401011000_model_b", "202401010900_model_a"])
 
+    def test_load_conversation_handles_old_file_references_format(self):
+        """Backwards compatibility: old file_references stored path as string, new stores dict."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            # Create a file to reference
+            test_file = root / "test.txt"
+            test_file.write_text("content", encoding="utf-8")
+
+            # Create conversation directory with old-format file_references (string path)
+            conv_dir = root / "202401010101_model_test"
+            conv_dir.mkdir()
+            meta = {
+                "display_name": "test",
+                "provider_id": "ollama",
+                "model_name": "model",
+                "temperature": 0.7,
+                "file_references": {
+                    "test.txt": str(test_file)  # Old format: just string path
+                }
+            }
+            (conv_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+            # Load should succeed and rehydrate file registry
+            loaded = load_conversation(root, "202401010101_model_test")
+            self.assertIsNotNone(loaded)
+            # Check that file_registry was rehydrated
+            self.assertTrue(hasattr(loaded, "file_registry"))
+            self.assertIn("test.txt", loaded.file_registry)
+            self.assertEqual(loaded.file_registry["test.txt"]["content"], "content")
 
 
 if __name__ == "__main__":

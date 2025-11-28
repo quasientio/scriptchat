@@ -278,6 +278,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
                 message=f"File is {size} bytes; exceeds {threshold}. Re-run with /file --force {file_path} to register."
             )
 
+        # Compute hash for the file content
+        import hashlib
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
         # Register by original path token
         state.file_registry[file_path] = {"content": content, "full_path": full_path_str}
         # Also register by basename if not already present
@@ -287,12 +291,21 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             state.file_registry[basename] = {"content": content, "full_path": full_path_str}
             alt = f" and @{basename}"
 
-        # Persist references on the conversation for future loads
+        # Persist references on the conversation for future loads (with hash)
         if not hasattr(state.current_conversation, "file_references") or state.current_conversation.file_references is None:
             state.current_conversation.file_references = {}
-        state.current_conversation.file_references[file_path] = full_path_str
-        if basename not in state.current_conversation.file_references:
-            state.current_conversation.file_references[basename] = full_path_str
+        file_ref_entry = {"path": full_path_str, "sha256": content_hash}
+        state.current_conversation.file_references[file_path] = file_ref_entry
+        # Update basename entry if it points to the same file, or create if not present
+        existing_basename_ref = state.current_conversation.file_references.get(basename)
+        if existing_basename_ref is None:
+            state.current_conversation.file_references[basename] = file_ref_entry
+        elif isinstance(existing_basename_ref, dict) and existing_basename_ref.get("path") == full_path_str:
+            # Same file, update the hash
+            state.current_conversation.file_references[basename] = file_ref_entry
+        elif isinstance(existing_basename_ref, str) and existing_basename_ref == full_path_str:
+            # Old format, same file, update to new format with hash
+            state.current_conversation.file_references[basename] = file_ref_entry
         # Auto-save meta if conversation already saved
         try:
             if state.current_conversation.id:

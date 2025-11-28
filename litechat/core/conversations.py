@@ -45,7 +45,7 @@ class Conversation:
     context_length_configured: Optional[int] = None  # Max context length model is running with
     context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
     tags: dict = field(default_factory=dict)
-    file_references: dict[str, str] = field(default_factory=dict)  # key -> full_path
+    file_references: dict[str, dict] = field(default_factory=dict)  # key -> {"path": str, "sha256": str}
 
 
 @dataclass
@@ -276,7 +276,12 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
 
     # Rehydrate file registry strictly from meta file references
     file_registry: dict = {}
-    for key, path_str in file_references.items():
+    for key, ref_value in file_references.items():
+        # Handle both old format (string path) and new format (dict with path and sha256)
+        if isinstance(ref_value, str):
+            path_str = ref_value
+        else:
+            path_str = ref_value.get("path", "")
         p = Path(path_str).expanduser()
         if p.exists() and p.is_file():
             try:

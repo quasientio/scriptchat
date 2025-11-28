@@ -442,6 +442,51 @@ class CommandTests(unittest.TestCase):
             meta = json.loads((root / saved.id / "meta.json").read_text(encoding="utf-8"))
             self.assertIn(str(file_path), meta.get("file_references", {}))
 
+    def test_file_command_stores_sha256_hash(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            file_path = root / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            handle_command(f"/file {file_path}", state)
+            from litechat.core.conversations import save_conversation
+            saved = save_conversation(root, state.current_conversation, save_name="save", system_prompt=None)
+            meta = json.loads((root / saved.id / "meta.json").read_text(encoding="utf-8"))
+
+            file_ref = meta.get("file_references", {}).get(str(file_path))
+            self.assertIsInstance(file_ref, dict)
+            self.assertIn("path", file_ref)
+            self.assertIn("sha256", file_ref)
+            # sha256 of "hello"
+            import hashlib
+            expected_hash = hashlib.sha256("hello".encode("utf-8")).hexdigest()
+            self.assertEqual(file_ref["sha256"], expected_hash)
+
+    def test_file_command_updates_basename_hash_on_reregister(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            file_path = root / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            # Register file first time
+            handle_command(f"/file {file_path}", state)
+
+            import hashlib
+            hash1 = hashlib.sha256("hello".encode("utf-8")).hexdigest()
+            self.assertEqual(state.current_conversation.file_references[str(file_path)]["sha256"], hash1)
+            self.assertEqual(state.current_conversation.file_references["note.txt"]["sha256"], hash1)
+
+            # Modify file and re-register
+            file_path.write_text("world", encoding="utf-8")
+            handle_command(f"/file {file_path}", state)
+
+            hash2 = hashlib.sha256("world".encode("utf-8")).hexdigest()
+            # Both full path and basename should have updated hash
+            self.assertEqual(state.current_conversation.file_references[str(file_path)]["sha256"], hash2)
+            self.assertEqual(state.current_conversation.file_references["note.txt"]["sha256"], hash2)
+
     def test_tag_auto_saves_when_conversation_has_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
