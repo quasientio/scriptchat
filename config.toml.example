@@ -37,8 +37,6 @@ timeout = 1200
 # File registration confirmation threshold in bytes. Above this size, use /file --force.
 file_confirm_threshold_bytes = 40000
 
-# Optional per-model reasoning levels (when supported by the provider) can be set under each provider model entry.
-
 # Provider definitions. Add as many as you need.
 
 # Ollama provider with contexts
