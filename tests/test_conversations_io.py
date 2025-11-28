@@ -139,6 +139,90 @@ class ConversationIoTests(unittest.TestCase):
             self.assertIn("test.txt", loaded.file_registry)
             self.assertEqual(loaded.file_registry["test.txt"]["content"], "content")
 
+    def test_branch_sets_parent_id(self):
+        """Branch creates new conversation with parent_id pointing to original."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[Message(role="user", content="hello")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+
+            # Save original
+            original = save_conversation(root, convo, save_name="parent")
+
+            # Branch it
+            branched = branch_conversation(root, original, new_save_name="child")
+
+            # Verify parent_id is set
+            self.assertEqual(branched.parent_id, original.id)
+            self.assertIsNotNone(branched.branched_at)
+
+            # Verify it's persisted in meta.json
+            meta_path = root / branched.id / "meta.json"
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            self.assertEqual(meta.get("parent_id"), original.id)
+            self.assertIsNotNone(meta.get("branched_at"))
+
+    def test_branch_preserves_messages(self):
+        """Branch copies all messages from parent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[
+                    Message(role="user", content="hello"),
+                    Message(role="assistant", content="hi there"),
+                ],
+                tokens_in=10,
+                tokens_out=5,
+            )
+
+            original = save_conversation(root, convo, save_name="parent")
+            branched = branch_conversation(root, original, new_save_name="child")
+
+            # Messages should be copied
+            self.assertEqual(len(branched.messages), len(original.messages))
+            self.assertEqual(branched.messages[0].content, "hello")
+            self.assertEqual(branched.messages[1].content, "hi there")
+
+    def test_list_conversations_includes_parent_id(self):
+        """list_conversations returns parent_id in summaries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.7,
+                system_prompt=None,
+                messages=[],
+                tokens_in=0,
+                tokens_out=0,
+            )
+
+            original = save_conversation(root, convo, save_name="parent")
+            branched = branch_conversation(root, original, new_save_name="child")
+
+            summaries = list_conversations(root)
+            # Find the branched conversation summary
+            branch_summary = next(s for s in summaries if s.dir_name == branched.id)
+            self.assertEqual(branch_summary.parent_id, original.id)
+
+            # Parent should have no parent_id
+            parent_summary = next(s for s in summaries if s.dir_name == original.id)
+            self.assertIsNone(parent_summary.parent_id)
+
 
 if __name__ == "__main__":
     unittest.main()

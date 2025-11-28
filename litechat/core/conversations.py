@@ -46,6 +46,8 @@ class Conversation:
     context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
     tags: dict = field(default_factory=dict)
     file_references: dict[str, dict] = field(default_factory=dict)  # key -> {"path": str, "sha256": str}
+    parent_id: Optional[str] = None  # ID of parent conversation if this is a branch
+    branched_at: Optional[str] = None  # ISO timestamp when branch was created
 
 
 @dataclass
@@ -57,6 +59,7 @@ class ConversationSummary:
     display_name: str
     last_modified: str = ""
     tags: dict = field(default_factory=dict)
+    parent_id: Optional[str] = None
 
 
 def _slugify_model_name(model_name: str) -> str:
@@ -141,16 +144,19 @@ def list_conversations(root: Path) -> list[ConversationSummary]:
                 model_name = meta.get('model', 'unknown')
                 tags = meta.get('tags', {}) or {}
                 last_modified = meta.get('last_modified', '')
+                parent_id = meta.get('parent_id')
             except (json.JSONDecodeError, IOError):
                 created_at = ''
                 model_name = 'unknown'
                 tags = {}
                 last_modified = ''
+                parent_id = None
         else:
             created_at = ''
             model_name = 'unknown'
             tags = {}
             last_modified = ''
+            parent_id = None
 
         # Parse directory name for display
         dir_name = conv_dir.name
@@ -167,7 +173,8 @@ def list_conversations(root: Path) -> list[ConversationSummary]:
             model_name=model_name,
             display_name=display_name,
             last_modified=last_modified,
-            tags=tags
+            tags=tags,
+            parent_id=parent_id
         ))
 
     # Sort by directory name (which starts with timestamp) in reverse
@@ -209,6 +216,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         last_modified = meta.get('last_modified')
         reasoning_level = meta.get('reasoning_level')
         file_references = meta.get('file_references', {}) or {}
+        parent_id = meta.get('parent_id')
+        branched_at = meta.get('branched_at')
     else:
         # Try to infer from directory name
         parts = dir_name.split('_', 2)
@@ -225,6 +234,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         last_modified = None
         reasoning_level = None
         file_references = {}
+        parent_id = None
+        branched_at = None
 
     # Load message files
     messages = []
@@ -271,7 +282,9 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         context_length_configured=context_length_configured,
         context_length_used=context_length_used,
         tags=tags,
-        file_references=file_references
+        file_references=file_references,
+        parent_id=parent_id,
+        branched_at=branched_at
     )
 
     # Rehydrate file registry strictly from meta file references
@@ -366,6 +379,10 @@ def save_conversation(
         meta['context_length_used'] = convo.context_length_used
     if convo.tags:
         meta['tags'] = convo.tags
+    if convo.parent_id:
+        meta['parent_id'] = convo.parent_id
+    if convo.branched_at:
+        meta['branched_at'] = convo.branched_at
 
     meta_path = conv_dir / 'meta.json'
     with open(meta_path, 'w') as f:
@@ -439,13 +456,18 @@ def branch_conversation(
     # Copy entire directory
     shutil.copytree(old_conv_dir, new_conv_dir)
 
-    # Update meta.json with new timestamp
+    # Update meta.json with new timestamp and parent info
     meta_path = new_conv_dir / 'meta.json'
+    now = datetime.now()
+    parent_id = convo.id
+    branched_at = now.isoformat()
     if meta_path.exists():
         with open(meta_path, 'r') as f:
             meta = json.load(f)
-        meta['created_at'] = datetime.now().isoformat()
-        meta['last_modified'] = datetime.now().isoformat()
+        meta['created_at'] = now.isoformat()
+        meta['last_modified'] = now.isoformat()
+        meta['parent_id'] = parent_id
+        meta['branched_at'] = branched_at
         with open(meta_path, 'w') as f:
             json.dump(meta, f, indent=2)
 
@@ -460,7 +482,10 @@ def branch_conversation(
         tokens_in=convo.tokens_in,
         tokens_out=convo.tokens_out,
         reasoning_level=convo.reasoning_level,
-        tags=convo.tags.copy()
+        tags=convo.tags.copy(),
+        file_references=convo.file_references.copy() if convo.file_references else {},
+        parent_id=parent_id,
+        branched_at=branched_at
     )
 
     return new_convo

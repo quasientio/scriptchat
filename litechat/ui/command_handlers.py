@@ -269,8 +269,45 @@ class CommandHandlers:
             self.app.add_system_message("Invalid index. Please enter a number.")
 
     def handle_branch(self, args: str = ""):
+        if args.strip():
+            # Name provided, branch immediately
+            self._branch_callback(args.strip())
+        else:
+            # Prompt for name with default
+            default_name = self._get_default_branch_name()
+            self.app.prompt_message = f"Branch name [{default_name}]:"
+            self.app.prompt_for_input(lambda name: self._branch_callback(name or default_name))
+
+    def _get_default_branch_name(self) -> str:
+        """Generate default branch name based on current conversation."""
+        convo = self.app.state.current_conversation
+        if convo.id:
+            parts = convo.id.split('_', 2)
+            if len(parts) >= 3:
+                base_name = parts[2]
+            else:
+                base_name = 'untitled'
+        else:
+            base_name = 'untitled'
+
+        # Find next available branch number
+        root = self.app.state.conversations_root
+        branch_num = 1
+        while True:
+            candidate = f"{base_name}-branch-{branch_num}"
+            # Check if any conversation already uses this name
+            exists = False
+            if root.exists():
+                for d in root.iterdir():
+                    if d.is_dir() and d.name.endswith(f"_{candidate}"):
+                        exists = True
+                        break
+            if not exists:
+                return candidate
+            branch_num += 1
+
+    def _branch_callback(self, new_save_name: str):
         try:
-            new_save_name = args if args else None
             new_convo = branch_conversation(
                 self.app.state.conversations_root,
                 self.app.state.current_conversation,
@@ -526,9 +563,29 @@ class CommandHandlers:
 
 
 def format_conversation_list(summaries: list[ConversationSummary]) -> list[str]:
-    """Format conversation summaries with tags."""
+    """Format conversation summaries with tags and branch hierarchy."""
     lines = ["Saved conversations:"]
+
+    # Build parent->children map and identify root conversations
+    children_map: dict[str, list[int]] = {}  # parent_id -> list of summary indices
     for i, summary in enumerate(summaries):
+        if summary.parent_id:
+            if summary.parent_id not in children_map:
+                children_map[summary.parent_id] = []
+            children_map[summary.parent_id].append(i)
+
+    # Track which summaries have been rendered (to avoid duplicates)
+    rendered = set()
+
+    def format_summary(idx: int, indent: str = "  ") -> list[str]:
+        """Format a single summary and its children recursively."""
+        if idx in rendered:
+            return []
+        rendered.add(idx)
+
+        summary = summaries[idx]
+        result = []
+
         tag_str = ""
         if getattr(summary, "tags", None):
             tag_str = " tags: " + ", ".join(f"{k}={v}" for k, v in summary.tags.items())
@@ -541,5 +598,20 @@ def format_conversation_list(summaries: list[ConversationSummary]) -> list[str]:
         if tag_str:
             meta_parts.append(tag_str.strip())
         meta_text = " - ".join(meta_parts)
-        lines.append(f"  [{i}] {summary.display_name} ({meta_text})")
+        result.append(f"{indent}[{idx}] {summary.display_name} ({meta_text})")
+
+        # Render children (branches) indented below
+        if summary.dir_name in children_map:
+            for child_idx in children_map[summary.dir_name]:
+                result.extend(format_summary(child_idx, indent + "  └─ "))
+
+        return result
+
+    # Render root conversations (those without parents, or whose parent doesn't exist)
+    existing_dirs = {s.dir_name for s in summaries}
+    for i, summary in enumerate(summaries):
+        # Root if no parent or parent doesn't exist in current list
+        if not summary.parent_id or summary.parent_id not in existing_dirs:
+            lines.extend(format_summary(i))
+
     return lines

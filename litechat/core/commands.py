@@ -496,6 +496,27 @@ def handle_command(line: str, state: AppState) -> CommandResult:
                     seen.add(full_path)
                     full_paths.append(full_path)
             lines.append("Files: " + ", ".join(full_paths))
+
+        # Show branch info
+        if convo.parent_id:
+            lines.append(f"Parent: {convo.parent_id}")
+        # Count children (branches of this conversation)
+        if convo.id:
+            child_count = 0
+            try:
+                for d in state.conversations_root.iterdir():
+                    if d.is_dir():
+                        meta_path = d / "meta.json"
+                        if meta_path.exists():
+                            import json
+                            meta = json.loads(meta_path.read_text())
+                            if meta.get("parent_id") == convo.id:
+                                child_count += 1
+            except Exception:
+                pass
+            if child_count > 0:
+                lines.append(f"Branches: {child_count}")
+
         return CommandResult(message="\n".join(lines))
 
     elif command == 'assert':
