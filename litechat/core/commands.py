@@ -25,6 +25,289 @@ from .ollama_client import OllamaChatClient
 from .provider_dispatcher import ProviderDispatcher
 
 
+# Command registry with metadata for help system
+COMMAND_REGISTRY = {
+    # Conversation management
+    "new": {
+        "category": "Conversation",
+        "usage": "/new",
+        "description": "Start a new conversation, preserving current model and settings.",
+        "examples": ["/new"],
+    },
+    "save": {
+        "category": "Conversation",
+        "usage": "/save [name]",
+        "description": "Save the current conversation. Prompts for name if not provided.",
+        "examples": ["/save", "/save my-chat"],
+    },
+    "load": {
+        "category": "Conversation",
+        "usage": "/load [index|name]",
+        "description": "Load a saved conversation by index or name.",
+        "examples": ["/load", "/load 0", "/load my-chat"],
+    },
+    "branch": {
+        "category": "Conversation",
+        "usage": "/branch [name]",
+        "description": "Create a branch (copy) of the current conversation.",
+        "examples": ["/branch", "/branch experiment"],
+    },
+    "rename": {
+        "category": "Conversation",
+        "usage": "/rename [new-name]",
+        "description": "Rename the current saved conversation.",
+        "examples": ["/rename better-name"],
+    },
+    "chats": {
+        "category": "Conversation",
+        "usage": "/chats",
+        "description": "List all saved conversations.",
+        "examples": ["/chats"],
+    },
+    "clear": {
+        "category": "Conversation",
+        "usage": "/clear [index]",
+        "description": "Clear current conversation or delete a saved one by index.",
+        "examples": ["/clear", "/clear 2"],
+    },
+    # Export/Import
+    "export": {
+        "category": "Export/Import",
+        "usage": "/export [format]",
+        "description": "Export current conversation. Formats: md, json, html.",
+        "examples": ["/export", "/export md", "/export html"],
+    },
+    "export-all": {
+        "category": "Export/Import",
+        "usage": "/export-all [format]",
+        "description": "Export all saved conversations in the given format.",
+        "examples": ["/export-all json", "/export-all html"],
+    },
+    "import": {
+        "category": "Export/Import",
+        "usage": "/import <path>",
+        "description": "Import a conversation from a JSON or Markdown file.",
+        "examples": ["/import ~/backup/chat.json"],
+    },
+    # Model & Settings
+    "model": {
+        "category": "Model & Settings",
+        "usage": "/model [index|provider/model]",
+        "description": "Switch to a different model or list available models.",
+        "examples": ["/model", "/model 2", "/model ollama/llama3"],
+    },
+    "temp": {
+        "category": "Model & Settings",
+        "usage": "/temp [value]",
+        "description": "Set temperature (0.0-2.0). Lower = more deterministic.",
+        "examples": ["/temp", "/temp 0.7", "/temp 1.5"],
+    },
+    "reason": {
+        "category": "Model & Settings",
+        "usage": "/reason [level]",
+        "description": "Set reasoning level for supported models (e.g., Claude).",
+        "examples": ["/reason", "/reason low", "/reason high"],
+    },
+    "timeout": {
+        "category": "Model & Settings",
+        "usage": "/timeout <seconds>",
+        "description": "Set the request timeout in seconds.",
+        "examples": ["/timeout 60", "/timeout 120"],
+    },
+    "stream": {
+        "category": "Model & Settings",
+        "usage": "/stream [on|off]",
+        "description": "Toggle streaming mode for responses.",
+        "examples": ["/stream", "/stream on", "/stream off"],
+    },
+    "prompt": {
+        "category": "Model & Settings",
+        "usage": "/prompt [text|clear]",
+        "description": "Set or clear the system prompt.",
+        "examples": ["/prompt Be concise", "/prompt clear"],
+    },
+    # Files
+    "file": {
+        "category": "Files",
+        "usage": "/file <path> [--force]",
+        "description": "Register a file for @reference in messages.",
+        "examples": ["/file src/main.py", "/file --force large.txt"],
+    },
+    "files": {
+        "category": "Files",
+        "usage": "/files [--long]",
+        "description": "List registered files. Use --long for details.",
+        "examples": ["/files", "/files --long"],
+    },
+    # Tags
+    "tag": {
+        "category": "Tags",
+        "usage": "/tag <key>=<value>",
+        "description": "Add a tag to the current conversation.",
+        "examples": ["/tag project=demo", "/tag status=done"],
+    },
+    "untag": {
+        "category": "Tags",
+        "usage": "/untag <key>",
+        "description": "Remove a tag from the current conversation.",
+        "examples": ["/untag project"],
+    },
+    "tags": {
+        "category": "Tags",
+        "usage": "/tags",
+        "description": "Show all tags on the current conversation.",
+        "examples": ["/tags"],
+    },
+    # Messaging
+    "send": {
+        "category": "Messaging",
+        "usage": "/send <message>",
+        "description": "Send a message (useful in scripts).",
+        "examples": ["/send Hello, how are you?"],
+    },
+    "undo": {
+        "category": "Messaging",
+        "usage": "/undo [n]",
+        "description": "Remove the last n user/assistant exchanges (default 1).",
+        "examples": ["/undo", "/undo 2"],
+    },
+    "retry": {
+        "category": "Messaging",
+        "usage": "/retry",
+        "description": "Remove last response and re-send the user message.",
+        "examples": ["/retry"],
+    },
+    # Testing & Debug
+    "assert": {
+        "category": "Testing & Debug",
+        "usage": "/assert <pattern>",
+        "description": "Assert last response contains pattern (regex or substring).",
+        "examples": ["/assert hello", "/assert \\d{4}"],
+    },
+    "assert-not": {
+        "category": "Testing & Debug",
+        "usage": "/assert-not <pattern>",
+        "description": "Assert last response does NOT contain pattern.",
+        "examples": ["/assert-not error", "/assert-not fail"],
+    },
+    "echo": {
+        "category": "Testing & Debug",
+        "usage": "/echo <message>",
+        "description": "Display a message without sending to the model.",
+        "examples": ["/echo Step 1 complete"],
+    },
+    "log-level": {
+        "category": "Testing & Debug",
+        "usage": "/log-level <level>",
+        "description": "Set log level: debug, info, warn, error.",
+        "examples": ["/log-level debug", "/log-level info"],
+    },
+    "profile": {
+        "category": "Testing & Debug",
+        "usage": "/profile",
+        "description": "Show current session profile (model, tokens, settings).",
+        "examples": ["/profile"],
+    },
+    # Scripting
+    "run": {
+        "category": "Scripting",
+        "usage": "/run <path>",
+        "description": "Run commands from a script file.",
+        "examples": ["/run tests/scenario.txt"],
+    },
+    # System
+    "help": {
+        "category": "System",
+        "usage": "/help [command|search]",
+        "description": "Show help. Search commands by name or keyword.",
+        "examples": ["/help", "/help export", "/help save"],
+    },
+    "exit": {
+        "category": "System",
+        "usage": "/exit",
+        "description": "Exit lite-chat.",
+        "examples": ["/exit"],
+    },
+}
+
+# Category display order
+CATEGORY_ORDER = [
+    "Conversation",
+    "Export/Import",
+    "Model & Settings",
+    "Files",
+    "Tags",
+    "Messaging",
+    "Testing & Debug",
+    "Scripting",
+    "System",
+]
+
+
+def format_help_all() -> str:
+    """Format help for all commands, organized by category."""
+    lines = ["", "Commands:"]
+
+    # Group by category
+    by_category = {}
+    for cmd, info in COMMAND_REGISTRY.items():
+        cat = info["category"]
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append((cmd, info))
+
+    # Display in order
+    for cat in CATEGORY_ORDER:
+        if cat not in by_category:
+            continue
+        lines.append(f"\n  {cat}:")
+        for cmd, info in sorted(by_category[cat], key=lambda x: x[0]):
+            lines.append(f"    {info['usage']:<24} {info['description']}")
+
+    lines.append("\nUse /help <command> for details, or /help <keyword> to search.")
+    return "\n".join(lines)
+
+
+def format_help_command(cmd: str) -> str:
+    """Format detailed help for a specific command."""
+    info = COMMAND_REGISTRY.get(cmd)
+    if not info:
+        return None
+
+    lines = [
+        "",
+        f"  {info['usage']}",
+        "",
+        f"  {info['description']}",
+        "",
+        "  Examples:",
+    ]
+    for ex in info["examples"]:
+        lines.append(f"    {ex}")
+
+    return "\n".join(lines)
+
+
+def search_commands(query: str) -> str:
+    """Search commands by name or description."""
+    query_lower = query.lower()
+    matches = []
+
+    for cmd, info in COMMAND_REGISTRY.items():
+        # Match command name or description
+        if query_lower in cmd or query_lower in info["description"].lower():
+            matches.append((cmd, info))
+
+    if not matches:
+        return f"No commands found matching '{query}'."
+
+    lines = [f"", f"Commands matching '{query}':"]
+    for cmd, info in sorted(matches, key=lambda x: x[0]):
+        lines.append(f"  {info['usage']:<24} {info['description']}")
+
+    return "\n".join(lines)
+
+
 @dataclass
 class AppState:
     """Global application state."""
@@ -135,6 +418,17 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             message="Exiting lite-chat...",
             should_exit=True
         )
+
+    elif command == 'help':
+        arg = parts[1].strip() if len(parts) > 1 else ""
+        if not arg:
+            return CommandResult(message=format_help_all())
+        # Check for exact command match first
+        cmd_help = format_help_command(arg.lstrip('/'))
+        if cmd_help:
+            return CommandResult(message=cmd_help)
+        # Otherwise search
+        return CommandResult(message=search_commands(arg))
 
     elif command == 'new':
         # Create new conversation
@@ -539,8 +833,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
     else:
         return CommandResult(
-            message=f"Unknown command: /{command}\n"
-                    "Available commands: /new, /save, /load, /branch, /rename, /chats, /send, /export, /import, /stream, /prompt, /run, /model, /temp, /reason, /timeout, /profile, /clear, /file, /echo, /tag, /untag, /tags, /assert, /assert-not, /exit"
+            message=f"Unknown command: /{command}. Type /help for available commands."
         )
 
 

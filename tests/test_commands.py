@@ -557,6 +557,69 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(state.current_conversation.reasoning_level, "high")
 
 
+class HelpCommandTests(unittest.TestCase):
+    """Tests for the /help command."""
+
+    def test_help_shows_all_categories(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help", state)
+            # Should show category headers
+            self.assertIn("Conversation:", result.message)
+            self.assertIn("Export/Import:", result.message)
+            self.assertIn("Model & Settings:", result.message)
+            self.assertIn("Files:", result.message)
+            self.assertIn("Tags:", result.message)
+            self.assertIn("System:", result.message)
+
+    def test_help_shows_commands(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help", state)
+            # Should list various commands
+            self.assertIn("/save", result.message)
+            self.assertIn("/export", result.message)
+            self.assertIn("/model", result.message)
+            self.assertIn("/help", result.message)
+
+    def test_help_specific_command_shows_details(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help save", state)
+            # Should show usage and examples
+            self.assertIn("/save", result.message)
+            self.assertIn("Examples:", result.message)
+            self.assertIn("my-chat", result.message)
+
+    def test_help_specific_command_with_slash(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help /export", state)
+            # Should work with leading slash
+            self.assertIn("Export current conversation", result.message)
+
+    def test_help_search_finds_matching_commands(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help conversation", state)
+            # Should find commands with "conversation" in description
+            self.assertIn("matching", result.message.lower())
+            self.assertIn("/save", result.message)
+            self.assertIn("/new", result.message)
+
+    def test_help_search_no_matches(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help xyznonexistent", state)
+            self.assertIn("No commands found", result.message)
+
+    def test_help_export_all_included(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/help export-all", state)
+            self.assertIn("Export all saved conversations", result.message)
+
+
 class ResolvePlaceholdersTests(unittest.TestCase):
     """Tests for the resolve_placeholders function."""
 
