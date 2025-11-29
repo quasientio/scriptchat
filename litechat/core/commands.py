@@ -192,6 +192,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='export'
         )
 
+    elif command == 'export-all':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='export-all'
+        )
+
     elif command == 'stream':
         return CommandResult(
             needs_ui_interaction=True,

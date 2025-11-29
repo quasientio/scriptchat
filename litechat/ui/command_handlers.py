@@ -112,6 +112,8 @@ class CommandHandlers:
                 self.handle_send(args)
             elif result.command_type == 'export':
                 self.handle_export(args)
+            elif result.command_type == 'export-all':
+                self.handle_export_all(args)
             elif result.command_type == 'import':
                 self.handle_import(args)
             elif result.command_type == 'stream':
@@ -439,6 +441,59 @@ class CommandHandlers:
             self.app.add_system_message(f"Exported to: {path}")
         except Exception as e:
             self.app.add_system_message(f"Error exporting: {str(e)}")
+
+    def handle_export_all(self, args: str = ""):
+        fmt = args.strip().lower()
+        if fmt and fmt not in ('md', 'json', 'html'):
+            self.app.add_system_message("Unsupported format. Available: md, json, html")
+            return
+        if fmt:
+            self._export_all(fmt)
+        else:
+            self.app.prompt_message = "Export format (available: md, json, html):"
+            self.app.prompt_for_input(self._export_all_format_callback)
+
+    def _export_all_format_callback(self, fmt: str):
+        fmt = fmt.strip().lower()
+        if not fmt:
+            self.app.add_system_message("Export cancelled (no format selected).")
+            return
+        if fmt not in ('md', 'json', 'html'):
+            self.app.add_system_message("Unsupported format. Available: md, json, html")
+            return
+        self._export_all(fmt)
+
+    def _export_all(self, fmt: str):
+        target_dir = self.app.state.config.exports_dir or Path.cwd()
+        conversations = list_conversations(self.app.state.conversations_root)
+        if not conversations:
+            self.app.add_system_message("No saved conversations to export.")
+            return
+
+        exported = 0
+        errors = 0
+        for summary in conversations:
+            try:
+                conv = load_conversation(self.app.state.conversations_root, summary.dir_name)
+                if fmt == 'md':
+                    export_conversation_md(conv, target_dir)
+                elif fmt == 'json':
+                    export_conversation_json(conv, target_dir)
+                else:
+                    export_conversation_html(conv, target_dir)
+                exported += 1
+            except Exception as e:
+                logger.error(f"Error exporting {summary.dir_name}: {e}")
+                errors += 1
+
+        # Regenerate index.html if HTML format
+        if fmt == 'html':
+            generate_html_index(target_dir, self.app.state.conversations_root)
+
+        msg = f"Exported {exported} conversation(s) to {fmt.upper()}"
+        if errors:
+            msg += f" ({errors} error(s))"
+        self.app.add_system_message(msg)
 
     def handle_import(self, args: str):
         path = args.strip()

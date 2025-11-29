@@ -199,6 +199,69 @@ class CommandHandlersUiTests(unittest.TestCase):
             self.assertTrue(exported)
             self.assertIn("exported", app.messages[-1].lower())
 
+    def test_export_all_exports_all_saved_conversations(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            # Save first conversation
+            state.current_conversation.messages.append(Message(role="user", content="first"))
+            handlers.handle_save("conv1")
+
+            # Create and save second conversation
+            state.current_conversation = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="llama3",
+                temperature=0.5,
+                system_prompt=None,
+                messages=[Message(role="user", content="second")],
+                tokens_in=0,
+                tokens_out=0,
+            )
+            handlers.handle_save("conv2")
+
+            # Export all to JSON
+            handlers.handle_export_all("json")
+
+            # Should have 2 JSON files
+            exported = list(Path(root).glob("*.json"))
+            self.assertEqual(len(exported), 2)
+            self.assertIn("exported 2 conversation(s)", app.messages[-1].lower())
+
+    def test_export_all_prompts_for_format_when_not_provided(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_export_all("")
+            self.assertIn("export format", app.prompt_message.lower())
+            self.assertIsNotNone(app.last_callback)
+
+    def test_export_all_rejects_invalid_format(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_export_all("invalid")
+            self.assertIn("unsupported format", app.messages[-1].lower())
+
+    def test_export_all_with_no_saved_conversations(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_export_all("md")
+            self.assertIn("no saved conversations", app.messages[-1].lower())
+
     def test_load_registers_file_references(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
