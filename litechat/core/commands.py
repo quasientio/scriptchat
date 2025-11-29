@@ -105,8 +105,14 @@ COMMAND_REGISTRY = {
     "reason": {
         "category": "Model & Settings",
         "usage": "/reason [level]",
-        "description": "Set reasoning level for supported models (e.g., Claude).",
-        "examples": ["/reason", "/reason low", "/reason high"],
+        "description": "Set reasoning level: low, medium, high, max (presets for thinking budget).",
+        "examples": ["/reason", "/reason low", "/reason high", "/reason max"],
+    },
+    "thinking": {
+        "category": "Model & Settings",
+        "usage": "/thinking [tokens]",
+        "description": "Set exact thinking budget in tokens (Anthropic Claude only). 1024-128000.",
+        "examples": ["/thinking", "/thinking 8000", "/thinking 32000"],
     },
     "timeout": {
         "category": "Model & Settings",
@@ -522,6 +528,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         level_arg = parts[1].strip() if len(parts) > 1 else ""
         return set_reasoning_level(state, level_arg)
 
+    elif command == 'thinking':
+        budget_arg = parts[1].strip() if len(parts) > 1 else ""
+        return set_thinking_budget(state, budget_arg)
+
     elif command == 'import':
         if len(parts) < 2 or not parts[1].strip():
             return CommandResult(message="Usage: /import <path>")
@@ -750,8 +760,16 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
         file_keys = list(state.file_registry.keys()) if hasattr(state, "file_registry") else []
         available_reasoning = reasoning_levels_for_model(cfg, convo.provider_id, convo.model_name)
-        if available_reasoning:
-            reasoning_display = convo.reasoning_level or "(default)"
+        if convo.thinking_budget:
+            reasoning_display = f"{convo.thinking_budget} tokens (custom)"
+        elif convo.reasoning_level:
+            budget = THINKING_BUDGET_PRESETS.get(convo.reasoning_level)
+            if budget:
+                reasoning_display = f"{convo.reasoning_level} ({budget} tokens)"
+            else:
+                reasoning_display = convo.reasoning_level
+        elif available_reasoning:
+            reasoning_display = "(off)"
         else:
             reasoning_display = "(unavailable)"
 
@@ -914,13 +932,17 @@ def set_reasoning_level(state: AppState, level: str) -> CommandResult:
         if not available:
             return CommandResult(message="Reasoning controls not available for this model/provider.")
         current = convo.reasoning_level or "(default)"
+        budget_info = ""
+        if convo.thinking_budget:
+            budget_info = f" (custom: {convo.thinking_budget} tokens)"
         return CommandResult(
-            message=f"Reasoning level: {current}\nAvailable: {', '.join(available)}\nUsage: /reason <level>"
+            message=f"Reasoning level: {current}{budget_info}\nAvailable: {', '.join(available)}\nUsage: /reason <level>"
         )
 
     desired = level.strip().lower()
     if desired in ("default", "clear", "reset"):
         convo.reasoning_level = None
+        convo.thinking_budget = None
         return CommandResult(message="Reasoning level cleared (provider default).")
 
     if not available:
@@ -930,7 +952,58 @@ def set_reasoning_level(state: AppState, level: str) -> CommandResult:
         return CommandResult(message=f"Unsupported reasoning level for {convo.model_name}. Available: {', '.join(available)}")
 
     convo.reasoning_level = desired
+    convo.thinking_budget = None  # Clear custom budget when using preset
     return CommandResult(message=f"Reasoning level set to {desired}")
+
+
+# Thinking budget presets (used by Anthropic client)
+THINKING_BUDGET_PRESETS = {
+    "low": 4000,
+    "medium": 16000,
+    "high": 64000,
+    "max": 128000,
+}
+
+
+def set_thinking_budget(state: AppState, budget: str) -> CommandResult:
+    """Set or show the thinking budget for Anthropic Claude models."""
+    convo = state.current_conversation
+
+    if not budget.strip():
+        # Show current setting
+        current_budget = convo.thinking_budget
+        current_level = convo.reasoning_level
+        if current_budget:
+            return CommandResult(message=f"Thinking budget: {current_budget} tokens\nUsage: /thinking <tokens> (1024-128000)")
+        elif current_level and current_level in THINKING_BUDGET_PRESETS:
+            preset_budget = THINKING_BUDGET_PRESETS[current_level]
+            return CommandResult(message=f"Thinking budget: {preset_budget} tokens (from /reason {current_level})\nUsage: /thinking <tokens> (1024-128000)")
+        else:
+            return CommandResult(message="Thinking: disabled\nUsage: /thinking <tokens> (1024-128000)")
+
+    budget_str = budget.strip().lower()
+
+    # Handle clear/disable
+    if budget_str in ("clear", "off", "disable", "0"):
+        convo.thinking_budget = None
+        convo.reasoning_level = None
+        return CommandResult(message="Thinking disabled.")
+
+    # Parse token count
+    try:
+        tokens = int(budget_str)
+    except ValueError:
+        return CommandResult(message="Invalid budget. Usage: /thinking <tokens> (1024-128000)")
+
+    # Validate range
+    if tokens < 1024:
+        return CommandResult(message="Minimum thinking budget is 1024 tokens.")
+    if tokens > 128000:
+        return CommandResult(message="Maximum thinking budget is 128000 tokens.")
+
+    convo.thinking_budget = tokens
+    convo.reasoning_level = None  # Clear preset when using custom budget
+    return CommandResult(message=f"Thinking budget set to {tokens} tokens")
 
 
 def set_timeout(state: AppState, seconds: float) -> CommandResult:

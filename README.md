@@ -1,7 +1,7 @@
 # lite-chat
 
 A terminal-based, scriptable chat client for interacting with local LLMs (via Ollama)
-and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...).
+and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...) and Anthropic Claude.
 
 ## Features
 
@@ -58,7 +58,7 @@ Key configuration options:
 - `conversations_dir`: Where to store conversations (set in `[general]`)
 - `exports_dir`: Where to write exports (defaults to current working directory if not set)
 - `enable_streaming`: Enable token streaming (default: false)
-- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama` or `openai-compatible` for now), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `contexts` (for Ollama), `reasoning_levels` (for `/reason` on reasoning-capable models such as GPT-5/GPT-5.1), and `reasoning_default` to pick the level applied when you select that model.
+- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama`, `openai-compatible`, or `anthropic`), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `contexts` (for Ollama), `reasoning_levels` (for `/reason` on reasoning-capable models), and `reasoning_default` to pick the level applied when you select that model.
 
 Example providers:
 ```toml
@@ -88,6 +88,16 @@ type = "openai-compatible"
 api_url = "https://api.deepseek.com"
 api_key = "sk-..."
 models = "deepseek-chat,deepseek-coder"
+
+[[providers]]
+id = "anthropic"
+type = "anthropic"
+api_url = "https://api.anthropic.com"
+api_key = "sk-ant-..."
+models = [
+  { name = "claude-sonnet-4-20250514", reasoning_levels = ["low", "medium", "high", "max"] },
+  { name = "claude-3-5-sonnet-20241022" }
+]
 ```
 
 ## Usage
@@ -121,13 +131,15 @@ All commands start with `/`:
 - `/chats` - List saved conversations
 - `/send <message>` - Queue a message (sends immediately if the model is idle)
 - `/export [format]` - Export the current conversation (formats: `md`, `json`, `html`; prompts if omitted). `json` includes full metadata; `md`/`html` are minimal, human-friendly transcripts.
+- `/export-all [format]` - Export all saved conversations in the given format.
 - `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
-- `/reason [level]` - Show or set the reasoning effort for the current model (supported models only, e.g., `none|low|medium|high` on GPT-5.1). `/reason` alone lists available levels.
+- `/reason [level]` - Show or set the reasoning level (`low`, `medium`, `high`, `max`). For Anthropic Claude, these map to thinking budgets (4K, 16K, 64K, 128K tokens). `/reason` alone lists available levels.
+- `/thinking [tokens]` - Set exact thinking budget in tokens for Anthropic Claude (1024-128000). Use `/thinking off` to disable. Overrides `/reason` presets.
 - `/timeout <seconds>` - Override the request timeout for all providers at runtime
 - `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and registered files
 - `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
@@ -142,6 +154,7 @@ All commands start with `/`:
 - `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
+- `/help [command|keyword]` - Show help for all commands, a specific command, or search by keyword.
 - `/exit` - Exit lite-chat
 
 ### Multi-line Messages

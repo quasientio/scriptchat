@@ -271,14 +271,14 @@ class CommandTests(unittest.TestCase):
             msg = result.message or ""
             self.assertIn("Context: (not configured)", msg)
 
-    def test_profile_shows_reasoning_default_when_available(self):
+    def test_profile_shows_reasoning_off_when_available_but_not_set(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
-            # Enable reasoning on the model
+            # Enable reasoning on the model but don't set a level
             state.config.providers[0].models[0].reasoning_levels = ["low", "medium", "high"]
             result = handle_command("/profile", state)
             msg = result.message or ""
-            self.assertIn("Reasoning: (default)", msg)
+            self.assertIn("Reasoning: (off)", msg)
 
     def test_profile_shows_reasoning_level_when_set(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -287,7 +287,7 @@ class CommandTests(unittest.TestCase):
             state.current_conversation.reasoning_level = "high"
             result = handle_command("/profile", state)
             msg = result.message or ""
-            self.assertIn("Reasoning: high", msg)
+            self.assertIn("Reasoning: high (64000 tokens)", msg)
 
     def test_profile_system_prompt_trimmed_and_none(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -555,6 +555,58 @@ class CommandTests(unittest.TestCase):
             self.assertIn("Switched to model", res.message)
             self.assertEqual(state.current_conversation.model_name, "llama-reason")
             self.assertEqual(state.current_conversation.reasoning_level, "high")
+
+    def test_thinking_command_sets_budget(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            res = handle_command("/thinking 8000", state)
+            self.assertIn("8000 tokens", res.message)
+            self.assertEqual(state.current_conversation.thinking_budget, 8000)
+            self.assertIsNone(state.current_conversation.reasoning_level)
+
+    def test_thinking_command_shows_current(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.thinking_budget = 16000
+            res = handle_command("/thinking", state)
+            self.assertIn("16000 tokens", res.message)
+
+    def test_thinking_command_validates_range(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            res_low = handle_command("/thinking 500", state)
+            self.assertIn("Minimum", res_low.message)
+            self.assertIsNone(state.current_conversation.thinking_budget)
+
+            res_high = handle_command("/thinking 200000", state)
+            self.assertIn("Maximum", res_high.message)
+            self.assertIsNone(state.current_conversation.thinking_budget)
+
+    def test_thinking_command_clears_budget(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.current_conversation.thinking_budget = 8000
+            res = handle_command("/thinking off", state)
+            self.assertIn("disabled", res.message.lower())
+            self.assertIsNone(state.current_conversation.thinking_budget)
+
+    def test_thinking_and_reason_clear_each_other(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.config.providers[0].models[0].reasoning_levels = ["low", "medium", "high", "max"]
+
+            # Set thinking budget, then reason level should clear it
+            handle_command("/thinking 10000", state)
+            self.assertEqual(state.current_conversation.thinking_budget, 10000)
+
+            handle_command("/reason medium", state)
+            self.assertIsNone(state.current_conversation.thinking_budget)
+            self.assertEqual(state.current_conversation.reasoning_level, "medium")
+
+            # Set reason level, then thinking budget should clear it
+            handle_command("/thinking 20000", state)
+            self.assertIsNone(state.current_conversation.reasoning_level)
+            self.assertEqual(state.current_conversation.thinking_budget, 20000)
 
 
 class HelpCommandTests(unittest.TestCase):

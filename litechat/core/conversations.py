@@ -42,6 +42,7 @@ class Conversation:
     tokens_in: int = 0
     tokens_out: int = 0
     reasoning_level: Optional[str] = None
+    thinking_budget: Optional[int] = None  # Explicit thinking budget (tokens) for Anthropic
     context_length_configured: Optional[int] = None  # Max context length model is running with
     context_length_used: Optional[int] = None  # Current context length used (last tokens_in)
     tags: dict = field(default_factory=dict)

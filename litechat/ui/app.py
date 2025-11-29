@@ -134,7 +134,7 @@ class LiteChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/untag', '/tags', '/assert', '/assert-not', '/undo', '/retry', '/help', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/untag', '/tags', '/assert', '/assert-not', '/undo', '/retry', '/help', '/exit'],
             ignore_case=True,
             sentence=True
         )

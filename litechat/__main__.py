@@ -463,6 +463,10 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
             elif p.type == "openai-compatible":
                 logger.debug("Initializing OpenAI-compatible provider '%s'", p.id)
                 provider_clients[p.id] = OpenAIChatClient(config, p, timeout=config.timeout)
+            elif p.type == "anthropic":
+                logger.debug("Initializing Anthropic provider '%s'", p.id)
+                from .core.anthropic_client import AnthropicChatClient
+                provider_clients[p.id] = AnthropicChatClient(config, p, timeout=config.timeout)
             else:
                 logger.warning("Provider type '%s' not supported yet (id=%s)", p.type, p.id)
 
