@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Command handlers for lite-chat UI."""
+"""Command handlers for ScriptChat UI."""
 
 import logging
 from pathlib import Path
@@ -32,7 +32,7 @@ from ..core.exports import (
 )
 
 if TYPE_CHECKING:
-    from .app import LiteChatUI
+    from .app import ScriptChatUI
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +40,11 @@ logger = logging.getLogger(__name__)
 class CommandHandlers:
     """Handles all command processing for the UI."""
 
-    def __init__(self, app: 'LiteChatUI'):
+    def __init__(self, app: 'ScriptChatUI'):
         """Initialize command handlers.
 
         Args:
-            app: Reference to the main LiteChatUI instance
+            app: Reference to the main ScriptChatUI instance
         """
         self.app = app
 

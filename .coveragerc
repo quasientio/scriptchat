@@ -1,7 +1,7 @@
 [run]
 omit =
-    litechat/ui/*
-    litechat/__main__.py
+    scriptchat/ui/*
+    scriptchat/__main__.py
 
 [report]
 show_missing = True

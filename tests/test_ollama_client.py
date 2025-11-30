@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ from pathlib import Path
 
 import requests
 
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation, Message
-from litechat.core.ollama_client import OllamaChatClient
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation, Message
+from scriptchat.core.ollama_client import OllamaChatClient
 
 
 class FakeServerManager:

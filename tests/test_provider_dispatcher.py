@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 import unittest
 
-from litechat.core.conversations import Conversation
-from litechat.core.provider_dispatcher import ProviderDispatcher
+from scriptchat.core.conversations import Conversation
+from scriptchat.core.provider_dispatcher import ProviderDispatcher
 
 
 class DummyClient:

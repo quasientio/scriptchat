@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@ from pathlib import Path
 
 from prompt_toolkit.document import Document
 
-from litechat.core.commands import AppState
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation, Message
-from litechat.ui.app import AnsiLexer, LiteChatUI
+from scriptchat.core.commands import AppState
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation, Message
+from scriptchat.ui.app import AnsiLexer, ScriptChatUI
 
 
 def make_state():
@@ -74,7 +74,7 @@ def make_state():
 class AppHelperTests(unittest.TestCase):
     def test_status_bar_and_prompt_prefix(self):
         state = make_state()
-        ui = object.__new__(LiteChatUI)
+        ui = object.__new__(ScriptChatUI)
         ui.state = state
         ui.thinking = True
         ui.thinking_dots = 1
@@ -87,7 +87,7 @@ class AppHelperTests(unittest.TestCase):
 
     def test_build_conversation_text_and_lexer(self):
         state = make_state()
-        ui = object.__new__(LiteChatUI)
+        ui = object.__new__(ScriptChatUI)
         ui.state = state
 
         text = ui._build_conversation_text()
@@ -102,7 +102,7 @@ class AppHelperTests(unittest.TestCase):
         self.assertTrue(line_fn(0))
 
     def test_history_navigation_and_apply(self):
-        ui = object.__new__(LiteChatUI)
+        ui = object.__new__(ScriptChatUI)
         ui.input_history = []
         ui.input_history_index = None
 
@@ -132,13 +132,13 @@ class AppHelperTests(unittest.TestCase):
     def test_conversation_arrow_scroll_bindings_exist(self):
         # Ensure key bindings are registered and filter is set to conversation buffer focus
         state = make_state()
-        ui = LiteChatUI(state)
+        ui = ScriptChatUI(state)
         keys = [binding.keys for binding in ui.kb.bindings]
         flat_keys = [k for sub in keys for k in sub]
         self.assertIn("up", flat_keys)
         self.assertIn("down", flat_keys)
 
-    def test_litechat_ui_initialization_and_cleanup(self):
+    def test_scriptchat_ui_initialization_and_cleanup(self):
         state = make_state()
 
         class DummyClient:
@@ -148,7 +148,7 @@ class AppHelperTests(unittest.TestCase):
         state.client = DummyClient()
 
         # Instantiate full UI to exercise layout/key setup
-        ui = LiteChatUI(state)
+        ui = ScriptChatUI(state)
         ui.add_system_message("note")
         self.assertIn("note", ui.conversation_buffer.text)
 
@@ -162,12 +162,12 @@ class AppHelperTests(unittest.TestCase):
             conv_dir.mkdir(parents=True, exist_ok=True)
             state = make_state()
             state.config.conversations_dir = conv_dir
-            ui = LiteChatUI(state)
+            ui = ScriptChatUI(state)
             ui._append_history("first")
             ui._append_history("second")
 
             # Reload UI and ensure history was persisted
-            ui2 = LiteChatUI(state)
+            ui2 = ScriptChatUI(state)
             self.assertEqual(ui2.input_history, ["first", "second"])
 
 

@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@ from pathlib import Path
 
 import json
 
-from litechat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature, resolve_placeholders
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation, Message
-from litechat.core.provider_dispatcher import ProviderDispatcher
+from scriptchat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature, resolve_placeholders
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation, Message
+from scriptchat.core.provider_dispatcher import ProviderDispatcher
 
 
 def make_config(tmp_path: Path, system_prompt: str | None = "system says"):
@@ -437,7 +437,7 @@ class CommandTests(unittest.TestCase):
             file_path.write_text("hello", encoding="utf-8")
 
             handle_command(f"/file {file_path}", state)
-            from litechat.core.conversations import save_conversation
+            from scriptchat.core.conversations import save_conversation
             saved = save_conversation(root, state.current_conversation, save_name="save", system_prompt=None)
             meta = json.loads((root / saved.id / "meta.json").read_text(encoding="utf-8"))
             self.assertIn(str(file_path), meta.get("file_references", {}))
@@ -450,7 +450,7 @@ class CommandTests(unittest.TestCase):
             file_path.write_text("hello", encoding="utf-8")
 
             handle_command(f"/file {file_path}", state)
-            from litechat.core.conversations import save_conversation
+            from scriptchat.core.conversations import save_conversation
             saved = save_conversation(root, state.current_conversation, save_name="save", system_prompt=None)
             meta = json.loads((root / saved.id / "meta.json").read_text(encoding="utf-8"))
 
@@ -492,7 +492,7 @@ class CommandTests(unittest.TestCase):
             root = Path(tmpdir)
             state = make_state(root)
             # Save conversation to assign id and persist
-            from litechat.core.conversations import save_conversation
+            from scriptchat.core.conversations import save_conversation
             saved = save_conversation(root, state.current_conversation, save_name="test", system_prompt=state.current_conversation.system_prompt)
             state.current_conversation = saved
 

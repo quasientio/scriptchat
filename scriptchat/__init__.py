@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,4 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""UI modules for lite-chat."""
+"""ScriptChat: CLI-based chat interface for local LLMs via Ollama."""
+
+__version__ = "0.1.0"

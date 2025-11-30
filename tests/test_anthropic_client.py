@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from litechat.core.anthropic_client import AnthropicChatClient, THINKING_BUDGET_PRESETS
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation, Message
+from scriptchat.core.anthropic_client import AnthropicChatClient, THINKING_BUDGET_PRESETS
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation, Message
 
 
 def make_config(tmp_path: Path):
@@ -167,7 +167,7 @@ class AnthropicClientTests(unittest.TestCase):
             content = client._extract_content(data)
             self.assertEqual(content, "The answer is 42.")  # Thinking excluded
 
-    @patch('litechat.core.anthropic_client.requests.Session')
+    @patch('scriptchat.core.anthropic_client.requests.Session')
     def test_chat_single_builds_correct_payload(self, mock_session_class):
         with tempfile.TemporaryDirectory() as tmpdir:
             config = make_config(Path(tmpdir))
@@ -212,7 +212,7 @@ class AnthropicClientTests(unittest.TestCase):
             self.assertEqual(convo.tokens_in, 10)
             self.assertEqual(convo.tokens_out, 5)
 
-    @patch('litechat.core.anthropic_client.requests.Session')
+    @patch('scriptchat.core.anthropic_client.requests.Session')
     def test_chat_with_thinking_includes_thinking_param(self, mock_session_class):
         with tempfile.TemporaryDirectory() as tmpdir:
             config = make_config(Path(tmpdir))

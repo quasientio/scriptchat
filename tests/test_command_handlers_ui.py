@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from litechat.core.commands import AppState, create_new_conversation
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation, Message
-from litechat.ui.command_handlers import CommandHandlers
-from litechat.__main__ import parse_script_lines
+from scriptchat.core.commands import AppState, create_new_conversation
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation, Message
+from scriptchat.ui.command_handlers import CommandHandlers
+from scriptchat.__main__ import parse_script_lines
 
 
 def make_config(root: Path, system_prompt: str | None = None):
@@ -278,7 +278,7 @@ class CommandHandlersUiTests(unittest.TestCase):
                 tokens_out=0,
                 file_references={str(file_path): str(file_path)}
             )
-            from litechat.core.conversations import save_conversation
+            from scriptchat.core.conversations import save_conversation
             saved = save_conversation(root, convo, save_name="withfile", system_prompt=None)
 
             state = make_state(root)
@@ -306,7 +306,7 @@ class CommandHandlersUiTests(unittest.TestCase):
                 tokens_out=0,
                 file_references={"absent.txt": str(root / "absent.txt")},
             )
-            from litechat.core.conversations import save_conversation
+            from scriptchat.core.conversations import save_conversation
             save_conversation(root, convo, save_name="missing", system_prompt=None)
 
             state = make_state(root)

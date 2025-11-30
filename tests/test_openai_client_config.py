@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ from pathlib import Path
 
 import requests
 
-from litechat.core.config import Config, ProviderConfig, load_config
-from litechat.core.conversations import Conversation
-from litechat.core.openai_client import OpenAIChatClient
+from scriptchat.core.config import Config, ProviderConfig, load_config
+from scriptchat.core.conversations import Conversation
+from scriptchat.core.openai_client import OpenAIChatClient
 
 
 class OpenAIClientSmokeTest(unittest.TestCase):
@@ -43,7 +43,7 @@ models = "gpt-4o"
         with tempfile.TemporaryDirectory() as tmpdir:
             os.environ["HOME"] = tmpdir
             conv_dir = Path(tmpdir) / "conversations"
-            cfg_dir = Path(tmpdir) / ".lite-chat"
+            cfg_dir = Path(tmpdir) / ".scriptchat"
             cfg_dir.mkdir()
             (cfg_dir / "config.toml").write_text(config_text.format(conv=conv_dir.as_posix()), encoding="utf-8")
             cfg = load_config()

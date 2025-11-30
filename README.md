@@ -1,4 +1,4 @@
-# lite-chat
+# ScriptChat
 
 A terminal-based, scriptable chat client for interacting with local LLMs (via Ollama)
 and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...) and Anthropic Claude.
@@ -23,7 +23,7 @@ and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...) and Anthro
 
 1. Clone this repository:
    ```bash
-   cd /path/to/lite-chat
+   cd /path/to/ScriptChat
    ```
 
 2. Create and activate a virtual environment:
@@ -39,15 +39,15 @@ and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...) and Anthro
 
 4. Create configuration directory and file:
    ```bash
-   mkdir -p ~/.lite-chat
-   cp config.toml.example ~/.lite-chat/config.toml
+   mkdir -p ~/.scriptchat
+   cp config.toml.example ~/.scriptchat/config.toml
    ```
 
-5. Edit `~/.lite-chat/config.toml` to configure your models and preferences.
+5. Edit `~/.scriptchat/config.toml` to configure your models and preferences.
 
 ## Configuration
 
-Edit `~/.lite-chat/config.toml` to configure lite-chat. See `config.toml.example` for a complete example.
+Edit `~/.scriptchat/config.toml` to configure ScriptChat. See `config.toml.example` for a complete example.
 
 Key configuration options:
 
@@ -60,7 +60,7 @@ Key configuration options:
 - `enable_streaming`: Enable token streaming (default: false)
 - `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama`, `openai-compatible`, or `anthropic`), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `contexts` (for Ollama), `reasoning_levels` (for `/reason` on reasoning-capable models), and `reasoning_default` to pick the level applied when you select that model.
 
-**API Keys:** If `api_key` is not set in config, lite-chat will look for `{PROVIDER_ID}_API_KEY` environment variable (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`).
+**API Keys:** If `api_key` is not set in config, ScriptChat will look for `{PROVIDER_ID}_API_KEY` environment variable (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`).
 
 Example providers:
 ```toml
@@ -104,21 +104,21 @@ models = [
 
 ## Usage
 
-Run lite-chat:
+Run ScriptChat:
 
 ```bash
-python -m litechat
+python -m scriptchat
 ```
 In batch mode you can allow assertions to log but keep running using `--continue-on-error` (exit code will still be 1 if any assertion fails):
 
 ```bash
-python -m litechat --run tests/demo.txt --continue-on-error
+python -m scriptchat --run tests/demo.txt --continue-on-error
 ```
 
 You can also pipe a script via stdin (no `--run` needed):
 
 ```bash
-cat tests/demo.txt | python -m litechat
+cat tests/demo.txt | python -m scriptchat
 ```
 
 ### Commands
@@ -157,7 +157,7 @@ All commands start with `/`:
 - `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
 - `/help [command|keyword]` - Show help for all commands, a specific command, or search by keyword.
-- `/exit` - Exit lite-chat
+- `/exit` - Exit ScriptChat
 
 ### Multi-line Messages
 
@@ -179,7 +179,7 @@ You can register multiple files and mix references in one message. `/profile` li
 
 ### Conversation Storage
 
-Conversations are stored in `~/.lite-chat/conversations/` (or your configured directory) with the following structure:
+Conversations are stored in `~/.scriptchat/conversations/` (or your configured directory) with the following structure:
 
 - Each conversation is a directory: `YYYYMMDDHHMM_modelname_savename/`
 - Messages are stored as individual files: `0001_user.txt`, `0002_llm.txt`, etc.
@@ -189,7 +189,7 @@ You can manually edit message files or delete them as needed.
 
 ## Example Workflow
 
-1. Start lite-chat: `python -m litechat`
+1. Start ScriptChat: `python -m scriptchat`
 2. Chat with the default model
 3. Save your conversation: `/save` then enter a name
 4. Switch models: `/model` then select a model
@@ -211,9 +211,9 @@ Example: `model: llama3.2 | tokens: 1234 in / 567 out | convo: 202511180945_llam
 
 **"ollama executable not found"**: Ensure Ollama is installed and in your PATH.
 
-**"Configuration file not found"**: Create `~/.lite-chat/config.toml` from the example.
+**"Configuration file not found"**: Create `~/.scriptchat/config.toml` from the example.
 
-**Connection errors**: Ensure Ollama is running. lite-chat will start its own Ollama server instance with the correct context length.
+**Connection errors**: Ensure Ollama is running. ScriptChat will start its own Ollama server instance with the correct context length.
 
 **Model not found**: Make sure the model is pulled in Ollama (`ollama pull modelname`) and configured in `config.toml`.
 

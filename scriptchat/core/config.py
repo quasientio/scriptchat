@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration loading and management for lite-chat."""
+"""Configuration loading and management for ScriptChat."""
 
 import logging
 import os
@@ -178,7 +178,7 @@ def reasoning_default_for_model(config: Config, provider_id: str, model_name: st
 
 
 def load_config() -> Config:
-    """Load configuration from ~/.lite-chat/config.toml.
+    """Load configuration from ~/.scriptchat/config.toml.
 
     Returns:
         Config object with loaded or default values
@@ -187,12 +187,12 @@ def load_config() -> Config:
         FileNotFoundError: If config file doesn't exist
         ValueError: If configuration is invalid
     """
-    config_path = Path.home() / ".lite-chat" / "config.toml"
+    config_path = Path.home() / ".scriptchat" / "config.toml"
 
     if not config_path.exists():
         raise FileNotFoundError(
             f"Configuration file not found at {config_path}\n"
-            "Please create ~/.lite-chat/config.toml with your settings."
+            "Please create ~/.scriptchat/config.toml with your settings."
         )
 
     # Load TOML file
@@ -223,7 +223,7 @@ def load_config() -> Config:
 
     conversations_dir_str = general_section.get(
         'conversations_dir',
-        str(Path.home() / '.lite-chat' / 'conversations')
+        str(Path.home() / '.scriptchat' / 'conversations')
     )
     conversations_dir = Path(conversations_dir_str).expanduser()
 

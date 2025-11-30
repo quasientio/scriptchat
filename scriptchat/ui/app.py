@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Terminal UI for lite-chat using prompt_toolkit."""
+"""Terminal UI for ScriptChat using prompt_toolkit."""
 
 import shutil
 import threading
@@ -103,8 +103,8 @@ class AnsiLexer(Lexer):
         return get_line
 
 
-class LiteChatUI:
-    """Terminal user interface for lite-chat."""
+class ScriptChatUI:
+    """Terminal user interface for ScriptChat."""
 
     def __init__(self, state: AppState):
         """Initialize the UI.
@@ -831,5 +831,5 @@ def run_ui(state: AppState):  # pragma: no cover - interactive UI loop
     Args:
         state: Application state
     """
-    ui = LiteChatUI(state)
+    ui = ScriptChatUI(state)
     ui.run()

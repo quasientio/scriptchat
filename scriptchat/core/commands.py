@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Command parsing and handling for lite-chat."""
+"""Command parsing and handling for ScriptChat."""
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -231,7 +231,7 @@ COMMAND_REGISTRY = {
     "exit": {
         "category": "System",
         "usage": "/exit",
-        "description": "Exit lite-chat.",
+        "description": "Exit ScriptChat.",
         "examples": ["/exit"],
     },
 }
@@ -421,7 +421,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     # Handle simple commands
     if command == 'exit':
         return CommandResult(
-            message="Exiting lite-chat...",
+            message="Exiting ScriptChat...",
             should_exit=True
         )
 

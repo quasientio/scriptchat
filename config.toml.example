@@ -1,5 +1,5 @@
-# Example configuration for lite-chat (new provider schema)
-# Copy this file to ~/.lite-chat/config.toml and customize as needed
+# Example configuration for ScriptChat (new provider schema)
+# Copy this file to ~/.scriptchat/config.toml and customize as needed
 
 [general]
 
@@ -9,13 +9,13 @@ log_level = "INFO"  # Options: DEBUG, INFO, WARN, ERROR, CRITICAL
 
 # Log file path (optional, defaults to stderr if not specified)
 # Use an absolute path or ~ for home directory
-# log_file = "~/.lite-chat/logs/litechat.log"
+# log_file = "~/.scriptchat/logs/scriptchat.log"
 
 # Directory for storing conversations
-conversations_dir = "~/.lite-chat/conversations"
+conversations_dir = "~/.scriptchat/conversations"
 
 # Directory for exports (optional). If not set, exports go to the current working directory.
-# exports_dir = "~/.lite-chat/exports"
+# exports_dir = "~/.scriptchat/exports"
 
 # Streaming (optional; default false)
 # enable_streaming = true
@@ -40,7 +40,7 @@ file_confirm_threshold_bytes = 40000
 # Provider definitions. Add as many as you need.
 #
 # API keys can be set in config or via environment variables.
-# If api_key is empty/missing, lite-chat will look for {PROVIDER_ID}_API_KEY
+# If api_key is empty/missing, ScriptChat will look for {PROVIDER_ID}_API_KEY
 # (e.g., OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY).
 
 # Ollama provider with contexts

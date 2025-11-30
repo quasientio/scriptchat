@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from litechat.ui.app import resolve_clear_target_from_args
-from litechat.core.conversations import ConversationSummary
+from scriptchat.ui.app import resolve_clear_target_from_args
+from scriptchat.core.conversations import ConversationSummary
 
 
 def make_convo_dir(root: Path, name: str):

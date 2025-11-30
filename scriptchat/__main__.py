@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Main entry point for lite-chat."""
+"""Main entry point for ScriptChat."""
 
 import argparse
 import logging
@@ -421,8 +421,8 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
     """Main entry point for the application."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description="lite-chat: A lightweight terminal UI for Ollama",
-        prog="python -m litechat"
+        description="ScriptChat: A scriptable terminal chat client for LLMs",
+        prog="python -m scriptchat"
     )
     parser.add_argument(
         '--run',
@@ -439,11 +439,11 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
     try:
         # Load configuration (this also initializes logging)
         if not args.run:
-            print("Loading configuration from ~/.lite-chat/config.toml...")
+            print("Loading configuration from ~/.scriptchat/config.toml...")
         config = load_config()
 
         # Log startup information
-        logger.info("=== lite-chat starting ===")
+        logger.info("=== ScriptChat starting ===")
         logger.info(f"Configuration loaded: api_url={config.api_url}, default_model={config.default_model}")
 
         # Inform user where logs are being written (only in interactive mode)
@@ -541,13 +541,13 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
             sys.exit(exit_code)
 
         # Run the UI
-        print("Starting lite-chat...")
+        print("Starting ScriptChat...")
         print("Press Ctrl+C or Ctrl+D to exit, or use /exit command")
         run_ui(state)
 
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
-        print("\nPlease create a configuration file at ~/.lite-chat/config.toml", file=sys.stderr)
+        print("\nPlease create a configuration file at ~/.scriptchat/config.toml", file=sys.stderr)
         print("See the example configuration for reference.", file=sys.stderr)
         sys.exit(1)
 
@@ -561,7 +561,7 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         sys.exit(1)
 
     except KeyboardInterrupt:
-        print("\nExiting lite-chat...")
+        print("\nExiting ScriptChat...")
         logger.info("Application terminated by user (Ctrl+C)")
         sys.exit(0)
 

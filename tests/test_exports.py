@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from litechat.core.conversations import Conversation, Message, load_conversation
-from litechat.core.exports import (
+from scriptchat.core.conversations import Conversation, Message, load_conversation
+from scriptchat.core.exports import (
     export_conversation_md,
     export_conversation_json,
     export_conversation_html,
     import_conversation_from_file,
     generate_html_index,
 )
-from litechat.core.conversations import save_conversation, branch_conversation
+from scriptchat.core.conversations import save_conversation, branch_conversation
 
 
 class ExportImportTests(unittest.TestCase):

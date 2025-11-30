@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from litechat.core.config import load_config
+from scriptchat.core.config import load_config
 
 
 def write_config(text: str, dirpath: Path):
-    cfg_dir = dirpath / ".lite-chat"
+    cfg_dir = dirpath / ".scriptchat"
     cfg_dir.mkdir()
     (cfg_dir / "config.toml").write_text(text, encoding="utf-8")
 

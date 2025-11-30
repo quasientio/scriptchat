@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from litechat.__main__ import handle_batch_command
-from litechat.core.commands import AppState
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation
+from scriptchat.__main__ import handle_batch_command
+from scriptchat.core.commands import AppState
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation
 
 
 def make_state(tmp_path: Path):

@@ -1,4 +1,4 @@
-# Copyright 2024 lite-chat contributors
+# Copyright 2024 ScriptChat contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from litechat import __main__
-from litechat.core.config import Config, ModelConfig, ProviderConfig
-from litechat.core.conversations import Conversation
+from scriptchat import __main__
+from scriptchat.core.config import Config, ModelConfig, ProviderConfig
+from scriptchat.core.conversations import Conversation
 
 
 def make_config(tmp_path: Path):
@@ -79,7 +79,7 @@ class MainEntrypointTests(unittest.TestCase):
                 mock_dispatcher.return_value = dispatcher
 
                 argv = sys.argv
-                sys.argv = ["litechat"]  # no --run
+                sys.argv = ["scriptchat"]  # no --run
                 try:
                     __main__.main()
                 finally:
@@ -93,7 +93,7 @@ class MainEntrypointTests(unittest.TestCase):
             cfg.default_provider = "missing"
             with mock.patch.object(__main__, "load_config", return_value=cfg):
                 argv = sys.argv
-                sys.argv = ["litechat"]
+                sys.argv = ["scriptchat"]
                 with self.assertRaises(SystemExit) as exc:
                     __main__.main()
                 sys.argv = argv
@@ -116,7 +116,7 @@ class MainEntrypointTests(unittest.TestCase):
 
                 argv = sys.argv
                 stdin_backup = sys.stdin
-                sys.argv = ["litechat"]
+                sys.argv = ["scriptchat"]
                 sys.stdin = io.StringIO("hello\n")
                 try:
                     with self.assertRaises(SystemExit) as exc:
