@@ -209,11 +209,16 @@ Example: `model: llama3.2 | tokens: 1234 in / 567 out | convo: 202511180945_llam
 
 ## Troubleshooting
 
-**"ollama executable not found"**: Ensure Ollama is installed and in your PATH.
+**"Ollama executable not found"**: Ensure Ollama is installed and in your PATH.
 
 **"Configuration file not found"**: Create `~/.scriptchat/config.toml` from the example.
 
-**Connection errors**: Ensure Ollama is running. ScriptChat will start its own Ollama server instance with the correct context length.
+**"An Ollama instance is already running"**: ScriptChat detects if Ollama is already running on the configured port. You can:
+- Use the existing instance (recommended for most cases)
+- Start a new ScriptChat-managed instance on an alternative port
+- Exit and stop the existing instance first
+
+**Connection errors**: If using an external Ollama instance, check that it's still running. If ScriptChat manages the instance, check that Ollama is installed and the port is available.
 
 **Model not found**: Make sure the model is pulled in Ollama (`ollama pull modelname`) and configured in `config.toml`.
 

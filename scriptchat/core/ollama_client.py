@@ -32,25 +32,148 @@ logger = logging.getLogger(__name__)
 class OllamaServerManager:
     """Manages the Ollama server process with context length configuration."""
 
-    def __init__(self, api_url: str):
+    def __init__(self, api_url: str, interactive: bool = True):
         """Initialize the server manager.
 
         Args:
             api_url: Base URL for the Ollama API
+            interactive: Whether to prompt user for input (False for batch mode)
         """
         self.api_url = api_url
+        self.interactive = interactive
         self.current_process: Optional[subprocess.Popen] = None
         self.current_context_length: Optional[int] = None
+        self.using_external_instance = False
+        self._alternative_port: Optional[int] = None
+
+        # Check for existing Ollama instance and handle it
+        self._handle_existing_instance()
+
+    def _parse_port_from_url(self) -> int:
+        """Extract port number from API URL."""
+        from urllib.parse import urlparse
+        parsed = urlparse(self.api_url)
+        return parsed.port or 11434  # Default Ollama port
+
+    def _check_ollama_running(self, port: Optional[int] = None) -> bool:
+        """Check if Ollama is running on the specified port.
+
+        Args:
+            port: Port to check (uses configured URL if None)
+
+        Returns:
+            True if Ollama is responding, False otherwise
+        """
+        if port is None:
+            check_url = f"{self.api_url.rstrip('/')}/tags"
+        else:
+            from urllib.parse import urlparse
+            parsed = urlparse(self.api_url)
+            check_url = f"{parsed.scheme}://{parsed.hostname}:{port}/api/tags"
+
+        try:
+            response = requests.get(check_url, timeout=2)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def _handle_existing_instance(self) -> None:  # pragma: no cover - requires user input
+        """Check for existing Ollama instance and prompt user if found."""
+        if not self._check_ollama_running():
+            # No existing instance, will start our own
+            return
+
+        configured_port = self._parse_port_from_url()
+        logger.info(f"Detected existing Ollama instance on port {configured_port}")
+
+        if not self.interactive:
+            # In batch mode, use the existing instance silently
+            logger.info("Batch mode: using existing Ollama instance")
+            self.using_external_instance = True
+            return
+
+        # Interactive mode: prompt user
+        print(f"\nAn Ollama instance is already running on port {configured_port}.")
+        print("Options:")
+        print("  [1] Use the existing instance (recommended)")
+        print("  [2] Start a new instance on a different port")
+        print("  [3] Exit and let me stop the existing instance first")
+
+        while True:
+            try:
+                choice = input("\nChoice [1/2/3]: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nExiting...")
+                raise SystemExit(0)
+
+            if choice == '1':
+                logger.info("User chose to use existing Ollama instance")
+                self.using_external_instance = True
+                print("Using existing Ollama instance.")
+                return
+
+            elif choice == '2':
+                # Find an available alternative port
+                alt_port = self._find_alternative_port(configured_port)
+                if alt_port:
+                    logger.info(f"User chose to start new instance on port {alt_port}")
+                    self._alternative_port = alt_port
+                    print(f"Will start new Ollama instance on port {alt_port}.")
+                    return
+                else:
+                    print("Could not find an available port. Please stop the existing instance.")
+                    continue
+
+            elif choice == '3':
+                print("Please stop the existing Ollama instance and restart ScriptChat.")
+                raise SystemExit(0)
+
+            else:
+                print("Invalid choice. Please enter 1, 2, or 3.")
+
+    def _find_alternative_port(self, base_port: int) -> Optional[int]:
+        """Find an available port for a new Ollama instance.
+
+        Args:
+            base_port: The port that's already in use
+
+        Returns:
+            An available port number, or None if none found
+        """
+        import socket
+        # Try ports in range base_port+1 to base_port+10
+        for port in range(base_port + 1, base_port + 11):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(('localhost', port))
+                    return port
+            except OSError:
+                continue
+        return None
+
+    def _get_effective_api_url(self) -> str:
+        """Get the API URL, accounting for alternative port if set."""
+        if self._alternative_port is None:
+            return self.api_url
+        from urllib.parse import urlparse
+        parsed = urlparse(self.api_url)
+        return f"{parsed.scheme}://{parsed.hostname}:{self._alternative_port}/api"
 
     def ensure_running(self, context_length: int) -> None:  # pragma: no cover - spawns external server
         """Ensure Ollama server is running with the specified context length.
 
-        If the server is already running with a different context length,
+        If using an external instance, this is a no-op.
+        If we manage the server and it's running with a different context length,
         it will be stopped and restarted.
 
         Args:
             context_length: Context length to set via OLLAMA_CONTEXT_LENGTH
         """
+        # If using external instance, don't manage the server
+        if self.using_external_instance:
+            logger.debug("Using external Ollama instance, skipping server management")
+            return
+
         # If already running with the same context length, do nothing
         if (self.current_process is not None and
                 self.current_context_length == context_length and
@@ -68,6 +191,11 @@ class OllamaServerManager:
         env['OLLAMA_CONTEXT_LENGTH'] = str(context_length)
         env['OLLAMA_MODELS'] = '/var/lib/ollama'  # Use system models
 
+        # Set alternative port if needed
+        if self._alternative_port is not None:
+            env['OLLAMA_HOST'] = f"127.0.0.1:{self._alternative_port}"
+            logger.info(f"Starting Ollama on alternative port {self._alternative_port}")
+
         try:
             self.current_process = subprocess.Popen(
                 ['ollama', 'serve'],
@@ -78,8 +206,8 @@ class OllamaServerManager:
             self.current_context_length = context_length
 
             # Wait for Ollama to be ready (up to 10 seconds)
-            import requests
-            health_check_url = f"{self.api_url.rstrip('/')}/tags"
+            effective_url = self._get_effective_api_url()
+            health_check_url = f"{effective_url.rstrip('/')}/tags"
             for _ in range(20):
                 time.sleep(0.5)
                 try:
@@ -90,7 +218,7 @@ class OllamaServerManager:
 
         except FileNotFoundError:
             raise FileNotFoundError(
-                "ollama executable not found. Please ensure Ollama is installed and in your PATH."
+                "Ollama executable not found. Please ensure Ollama is installed and in your PATH."
             )
 
     def stop(self) -> None:  # pragma: no cover - stops external server
@@ -142,12 +270,17 @@ class OllamaChatClient:
         self.config = config
         self.server_manager = server_manager
         self.current_model = None  # Track current model for cleanup
-        self.api_url = base_url or config.api_url
+        self._base_url = base_url or config.api_url
 
         # Create session with authorization header if api_key is present
         self.session = requests.Session()
         if config.api_key:
             self.session.headers['Authorization'] = f'Bearer {config.api_key}'
+
+    @property
+    def api_url(self) -> str:
+        """Get effective API URL, accounting for alternative port if set."""
+        return self.server_manager._get_effective_api_url()
 
     def chat(
         self,
@@ -241,10 +374,18 @@ class OllamaChatClient:
             logger.debug("Received successful response from Ollama API")
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Connection error to Ollama API at {url}: {e}")
-            raise ConnectionError(
-                f"Failed to connect to Ollama API at {url}. "
-                "Ensure Ollama is running and accessible."
-            )
+            if self.server_manager.using_external_instance:
+                raise ConnectionError(
+                    f"Failed to connect to Ollama API at {url}. "
+                    "The external Ollama instance may have stopped. "
+                    "Please check that Ollama is still running."
+                )
+            else:
+                raise ConnectionError(
+                    f"Failed to connect to Ollama API at {url}. "
+                    "The Ollama server may have failed to start. "
+                    "Check that Ollama is installed and the port is available."
+                )
         except requests.exceptions.Timeout as e:
             logger.error(f"Timeout error after {self.config.timeout} seconds: {e}")
             raise TimeoutError(
@@ -288,10 +429,18 @@ class OllamaChatClient:
             logger.debug("Streaming response initiated from Ollama API")
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Connection error to Ollama API at {url}: {e}")
-            raise ConnectionError(
-                f"Failed to connect to Ollama API at {url}. "
-                "Ensure Ollama is running and accessible."
-            )
+            if self.server_manager.using_external_instance:
+                raise ConnectionError(
+                    f"Failed to connect to Ollama API at {url}. "
+                    "The external Ollama instance may have stopped. "
+                    "Please check that Ollama is still running."
+                )
+            else:
+                raise ConnectionError(
+                    f"Failed to connect to Ollama API at {url}. "
+                    "The Ollama server may have failed to start. "
+                    "Check that Ollama is installed and the port is available."
+                )
         except requests.exceptions.Timeout as e:
             logger.error(f"Timeout error after {self.config.timeout} seconds: {e}")
             raise TimeoutError(

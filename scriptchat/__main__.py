@@ -454,11 +454,12 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
                 print(f"Logging to stderr (level: {config.log_level})")
 
         # Initialize provider clients
+        is_interactive = not args.run
         provider_clients = {}
         for p in config.providers:
             if p.type == "ollama":
                 logger.debug("Initializing Ollama provider '%s'", p.id)
-                server_manager = OllamaServerManager(p.api_url)
+                server_manager = OllamaServerManager(p.api_url, interactive=is_interactive)
                 provider_clients[p.id] = OllamaChatClient(config, server_manager, base_url=p.api_url)
             elif p.type == "openai-compatible":
                 logger.debug("Initializing OpenAI-compatible provider '%s'", p.id)

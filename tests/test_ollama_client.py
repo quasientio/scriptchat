@@ -23,14 +23,25 @@ from scriptchat.core.ollama_client import OllamaChatClient
 
 
 class FakeServerManager:
-    def __init__(self):
+    def __init__(self, api_url="http://localhost:11434/api"):
         self.called_with = []
+        self.api_url = api_url
+        self.using_external_instance = False
+        self._alternative_port = None
 
     def ensure_running(self, context_length: int):
         self.called_with.append(context_length)
 
     def stop(self):
         self.called_with.append("stop")
+
+    def _get_effective_api_url(self) -> str:
+        """Get the API URL, accounting for alternative port if set."""
+        if self._alternative_port is None:
+            return self.api_url
+        from urllib.parse import urlparse
+        parsed = urlparse(self.api_url)
+        return f"{parsed.scheme}://{parsed.hostname}:{self._alternative_port}/api"
 
 
 class OllamaClientTests(unittest.TestCase):
