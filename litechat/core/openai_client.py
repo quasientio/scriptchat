@@ -16,6 +16,7 @@
 
 import json
 import logging
+import os
 from typing import Optional
 
 import requests
@@ -24,6 +25,25 @@ from .config import Config, ProviderConfig
 from .conversations import Conversation, Message
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_api_key(provider: ProviderConfig) -> Optional[str]:
+    """Resolve API key from config or environment variable.
+
+    Checks in order:
+    1. provider.api_key from config
+    2. {PROVIDER_ID}_API_KEY env var (e.g., OPENAI_API_KEY, DEEPSEEK_API_KEY)
+    """
+    if provider.api_key:
+        return provider.api_key
+
+    env_var = f"{provider.id.upper()}_API_KEY"
+    env_key = os.environ.get(env_var)
+    if env_key:
+        logger.debug("Using API key from %s environment variable", env_var)
+        return env_key
+
+    return None
 
 
 class OpenAIChatClient:
@@ -37,8 +57,9 @@ class OpenAIChatClient:
         headers = {
             "Content-Type": "application/json",
         }
-        if provider.api_key:
-            headers["Authorization"] = f"Bearer {provider.api_key}"
+        api_key = _resolve_api_key(provider)
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         if provider.headers:
             headers.update(provider.headers)
         self.session.headers.update(headers)

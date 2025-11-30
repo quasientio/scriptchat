@@ -38,6 +38,10 @@ timeout = 1200
 file_confirm_threshold_bytes = 40000
 
 # Provider definitions. Add as many as you need.
+#
+# API keys can be set in config or via environment variables.
+# If api_key is empty/missing, lite-chat will look for {PROVIDER_ID}_API_KEY
+# (e.g., OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY).
 
 # Ollama provider with contexts
 [[providers]]
@@ -54,7 +58,7 @@ models = [
 id = "openai"
 type = "openai-compatible"
 api_url = "https://api.openai.com"
-api_key = "sk-..."
+# api_key = "sk-..."  # Or set OPENAI_API_KEY env var
 models = [
   { name = "gpt-5-mini", reasoning_levels = ["minimal", "medium", "high"], reasoning_default = "medium" },
   { name = "gpt-5.1-mini", reasoning_levels = ["none", "low", "medium", "high"], reasoning_default = "none" }
@@ -66,7 +70,7 @@ models = [
 id = "deepseek"
 type = "openai-compatible"
 api_url = "https://api.deepseek.com"
-api_key = "sk-..."
+# api_key = "sk-..."  # Or set DEEPSEEK_API_KEY env var
 models = "deepseek-chat,deepseek-reasoner"
 
 # Anthropic Claude provider
@@ -74,7 +78,7 @@ models = "deepseek-chat,deepseek-reasoner"
 id = "anthropic"
 type = "anthropic"
 api_url = "https://api.anthropic.com"
-api_key = "sk-ant-..."  # Or use ANTHROPIC_API_KEY environment variable
+# api_key = "sk-ant-..."  # Or set ANTHROPIC_API_KEY env var
 models = [
   { name = "claude-sonnet-4-20250514", reasoning_levels = ["low", "medium", "high", "max"] },
   { name = "claude-3-5-sonnet-20241022" },
