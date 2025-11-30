@@ -419,10 +419,17 @@ def run_batch(script_path: str, state: AppState, continue_on_error: bool = False
 
 def main():  # pragma: no cover - interactive entrypoint not exercised in unit tests
     """Main entry point for the application."""
+    from . import __version__
+
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
         description="ScriptChat: A scriptable terminal chat client for LLMs",
-        prog="python -m scriptchat"
+        prog="scriptchat"
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {__version__}'
     )
     parser.add_argument(
         '--run',

@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scriptchat"
+dynamic = ["version"]
+description = "A terminal-based, scriptable chat client for LLMs (Ollama, OpenAI, Anthropic)"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+authors = [
+    {name = "ScriptChat contributors"}
+]
+keywords = ["llm", "chat", "cli", "ollama", "openai", "anthropic", "terminal"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "prompt_toolkit>=3.0.0",
+    "Pygments>=2.0.0",
+    "requests>=2.25.0",
+    "toml>=0.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "coverage>=7.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/scriptchat/scriptchat"
+Repository = "https://github.com/scriptchat/scriptchat"
+Issues = "https://github.com/scriptchat/scriptchat/issues"
+
+[project.scripts]
+scriptchat = "scriptchat.__main__:main"
+sc = "scriptchat.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "scriptchat.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["scriptchat*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["scriptchat"]
+omit = ["tests/*"]

@@ -21,33 +21,45 @@ and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...) and Anthro
 
 ## Installation
 
+### Via pipx (recommended)
+
+```bash
+pipx install scriptchat
+```
+
+This installs the `scriptchat` command (and the shorter `sc` alias) globally.
+
+### Via pip
+
+```bash
+pip install scriptchat
+```
+
+### From source
+
 1. Clone this repository:
    ```bash
-   cd /path/to/ScriptChat
+   git clone https://github.com/scriptchat/scriptchat.git
+   cd scriptchat
    ```
 
-2. Create and activate a virtual environment:
+2. Install in development mode:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -e ".[dev]"
    ```
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Configuration
 
-4. Create configuration directory and file:
-   ```bash
-   mkdir -p ~/.scriptchat
-   cp config.toml.example ~/.scriptchat/config.toml
-   ```
+After installation, create your configuration file:
 
-5. Edit `~/.scriptchat/config.toml` to configure your models and preferences.
+```bash
+mkdir -p ~/.scriptchat
+# Copy the example config (if installing from source)
+cp config.toml.example ~/.scriptchat/config.toml
+# Or create a new one based on the example in the repository
+```
 
-## Configuration
-
-Edit `~/.scriptchat/config.toml` to configure ScriptChat. See `config.toml.example` for a complete example.
+Edit `~/.scriptchat/config.toml` to configure your models and preferences. See `config.toml.example` for a complete example.
 
 Key configuration options:
 
@@ -107,18 +119,27 @@ models = [
 Run ScriptChat:
 
 ```bash
-python -m scriptchat
+scriptchat
+# or use the shorter alias:
+sc
 ```
+
 In batch mode you can allow assertions to log but keep running using `--continue-on-error` (exit code will still be 1 if any assertion fails):
 
 ```bash
-python -m scriptchat --run tests/demo.txt --continue-on-error
+scriptchat --run tests/demo.txt --continue-on-error
 ```
 
 You can also pipe a script via stdin (no `--run` needed):
 
 ```bash
-cat tests/demo.txt | python -m scriptchat
+cat tests/demo.txt | scriptchat
+```
+
+Check version:
+
+```bash
+scriptchat --version
 ```
 
 ### Commands
