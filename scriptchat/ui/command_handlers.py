@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Optional
 from ..core.commands import handle_command, set_model, set_temperature
 from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
-    branch_conversation, delete_conversation, ConversationSummary
+    branch_conversation, delete_conversation, rename_conversation, ConversationSummary
 )
 from ..core.exports import (
     export_conversation_md,
@@ -338,15 +338,14 @@ class CommandHandlers:
             self.app.add_system_message("Rename cancelled (empty name)")
             return
         try:
-            old_dir = self.app.state.conversations_root / self.app.state.current_conversation.id
-            new_dir_name = f"{self.app.state.current_conversation.model_name}_{new_name}"
-            new_dir = self.app.state.conversations_root / new_dir_name
-            if new_dir.exists():
-                self.app.add_system_message(f"Conversation already exists: {new_name}")
-                return
-            old_dir.rename(new_dir)
-            self.app.state.current_conversation.id = new_dir_name
+            self.app.state.current_conversation = rename_conversation(
+                self.app.state.conversations_root,
+                self.app.state.current_conversation,
+                new_name
+            )
             self.app.add_system_message(f"Renamed to: {new_name}")
+        except FileExistsError:
+            self.app.add_system_message(f"Conversation already exists: {new_name}")
         except Exception as e:
             self.app.add_system_message(f"Error renaming: {str(e)}")
 

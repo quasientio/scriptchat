@@ -507,6 +507,8 @@ def delete_conversation(root: Path, dir_name: str) -> None:
 def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> Conversation:
     """Rename a saved conversation by renaming its directory.
 
+    Also updates parent_id references in any child conversations (branches).
+
     Args:
         root: Conversations root directory
         convo: Conversation to rename (must already be saved)
@@ -522,7 +524,8 @@ def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> 
     if convo.id is None:
         raise ValueError("Conversation must be saved before it can be renamed")
 
-    old_dir = root / convo.id
+    old_id = convo.id
+    old_dir = root / old_id
     if not old_dir.exists():
         raise FileNotFoundError(f"Conversation directory not found: {old_dir}")
 
@@ -543,4 +546,34 @@ def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> 
 
     old_dir.rename(new_dir)
     convo.id = new_dir_name
+
+    # Update parent_id in any child conversations that reference the old id
+    _update_children_parent_id(root, old_id, new_dir_name)
+
     return convo
+
+
+def _update_children_parent_id(root: Path, old_parent_id: str, new_parent_id: str) -> None:
+    """Update parent_id references in child conversations after a rename.
+
+    Args:
+        root: Conversations root directory
+        old_parent_id: The old parent conversation id
+        new_parent_id: The new parent conversation id
+    """
+    for conv_dir in root.iterdir():
+        if not conv_dir.is_dir():
+            continue
+        meta_path = conv_dir / 'meta.json'
+        if not meta_path.exists():
+            continue
+        try:
+            with open(meta_path, 'r') as f:
+                meta = json.load(f)
+            if meta.get('parent_id') == old_parent_id:
+                meta['parent_id'] = new_parent_id
+                with open(meta_path, 'w') as f:
+                    json.dump(meta, f, indent=2)
+        except Exception:
+            # Skip any conversations we can't read/write
+            continue
