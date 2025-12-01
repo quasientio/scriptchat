@@ -342,6 +342,16 @@ def save_conversation(
 
         dir_name = _create_dir_name(convo.model_name, save_name)
         conv_dir = root / dir_name
+
+        # Handle collision: add numeric suffix if directory already exists
+        if conv_dir.exists():
+            base_name = dir_name
+            counter = 2
+            while conv_dir.exists():
+                dir_name = f"{base_name}-{counter}"
+                conv_dir = root / dir_name
+                counter += 1
+
         conv_dir.mkdir(parents=True, exist_ok=True)
         convo.id = dir_name
     else:
