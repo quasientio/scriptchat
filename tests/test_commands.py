@@ -287,7 +287,7 @@ class CommandTests(unittest.TestCase):
             state.current_conversation.reasoning_level = "high"
             result = handle_command("/profile", state)
             msg = result.message or ""
-            self.assertIn("Reasoning: high (64000 tokens)", msg)
+            self.assertIn("Reasoning: high (32000 tokens)", msg)
 
     def test_profile_system_prompt_trimmed_and_none(self):
         with tempfile.TemporaryDirectory() as tmpdir:

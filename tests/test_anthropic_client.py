@@ -70,8 +70,8 @@ class AnthropicClientTests(unittest.TestCase):
     def test_thinking_budget_presets(self):
         self.assertEqual(THINKING_BUDGET_PRESETS["low"], 4000)
         self.assertEqual(THINKING_BUDGET_PRESETS["medium"], 16000)
-        self.assertEqual(THINKING_BUDGET_PRESETS["high"], 64000)
-        self.assertEqual(THINKING_BUDGET_PRESETS["max"], 128000)
+        self.assertEqual(THINKING_BUDGET_PRESETS["high"], 32000)
+        self.assertEqual(THINKING_BUDGET_PRESETS["max"], 55000)
 
     def test_get_thinking_budget_from_explicit(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -103,7 +103,7 @@ class AnthropicClientTests(unittest.TestCase):
                 reasoning_level="high",
             )
             budget = client._get_thinking_budget(convo)
-            self.assertEqual(budget, 64000)
+            self.assertEqual(budget, 32000)
 
     def test_get_thinking_budget_explicit_overrides_level(self):
         with tempfile.TemporaryDirectory() as tmpdir:

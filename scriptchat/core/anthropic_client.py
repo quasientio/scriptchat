@@ -46,11 +46,13 @@ def _resolve_api_key(provider: ProviderConfig) -> Optional[str]:
     return None
 
 # Mapping from reasoning levels to thinking budget tokens
+# Values chosen to fit within Claude Sonnet 4.5's 64000 max_tokens limit
+# (thinking budget + output tokens must not exceed model's max_tokens)
 THINKING_BUDGET_PRESETS = {
     "low": 4000,
     "medium": 16000,
-    "high": 64000,
-    "max": 128000,
+    "high": 32000,
+    "max": 55000,
 }
 
 

@@ -957,11 +957,12 @@ def set_reasoning_level(state: AppState, level: str) -> CommandResult:
 
 
 # Thinking budget presets (used by Anthropic client)
+# Values chosen to fit within Claude Sonnet 4.5's 64000 max_tokens limit
 THINKING_BUDGET_PRESETS = {
     "low": 4000,
     "medium": 16000,
-    "high": 64000,
-    "max": 128000,
+    "high": 32000,
+    "max": 55000,
 }
 
 
