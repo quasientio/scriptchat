@@ -227,6 +227,12 @@ COMMAND_REGISTRY = {
         "description": "Run commands from a script file.",
         "examples": ["/run tests/scenario.txt"],
     },
+    "sleep": {
+        "category": "Scripting",
+        "usage": "/sleep <seconds>",
+        "description": "Pause execution for the specified duration (scripts/batch mode only).",
+        "examples": ["/sleep 1", "/sleep 0.5", "/sleep 10"],
+    },
     # System
     "help": {
         "category": "System",
@@ -558,6 +564,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             needs_ui_interaction=True,
             command_type='run'
         )
+
+    elif command == 'sleep':
+        # Sleep is only useful in batch/script mode - direct users there
+        return CommandResult(message="/sleep is only available in scripts (/run) or batch mode.")
 
     elif command == 'temp':
         return CommandResult(
