@@ -116,9 +116,9 @@ COMMAND_REGISTRY = {
     },
     "timeout": {
         "category": "Model & Settings",
-        "usage": "/timeout <seconds>",
-        "description": "Set the request timeout in seconds.",
-        "examples": ["/timeout 60", "/timeout 120"],
+        "usage": "/timeout <seconds|0|off>",
+        "description": "Set the request timeout in seconds, or disable with 0/off.",
+        "examples": ["/timeout 60", "/timeout 120", "/timeout off"],
     },
     "stream": {
         "category": "Model & Settings",
@@ -542,11 +542,17 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
     elif command == 'timeout':
         if len(parts) < 2 or not parts[1].strip():
-            return CommandResult(message=f"Current timeout: {state.config.timeout} seconds\nUsage: /timeout <seconds>")
+            current = state.config.timeout
+            if current is None:
+                return CommandResult(message="Current timeout: disabled\nUsage: /timeout <seconds|0|off>")
+            return CommandResult(message=f"Current timeout: {current} seconds\nUsage: /timeout <seconds|0|off>")
+        arg = parts[1].strip().lower()
+        if arg in ("off", "0"):
+            return set_timeout(state, None)
         try:
-            seconds = float(parts[1].strip())
+            seconds = float(arg)
         except ValueError:
-            return CommandResult(message="Invalid timeout. Usage: /timeout <seconds>")
+            return CommandResult(message="Invalid timeout. Usage: /timeout <seconds|0|off>")
         return set_timeout(state, seconds)
 
     elif command == 'clear':
@@ -1007,16 +1013,31 @@ def set_thinking_budget(state: AppState, budget: str) -> CommandResult:
     return CommandResult(message=f"Thinking budget set to {tokens} tokens")
 
 
-def set_timeout(state: AppState, seconds: float) -> CommandResult:
+def set_timeout(state: AppState, seconds: float | None) -> CommandResult:
     """Set the request timeout in seconds.
 
     Args:
         state: Application state
-        seconds: Timeout duration in seconds
+        seconds: Timeout duration in seconds, or None to disable
 
     Returns:
         CommandResult with execution result
     """
+    if seconds is None:
+        # Disable timeout
+        state.config.timeout = None
+        client = state.client
+        if isinstance(client, ProviderDispatcher):
+            for provider_client in client.clients.values():
+                if hasattr(provider_client, "timeout"):
+                    provider_client.timeout = None
+                if hasattr(provider_client, "config"):
+                    try:
+                        provider_client.config.timeout = None
+                    except Exception:
+                        pass
+        return CommandResult(message="Timeout disabled")
+
     try:
         timeout_val = float(seconds)
     except (TypeError, ValueError):

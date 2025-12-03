@@ -57,7 +57,7 @@ class Config:
     default_provider: str
     default_model: str
     default_temperature: float
-    timeout: int  # API request timeout in seconds
+    timeout: Optional[int]  # API request timeout in seconds (None = no timeout)
     log_level: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR
     log_file: Optional[Path] = None  # Path to log file (None = stderr)
     providers: list[ProviderConfig] = field(default_factory=list)

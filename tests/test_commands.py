@@ -319,9 +319,27 @@ class CommandTests(unittest.TestCase):
             current = handle_command("/timeout", state)
             self.assertIn("Current timeout", current.message)
 
-            invalid = handle_command("/timeout 0", state)
+            # Test disabling with 0
+            disable_zero = handle_command("/timeout 0", state)
+            self.assertIn("Timeout disabled", disable_zero.message)
+            self.assertIsNone(state.config.timeout)
+            self.assertIsNone(dispatcher.clients["ollama"].timeout)
+
+            # Show disabled state
+            disabled_status = handle_command("/timeout", state)
+            self.assertIn("disabled", disabled_status.message)
+
+            # Test disabling with off
+            handle_command("/timeout 60", state)  # re-enable first
+            disable_off = handle_command("/timeout off", state)
+            self.assertIn("Timeout disabled", disable_off.message)
+            self.assertIsNone(state.config.timeout)
+
+            # Test invalid value (negative)
+            handle_command("/timeout 30", state)  # re-enable first
+            invalid = handle_command("/timeout -5", state)
             self.assertIn("greater than zero", invalid.message)
-            self.assertEqual(state.config.timeout, 45)
+            self.assertEqual(state.config.timeout, 30)
 
     def test_undo_removes_exchanges(self):
         with tempfile.TemporaryDirectory() as tmpdir:
