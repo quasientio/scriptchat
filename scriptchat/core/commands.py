@@ -75,13 +75,13 @@ COMMAND_REGISTRY = {
         "category": "Export/Import",
         "usage": "/export [format]",
         "description": "Export current conversation. Formats: md, json, html.",
-        "examples": ["/export", "/export md", "/export html"],
+        "examples": ["/export", "/export md", "/export json", "/export html"],
     },
     "export-all": {
         "category": "Export/Import",
         "usage": "/export-all [format]",
         "description": "Export all saved conversations in the given format.",
-        "examples": ["/export-all json", "/export-all html"],
+        "examples": ["/export-all md", "/export-all json", "/export-all html"],
     },
     "import": {
         "category": "Export/Import",
@@ -110,9 +110,9 @@ COMMAND_REGISTRY = {
     },
     "thinking": {
         "category": "Model & Settings",
-        "usage": "/thinking [tokens]",
-        "description": "Set exact thinking budget in tokens (Anthropic Claude only). 1024-128000.",
-        "examples": ["/thinking", "/thinking 8000", "/thinking 32000"],
+        "usage": "/thinking [tokens|off]",
+        "description": "Set exact thinking budget in tokens (Anthropic Claude only). 1024-128000, or off to disable.",
+        "examples": ["/thinking", "/thinking 8000", "/thinking 32000", "/thinking off"],
     },
     "timeout": {
         "category": "Model & Settings",
@@ -135,8 +135,8 @@ COMMAND_REGISTRY = {
     # Files
     "file": {
         "category": "Files",
-        "usage": "/file <path> [--force]",
-        "description": "Register a file for @reference in messages.",
+        "usage": "/file [--force] <path>",
+        "description": "Register a file for @reference in messages. Use --force for large files.",
         "examples": ["/file src/main.py", "/file --force large.txt"],
     },
     "files": {
@@ -205,8 +205,8 @@ COMMAND_REGISTRY = {
     "log-level": {
         "category": "Testing & Debug",
         "usage": "/log-level <level>",
-        "description": "Set log level: debug, info, warn, error.",
-        "examples": ["/log-level debug", "/log-level info"],
+        "description": "Set log level: debug, info, warn, error, critical.",
+        "examples": ["/log-level debug", "/log-level info", "/log-level warn"],
     },
     "profile": {
         "category": "Testing & Debug",
@@ -563,7 +563,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
     elif command == 'file':
         if len(parts) < 2:
-            return CommandResult(message="Usage: /file <path> [--force]")
+            return CommandResult(message="Usage: /file [--force] <path>")
 
         arg_str = parts[1].strip()
         force = False
@@ -572,7 +572,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             force = True
             file_path = arg_str[len("--force "):].strip()
         elif arg_str == "--force":
-            return CommandResult(message="Usage: /file <path> [--force]")
+            return CommandResult(message="Usage: /file [--force] <path>")
 
         expanded_path = Path(file_path).expanduser()
         try:
