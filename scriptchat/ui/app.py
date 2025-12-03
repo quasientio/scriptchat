@@ -134,7 +134,7 @@ class ScriptChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/untag', '/tags', '/assert', '/assert-not', '/undo', '/retry', '/help', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/untag', '/tags', '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -307,7 +307,7 @@ class ScriptChatUI:
                     event.app.invalidate()  # Force redraw to show cleared input
                     self.handle_user_message(text)
 
-        @kb.add('escape')
+        @kb.add('escape', eager=True)
         def handle_escape(event):
             """Handle Escape to cancel inference or return focus to input."""
             import time
@@ -327,8 +327,10 @@ class ScriptChatUI:
                     self.add_system_message("⚠ Press ESC again within 2 seconds to cancel inference")
                 return
 
-            # Otherwise, return focus to input
-            event.app.layout.focus(self.input_window)
+            # Return focus to input (same pattern as TAB)
+            buff = event.current_buffer
+            if buff != self.input_buffer:
+                event.app.layout.focus(self.input_window)
 
         @kb.add('tab')
         def handle_tab(event):

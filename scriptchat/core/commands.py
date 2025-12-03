@@ -228,6 +228,12 @@ COMMAND_REGISTRY = {
         "description": "Show help. Search commands by name or keyword.",
         "examples": ["/help", "/help export", "/help save"],
     },
+    "keys": {
+        "category": "System",
+        "usage": "/keys",
+        "description": "Show keyboard shortcuts.",
+        "examples": ["/keys"],
+    },
     "exit": {
         "category": "System",
         "usage": "/exit",
@@ -312,6 +318,32 @@ def search_commands(query: str) -> str:
         lines.append(f"  {info['usage']:<24} {info['description']}")
 
     return "\n".join(lines)
+
+
+def format_keyboard_shortcuts() -> str:
+    """Format keyboard shortcuts for display."""
+    return """
+Keyboard Shortcuts:
+
+  Navigation:
+    Ctrl+Up          Focus conversation pane for scrolling
+    Ctrl+Home        Jump to start of conversation
+    Ctrl+End         Jump to end of conversation
+    Escape           Return focus to input pane
+    Tab              Return to input (when in conversation pane)
+
+  In conversation pane:
+    Up/Down          Scroll line by line
+
+  In input pane:
+    Up/Down          Navigate command history
+    Tab              Command completion
+    Shift+Tab        Reverse completion cycling
+
+  General:
+    Ctrl+C, Ctrl+D   Exit ScriptChat
+    Escape (2x)      Cancel ongoing inference (within 2 seconds)
+"""
 
 
 @dataclass
@@ -435,6 +467,9 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             return CommandResult(message=cmd_help)
         # Otherwise search
         return CommandResult(message=search_commands(arg))
+
+    elif command == 'keys':
+        return CommandResult(message=format_keyboard_shortcuts())
 
     elif command == 'new':
         # Create new conversation

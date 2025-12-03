@@ -689,6 +689,15 @@ class HelpCommandTests(unittest.TestCase):
             result = handle_command("/help export-all", state)
             self.assertIn("Export all saved conversations", result.message)
 
+    def test_keys_command_shows_shortcuts(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/keys", state)
+            self.assertIn("Keyboard Shortcuts", result.message)
+            self.assertIn("Ctrl+Up", result.message)
+            self.assertIn("Escape", result.message)
+            self.assertIn("Tab", result.message)
+
 
 class ResolvePlaceholdersTests(unittest.TestCase):
     """Tests for the resolve_placeholders function."""
