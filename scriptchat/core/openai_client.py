@@ -77,13 +77,15 @@ class OpenAIChatClient:
 
         use_responses_api = self.provider.id == "openai"
 
+        # Build messages array, filtering out display-only messages
         messages_payload = []
         history = expanded_history if expanded_history is not None else convo.messages
         for msg in history:
-            messages_payload.append({
-                "role": msg.role,
-                "content": msg.content
-            })
+            if msg.role not in ('echo', 'note'):
+                messages_payload.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
         messages_payload.append({"role": "user", "content": new_user_message})
 
         if use_responses_api:

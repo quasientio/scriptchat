@@ -341,6 +341,25 @@ class CommandTests(unittest.TestCase):
             self.assertIn("greater than zero", invalid.message)
             self.assertEqual(state.config.timeout, 30)
 
+    def test_note_command_adds_message(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            initial_count = len(state.current_conversation.messages)
+
+            result = handle_command("/note Remember to test edge cases", state)
+            self.assertIn("[Note]", result.message)
+            self.assertIn("Remember to test edge cases", result.message)
+
+            # Check that a note message was added
+            self.assertEqual(len(state.current_conversation.messages), initial_count + 1)
+            note_msg = state.current_conversation.messages[-1]
+            self.assertEqual(note_msg.role, "note")
+            self.assertEqual(note_msg.content, "Remember to test edge cases")
+
+            # Usage error when no text provided
+            usage = handle_command("/note", state)
+            self.assertIn("Usage:", usage.message)
+
     def test_undo_removes_exchanges(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))

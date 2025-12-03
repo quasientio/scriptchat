@@ -199,8 +199,14 @@ COMMAND_REGISTRY = {
     "echo": {
         "category": "Testing & Debug",
         "usage": "/echo <message>",
-        "description": "Display a message without sending to the model.",
+        "description": "Display a message without sending to the model (not saved).",
         "examples": ["/echo Step 1 complete"],
+    },
+    "note": {
+        "category": "Messaging",
+        "usage": "/note <text>",
+        "description": "Add a note to the conversation (saved, visible, but not sent to model).",
+        "examples": ["/note Remember to ask about error handling", "/note TODO: revisit this"],
     },
     "log-level": {
         "category": "Testing & Debug",
@@ -674,6 +680,21 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         # Echo command - print message without sending to LLM
         message = parts[1] if len(parts) > 1 else ""
         return CommandResult(message=message)
+
+    elif command == 'note':
+        # Note command - add a note to conversation (saved, visible, not sent to model)
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /note <text>")
+        note_text = parts[1].strip()
+        state.current_conversation.messages.append(Message(role='note', content=note_text))
+        # Auto-save if conversation has an ID
+        if state.current_conversation.id:
+            save_conversation(
+                state.conversations_root,
+                state.current_conversation,
+                system_prompt=state.config.system_prompt
+            )
+        return CommandResult(message=f"[Note] {note_text}")
 
     elif command == 'tag':
         if len(parts) < 2 or '=' not in parts[1]:

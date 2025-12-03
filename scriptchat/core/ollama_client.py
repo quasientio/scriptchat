@@ -320,11 +320,11 @@ class OllamaChatClient:
         self.server_manager.ensure_running(context_length)
 
         # Build messages array from conversation
-        # Filter out 'echo' messages - they're display-only
+        # Filter out 'echo' and 'note' messages - they're display-only
         messages = []
         history = expanded_history if expanded_history is not None else convo.messages
         for msg in history:
-            if msg.role != 'echo':
+            if msg.role not in ('echo', 'note'):
                 messages.append({
                     'role': msg.role,
                     'content': msg.content

@@ -134,7 +134,7 @@ class ScriptChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/tag', '/untag', '/tags', '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/note', '/tag', '/untag', '/tags', '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
             ignore_case=True,
             sentence=True
         )
@@ -490,6 +490,7 @@ class ScriptChatUI:
         CYAN = '\033[96m'
         GREEN = '\033[92m'
         YELLOW = '\033[93m'
+        MAGENTA = '\033[95m'
         RESET = '\033[0m'
 
         for msg in self.state.current_conversation.messages:
@@ -507,6 +508,9 @@ class ScriptChatUI:
             elif msg.role == 'echo':
                 # Echo messages in yellow, no prefix
                 lines.append(f"{YELLOW}{msg.content}{RESET}")
+            elif msg.role == 'note':
+                # Note messages in magenta with [note] prefix
+                lines.append(f"{MAGENTA}[note]{RESET} {msg.content}")
 
         return '\n'.join(lines)
 

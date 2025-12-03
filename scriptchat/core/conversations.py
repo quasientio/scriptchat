@@ -242,9 +242,9 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
     messages = []
     message_files = []
 
-    # Find all message files matching pattern NNNN_(user|llm).txt
+    # Find all message files matching pattern NNNN_(user|llm|note).txt
     for file_path in conv_dir.iterdir():
-        if file_path.is_file() and re.match(r'^\d+_(user|llm)\.txt$', file_path.name):
+        if file_path.is_file() and re.match(r'^\d+_(user|llm|note)\.txt$', file_path.name):
             message_files.append(file_path)
 
     # Sort lexicographically
@@ -258,6 +258,8 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
             role = 'user'
         elif filename.endswith('_llm.txt'):
             role = 'assistant'
+        elif filename.endswith('_note.txt'):
+            role = 'note'
         else:
             continue  # Skip unknown roles
 
@@ -412,6 +414,8 @@ def save_conversation(
             suffix = 'user.txt'
         elif message.role == 'assistant':
             suffix = 'llm.txt'
+        elif message.role == 'note':
+            suffix = 'note.txt'
         else:
             continue  # Skip unknown roles
 
