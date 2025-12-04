@@ -239,6 +239,18 @@ COMMAND_REGISTRY = {
         "description": "Pause execution for the specified duration (scripts/batch mode only).",
         "examples": ["/sleep 1", "/sleep 0.5", "/sleep 10"],
     },
+    "set": {
+        "category": "Scripting",
+        "usage": "/set <name>=<value>",
+        "description": "Set a variable for use in scripts. Use ${name} to reference.",
+        "examples": ["/set model=llama3", "/set prompt=Be concise", "/send ${prompt}"],
+    },
+    "vars": {
+        "category": "Scripting",
+        "usage": "/vars",
+        "description": "List all defined variables.",
+        "examples": ["/vars"],
+    },
     # System
     "help": {
         "category": "System",
@@ -372,6 +384,7 @@ class AppState:
     client: object
     conversations_root: Path
     file_registry: dict = field(default_factory=dict)  # key -> {"content": str, "full_path": str}
+    variables: dict = field(default_factory=dict)  # script variables: name -> value
 
 
 @dataclass
@@ -457,6 +470,9 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         CommandResult with execution result
     """
     line = line.strip()
+
+    # Expand variables (${name}) before processing
+    line = expand_variables(line, state.variables)
 
     if not line.startswith('/'):
         return CommandResult(message="Commands must start with /")
@@ -607,6 +623,24 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     elif command == 'sleep':
         # Sleep is only useful in batch/script mode - direct users there
         return CommandResult(message="/sleep is only available in scripts (/run) or batch mode.")
+
+    elif command == 'set':
+        if len(parts) < 2 or '=' not in parts[1]:
+            return CommandResult(message="Usage: /set <name>=<value>")
+        name, value = parts[1].split('=', 1)
+        name = name.strip()
+        # Validate variable name
+        import re
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+            return CommandResult(message="Invalid variable name. Use letters, numbers, and underscores (cannot start with number).")
+        state.variables[name] = value
+        return CommandResult(message=f"Set ${{{name}}} = {value}")
+
+    elif command == 'vars':
+        if not state.variables:
+            return CommandResult(message="No variables defined. Use /set name=value to define.")
+        lines = [f"${{{k}}} = {v}" for k, v in sorted(state.variables.items())]
+        return CommandResult(message="Variables:\n" + "\n".join(lines))
 
     elif command == 'temp':
         return CommandResult(
@@ -1237,6 +1271,26 @@ def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
     # Remove the assistant message
     convo.messages.pop(last_assistant)
     return last_user_content, "Retrying last user message."
+
+
+def expand_variables(text: str, variables: dict) -> str:
+    """Expand ${name} variable references in text.
+
+    Args:
+        text: Text containing variable references
+        variables: Dict mapping variable names to values
+
+    Returns:
+        Text with variables expanded. Unknown variables are left as-is.
+    """
+    import re
+
+    def replace_var(match):
+        var_name = match.group(1)
+        return variables.get(var_name, match.group(0))  # Leave as-is if not found
+
+    # Match ${name} where name is alphanumeric with underscores
+    return re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', replace_var, text)
 
 
 def resolve_placeholders(text: str, registry: dict) -> tuple[Optional[str], Optional[str]]:

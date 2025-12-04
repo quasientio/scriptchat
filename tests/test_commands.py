@@ -18,7 +18,7 @@ from pathlib import Path
 
 import json
 
-from scriptchat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature, resolve_placeholders
+from scriptchat.core.commands import AppState, CommandResult, create_new_conversation, handle_command, set_model, set_temperature, resolve_placeholders, expand_variables
 from scriptchat.core.config import Config, ModelConfig, ProviderConfig
 from scriptchat.core.conversations import Conversation, Message
 from scriptchat.core.provider_dispatcher import ProviderDispatcher
@@ -821,6 +821,219 @@ class ResolvePlaceholdersTests(unittest.TestCase):
         result, err = resolve_placeholders(text, registry)
         self.assertIsNone(err)
         self.assertEqual(result, text)
+
+
+class ScriptVariablesTests(unittest.TestCase):
+    """Tests for /set, /vars commands and variable expansion."""
+
+    def test_expand_variables_simple(self):
+        """Test basic variable expansion."""
+        variables = {"name": "Alice", "greeting": "Hello"}
+        result = expand_variables("${greeting}, ${name}!", variables)
+        self.assertEqual(result, "Hello, Alice!")
+
+    def test_expand_variables_unknown_left_unchanged(self):
+        """Unknown variables are left as-is."""
+        variables = {"known": "value"}
+        result = expand_variables("${known} and ${unknown}", variables)
+        self.assertEqual(result, "value and ${unknown}")
+
+    def test_expand_variables_empty_dict(self):
+        """Empty variables dict leaves all references unchanged."""
+        result = expand_variables("${foo} ${bar}", {})
+        self.assertEqual(result, "${foo} ${bar}")
+
+    def test_expand_variables_no_references(self):
+        """Text without variable references is unchanged."""
+        variables = {"foo": "bar"}
+        result = expand_variables("plain text", variables)
+        self.assertEqual(result, "plain text")
+
+    def test_expand_variables_underscore_names(self):
+        """Variable names can start with underscore."""
+        variables = {"_private": "secret", "var_name": "value"}
+        result = expand_variables("${_private} ${var_name}", variables)
+        self.assertEqual(result, "secret value")
+
+    def test_set_command_creates_variable(self):
+        """Test /set command creates a variable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set foo=bar", state)
+            self.assertIn("foo", result.message)
+            self.assertEqual(state.variables.get("foo"), "bar")
+
+    def test_set_command_with_equals_in_value(self):
+        """Test /set with value containing = sign."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set equation=a=b+c", state)
+            self.assertEqual(state.variables.get("equation"), "a=b+c")
+
+    def test_set_command_invalid_name(self):
+        """Test /set rejects invalid variable names."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set 123invalid=value", state)
+            self.assertIn("Invalid", result.message)
+            self.assertNotIn("123invalid", state.variables)
+
+    def test_set_command_missing_value(self):
+        """Test /set requires name=value format."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set novalue", state)
+            self.assertIn("Usage", result.message)
+
+    def test_vars_command_empty(self):
+        """Test /vars with no variables defined."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/vars", state)
+            self.assertIn("No variables", result.message)
+
+    def test_vars_command_lists_variables(self):
+        """Test /vars lists all defined variables."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.variables = {"alpha": "1", "beta": "2"}
+            result = handle_command("/vars", state)
+            self.assertIn("alpha", result.message)
+            self.assertIn("beta", result.message)
+
+    def test_variable_expansion_in_command(self):
+        """Test that variables are expanded in command arguments."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.variables = {"msg": "hello world"}
+            result = handle_command("/echo ${msg}", state)
+            self.assertEqual(result.message, "hello world")
+
+    def test_set_overwrites_existing_variable(self):
+        """Overwriting a variable replaces its value."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            handle_command("/set foo=original", state)
+            self.assertEqual(state.variables.get("foo"), "original")
+            handle_command("/set foo=updated", state)
+            self.assertEqual(state.variables.get("foo"), "updated")
+
+    def test_set_empty_value(self):
+        """Setting a variable to empty string is allowed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set empty=", state)
+            self.assertEqual(state.variables.get("empty"), "")
+            self.assertIn("empty", result.message)
+
+    def test_set_value_with_spaces(self):
+        """Value can contain spaces."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            handle_command("/set msg=hello world with spaces", state)
+            self.assertEqual(state.variables.get("msg"), "hello world with spaces")
+
+    def test_set_value_with_special_chars(self):
+        """Value can contain special characters."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            handle_command("/set special=!@#$%^&*()", state)
+            self.assertEqual(state.variables.get("special"), "!@#$%^&*()")
+
+    def test_set_invalid_name_with_hyphen(self):
+        """Variable names cannot contain hyphens."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set my-var=value", state)
+            self.assertIn("Invalid", result.message)
+            self.assertNotIn("my-var", state.variables)
+
+    def test_set_invalid_name_with_space(self):
+        """Variable names cannot contain spaces."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # "my var=value" splits as name="my var" which is invalid
+            result = handle_command("/set my var=value", state)
+            self.assertIn("Invalid", result.message)
+
+    def test_expand_adjacent_variables(self):
+        """Adjacent variable references expand correctly."""
+        variables = {"a": "hello", "b": "world"}
+        result = expand_variables("${a}${b}", variables)
+        self.assertEqual(result, "helloworld")
+
+    def test_expand_variable_in_middle_of_text(self):
+        """Variable in middle of text expands correctly."""
+        variables = {"name": "Alice"}
+        result = expand_variables("Hello ${name}, welcome!", variables)
+        self.assertEqual(result, "Hello Alice, welcome!")
+
+    def test_expand_same_variable_multiple_times(self):
+        """Same variable referenced multiple times expands each occurrence."""
+        variables = {"x": "foo"}
+        result = expand_variables("${x} and ${x} again", variables)
+        self.assertEqual(result, "foo and foo again")
+
+    def test_expand_preserves_unclosed_brace(self):
+        """Unclosed ${name doesn't match and is left alone."""
+        variables = {"name": "value"}
+        result = expand_variables("${name and ${name}", variables)
+        self.assertEqual(result, "${name and value")
+
+    def test_expand_empty_braces_unchanged(self):
+        """${} is not a valid variable reference and is left unchanged."""
+        variables = {"": "empty"}
+        result = expand_variables("test ${} here", variables)
+        self.assertEqual(result, "test ${} here")
+
+    def test_expand_nested_syntax_unchanged(self):
+        """Nested ${${x}} doesn't do recursive expansion."""
+        variables = {"x": "inner", "inner": "value"}
+        result = expand_variables("${${x}}", variables)
+        # Only outer braces match, inner ${x} becomes "inner", result is ${inner}
+        # which doesn't get re-expanded
+        self.assertEqual(result, "${inner}")
+
+    def test_variables_are_case_sensitive(self):
+        """Variable names are case-sensitive."""
+        variables = {"Name": "upper", "name": "lower"}
+        result = expand_variables("${Name} vs ${name}", variables)
+        self.assertEqual(result, "upper vs lower")
+
+    def test_expand_with_newlines_in_value(self):
+        """Variables can contain newlines."""
+        variables = {"multi": "line1\nline2"}
+        result = expand_variables("${multi}", variables)
+        self.assertEqual(result, "line1\nline2")
+
+    def test_vars_shows_sorted_output(self):
+        """Variables are listed in sorted order."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.variables = {"zebra": "z", "alpha": "a", "beta": "b"}
+            result = handle_command("/vars", state)
+            # Check that alpha appears before beta appears before zebra
+            alpha_pos = result.message.find("alpha")
+            beta_pos = result.message.find("beta")
+            zebra_pos = result.message.find("zebra")
+            self.assertLess(alpha_pos, beta_pos)
+            self.assertLess(beta_pos, zebra_pos)
+
+    def test_set_then_use_in_same_session(self):
+        """Set a variable and use it in the same session."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            handle_command("/set prefix=DEBUG", state)
+            result = handle_command("/echo ${prefix}: message", state)
+            self.assertEqual(result.message, "DEBUG: message")
+
+    def test_variable_in_set_value_expands(self):
+        """Variables in /set value are expanded (since expansion happens first)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.variables = {"base": "/home/user"}
+            handle_command("/set path=${base}/docs", state)
+            self.assertEqual(state.variables.get("path"), "/home/user/docs")
 
 
 if __name__ == "__main__":

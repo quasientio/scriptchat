@@ -31,7 +31,7 @@ from .core.exports import (
 from .core.ollama_client import OllamaServerManager, OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
-from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message, resolve_placeholders
+from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message, resolve_placeholders, expand_variables
 from .core.config import reasoning_default_for_model
 from .ui.app import run_ui
 
@@ -293,6 +293,28 @@ def handle_batch_command(
             print(f"[{line_num}] Error: Invalid sleep duration: {args}")
         return True, None, None
 
+    if command == 'set':
+        if not args or '=' not in args:
+            print(f"[{line_num}] Error: /set requires name=value")
+            return True, None, None
+        name, value = args.split('=', 1)
+        name = name.strip()
+        import re as re_module
+        if not re_module.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+            print(f"[{line_num}] Error: Invalid variable name: {name}")
+            return True, None, None
+        state.variables[name] = value
+        print(f"[{line_num}] Set ${{{name}}} = {value}")
+        return True, None, None
+
+    if command == 'vars':
+        if not state.variables:
+            print(f"[{line_num}] No variables defined.")
+        else:
+            lines_out = [f"${{{k}}} = {v}" for k, v in sorted(state.variables.items())]
+            print(f"[{line_num}] Variables:\n" + "\n".join(lines_out))
+        return True, None, None
+
     if command in ('retry', 'tag', 'log-level', 'files'):
         result = handle_command(line, state)
         if result.message:
@@ -300,7 +322,7 @@ def handle_batch_command(
         return True, result.resend_message if command == 'retry' else None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /vars")
     return True, None, None
 
 
@@ -324,6 +346,9 @@ def run_batch_lines(
     # Execute each line
     for i, line in enumerate(script_lines, 1):
         logger.debug(f"Executing line {i}: {line}")
+
+        # Expand variables (${name}) in the line
+        line = expand_variables(line, state.variables)
 
         message_to_send = None
         exit_code = None
