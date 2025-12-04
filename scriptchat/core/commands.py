@@ -171,6 +171,12 @@ COMMAND_REGISTRY = {
         "description": "Send a message (useful in scripts).",
         "examples": ["/send Hello, how are you?"],
     },
+    "history": {
+        "category": "Messaging",
+        "usage": "/history [n|all]",
+        "description": "Show recent user messages in the current conversation (persists if saved/loaded). Default: last 10.",
+        "examples": ["/history", "/history 5", "/history all"],
+    },
     "undo": {
         "category": "Messaging",
         "usage": "/undo [n]",
@@ -532,6 +538,39 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             needs_ui_interaction=True,
             command_type='send'
         )
+
+    elif command == 'history':
+        messages = state.current_conversation.messages
+        # Show only user messages (like shell history shows commands, not output)
+        user_msgs = [m for m in messages if m.role == 'user']
+
+        if not user_msgs:
+            return CommandResult(message="No messages in history.")
+
+        # Parse count argument
+        arg = parts[1].strip().lower() if len(parts) > 1 else ""
+        if arg == "all" or arg == "":
+            count = len(user_msgs) if arg == "all" else min(10, len(user_msgs))
+        else:
+            try:
+                count = int(arg)
+                if count <= 0:
+                    return CommandResult(message="Count must be positive.")
+            except ValueError:
+                return CommandResult(message="Usage: /history [n|all]")
+
+        # Get last n messages
+        recent = user_msgs[-count:] if count < len(user_msgs) else user_msgs
+        lines = []
+        for i, msg in enumerate(recent):
+            # Truncate long messages
+            content = msg.content
+            if len(content) > 200:
+                content = content[:200] + "..."
+            lines.append(content)
+
+        header = f"Last {len(recent)} of {len(user_msgs)} messages:"
+        return CommandResult(message=header + "\n" + "\n".join(lines))
 
     elif command == 'export':
         return CommandResult(

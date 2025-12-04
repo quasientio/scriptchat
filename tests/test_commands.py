@@ -360,6 +360,45 @@ class CommandTests(unittest.TestCase):
             usage = handle_command("/note", state)
             self.assertIn("Usage:", usage.message)
 
+    def test_history_command(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+
+            # Empty history
+            empty = handle_command("/history", state)
+            self.assertIn("No messages", empty.message)
+
+            # Add some messages
+            state.current_conversation.messages = [
+                Message(role="user", content="Hello"),
+                Message(role="assistant", content="Hi there!"),
+                Message(role="user", content="How are you?"),
+                Message(role="assistant", content="I'm doing well."),
+            ]
+
+            # Default (last 10, but we only have 2 user messages)
+            result = handle_command("/history", state)
+            self.assertIn("2 of 2", result.message)
+            self.assertIn("Hello", result.message)
+            self.assertIn("How are you?", result.message)
+            # Should NOT include assistant messages
+            self.assertNotIn("Hi there!", result.message)
+            self.assertNotIn("doing well", result.message)
+
+            # Specific count
+            result2 = handle_command("/history 1", state)
+            self.assertIn("1 of 2", result2.message)
+            self.assertIn("How are you?", result2.message)
+            self.assertNotIn("Hello", result2.message)
+
+            # All
+            result_all = handle_command("/history all", state)
+            self.assertIn("2 of 2", result_all.message)
+
+            # Invalid
+            invalid = handle_command("/history abc", state)
+            self.assertIn("Usage:", invalid.message)
+
     def test_undo_removes_exchanges(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
