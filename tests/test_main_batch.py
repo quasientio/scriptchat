@@ -86,6 +86,77 @@ class MainBatchTests(unittest.TestCase):
         parsed = parse_script_lines(lines)
         self.assertEqual(parsed, ["say", "/send hi"])
 
+    def test_parse_script_lines_multiline_basic(self):
+        """Test basic multi-line message with triple quotes."""
+        lines = [
+            '"""\n',
+            'Line one\n',
+            'Line two\n',
+            '"""\n',
+        ]
+        parsed = parse_script_lines(lines)
+        self.assertEqual(parsed, ["Line one\nLine two"])
+
+    def test_parse_script_lines_multiline_preserves_indentation(self):
+        """Test that indentation inside multi-line blocks is preserved."""
+        lines = [
+            '"""\n',
+            'First line\n',
+            '  Indented line\n',
+            '    More indented\n',
+            '"""\n',
+        ]
+        parsed = parse_script_lines(lines)
+        self.assertEqual(parsed, ["First line\n  Indented line\n    More indented"])
+
+    def test_parse_script_lines_multiline_with_commands(self):
+        """Test multi-line messages mixed with commands."""
+        lines = [
+            '/temp 0.5\n',
+            '"""\n',
+            'Multi-line\n',
+            'message here\n',
+            '"""\n',
+            '/save test\n',
+        ]
+        parsed = parse_script_lines(lines)
+        self.assertEqual(parsed, ["/temp 0.5", "Multi-line\nmessage here", "/save test"])
+
+    def test_parse_script_lines_multiline_empty_lines_preserved(self):
+        """Test that empty lines inside multi-line blocks are preserved."""
+        lines = [
+            '"""\n',
+            'First paragraph\n',
+            '\n',
+            'Second paragraph\n',
+            '"""\n',
+        ]
+        parsed = parse_script_lines(lines)
+        self.assertEqual(parsed, ["First paragraph\n\nSecond paragraph"])
+
+    def test_parse_script_lines_multiline_unclosed(self):
+        """Test handling of unclosed multi-line block."""
+        lines = [
+            '"""\n',
+            'Unclosed block\n',
+        ]
+        parsed = parse_script_lines(lines)
+        self.assertEqual(parsed, ["Unclosed block"])
+
+    def test_parse_script_lines_multiple_multiline_blocks(self):
+        """Test multiple multi-line blocks in same script."""
+        lines = [
+            '"""\n',
+            'First block\n',
+            '"""\n',
+            '/echo between\n',
+            '"""\n',
+            'Second block\n',
+            '"""\n',
+        ]
+        parsed = parse_script_lines(lines)
+        self.assertEqual(parsed, ["First block", "/echo between", "Second block"])
+
     def test_handle_batch_command_stream_prompt_send(self):
         with tempfile.TemporaryDirectory() as tmpdir, io.StringIO() as buf, redirect_stdout(buf):
             state = make_state(Path(tmpdir))

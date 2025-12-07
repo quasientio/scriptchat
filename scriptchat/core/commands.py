@@ -1282,6 +1282,8 @@ def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
 def expand_variables(text: str, variables: dict) -> str:
     """Expand ${name} variable references in text.
 
+    Checks script variables first, then falls back to environment variables.
+
     Args:
         text: Text containing variable references
         variables: Dict mapping variable names to values
@@ -1289,11 +1291,18 @@ def expand_variables(text: str, variables: dict) -> str:
     Returns:
         Text with variables expanded. Unknown variables are left as-is.
     """
+    import os
     import re
 
     def replace_var(match):
         var_name = match.group(1)
-        return variables.get(var_name, match.group(0))  # Leave as-is if not found
+        # Check script variables first, then environment
+        if var_name in variables:
+            return variables[var_name]
+        env_value = os.environ.get(var_name)
+        if env_value is not None:
+            return env_value
+        return match.group(0)  # Leave as-is if not found
 
     # Match ${name} where name is alphanumeric with underscores
     return re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', replace_var, text)

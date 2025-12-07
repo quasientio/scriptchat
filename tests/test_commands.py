@@ -1035,6 +1035,46 @@ class ScriptVariablesTests(unittest.TestCase):
             handle_command("/set path=${base}/docs", state)
             self.assertEqual(state.variables.get("path"), "/home/user/docs")
 
+    def test_expand_env_var_fallback(self):
+        """Environment variables are used when script variable not set."""
+        import os
+        os.environ["SCRIPTCHAT_TEST_VAR"] = "from_env"
+        try:
+            result = expand_variables("Value: ${SCRIPTCHAT_TEST_VAR}", {})
+            self.assertEqual(result, "Value: from_env")
+        finally:
+            del os.environ["SCRIPTCHAT_TEST_VAR"]
+
+    def test_expand_script_var_shadows_env(self):
+        """Script variables take precedence over environment variables."""
+        import os
+        os.environ["SCRIPTCHAT_TEST_VAR"] = "from_env"
+        try:
+            variables = {"SCRIPTCHAT_TEST_VAR": "from_script"}
+            result = expand_variables("Value: ${SCRIPTCHAT_TEST_VAR}", variables)
+            self.assertEqual(result, "Value: from_script")
+        finally:
+            del os.environ["SCRIPTCHAT_TEST_VAR"]
+
+    def test_expand_env_var_not_found_unchanged(self):
+        """Unknown variables (not in script or env) are left unchanged."""
+        import os
+        # Ensure var doesn't exist
+        os.environ.pop("SCRIPTCHAT_NONEXISTENT_VAR", None)
+        result = expand_variables("${SCRIPTCHAT_NONEXISTENT_VAR}", {})
+        self.assertEqual(result, "${SCRIPTCHAT_NONEXISTENT_VAR}")
+
+    def test_expand_mixed_script_and_env_vars(self):
+        """Mix of script and environment variables in same text."""
+        import os
+        os.environ["ENV_VAR"] = "env_value"
+        try:
+            variables = {"SCRIPT_VAR": "script_value"}
+            result = expand_variables("${SCRIPT_VAR} and ${ENV_VAR}", variables)
+            self.assertEqual(result, "script_value and env_value")
+        finally:
+            del os.environ["ENV_VAR"]
+
 
 if __name__ == "__main__":
     unittest.main()

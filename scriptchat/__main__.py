@@ -41,6 +41,12 @@ logger = logging.getLogger(__name__)
 def parse_script_lines(lines: list[str]) -> list[str]:
     """Parse script lines, stripping comments and empty lines.
 
+    Supports multi-line messages using triple quotes:
+        \"\"\"
+        First line
+        Second line
+        \"\"\"
+
     Args:
         lines: Raw lines from script file
 
@@ -48,11 +54,34 @@ def parse_script_lines(lines: list[str]) -> list[str]:
         List of executable lines
     """
     parsed = []
+    in_multiline = False
+    multiline_buffer = []
+
     for raw in lines:
         line = raw.strip()
-        if not line or line.startswith('#'):
-            continue
-        parsed.append(line)
+
+        if not in_multiline:
+            if not line or line.startswith('#'):
+                continue
+            if line == '"""':
+                in_multiline = True
+                multiline_buffer = []
+            else:
+                parsed.append(line)
+        else:
+            if line == '"""':
+                # End of multi-line block - join with newlines
+                parsed.append('\n'.join(multiline_buffer))
+                in_multiline = False
+                multiline_buffer = []
+            else:
+                # Preserve original line (with indentation) but strip trailing whitespace
+                multiline_buffer.append(raw.rstrip())
+
+    # Handle unclosed multi-line block
+    if in_multiline and multiline_buffer:
+        parsed.append('\n'.join(multiline_buffer))
+
     return parsed
 
 
@@ -315,14 +344,14 @@ def handle_batch_command(
             print(f"[{line_num}] Variables:\n" + "\n".join(lines_out))
         return True, None, None
 
-    if command in ('retry', 'tag', 'log-level', 'files'):
+    if command in ('retry', 'tag', 'log-level', 'files', 'note', 'history'):
         result = handle_command(line, state)
         if result.message:
             print(f"[{line_num}] {result.message}")
         return True, result.resend_message if command == 'retry' else None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /vars")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /vars, /note, /history")
     return True, None, None
 
 
