@@ -146,38 +146,61 @@ scriptchat --version
 
 All commands start with `/`:
 
+**Conversation**
 - `/new` - Start a new conversation
 - `/save` - Save the current conversation
-- `/load` - Load a saved conversation
+- `/load [index|name]` - Load a saved conversation by index or name
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats` - List saved conversations
-- `/send <message>` - Queue a message (sends immediately if the model is idle)
+- `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
+
+**Export/Import**
 - `/export [format]` - Export the current conversation (formats: `md`, `json`, `html`; prompts if omitted). `json` includes full metadata; `md`/`html` are minimal, human-friendly transcripts.
 - `/export-all [format]` - Export all saved conversations in the given format.
 - `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder
-- `/stream [on|off]` - Toggle or set streaming of assistant responses
-- `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
-- `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
+
+**Model & Settings**
 - `/model` - Switch to a different model (for the current provider)
 - `/temp` - Change the temperature setting
-- `/reason [level]` - Show or set the reasoning level (`low`, `medium`, `high`, `max`). For Anthropic Claude, these map to thinking budgets (4K, 16K, 64K, 128K tokens). `/reason` alone lists available levels.
+- `/reason [level]` - Show or set the reasoning level (`low`, `medium`, `high`, `max`). For Anthropic Claude, these map to thinking budgets (4K, 16K, 32K, 55K tokens). `/reason` alone lists available levels.
 - `/thinking [tokens]` - Set exact thinking budget in tokens for Anthropic Claude (1024-128000). Use `/thinking off` to disable. Overrides `/reason` presets.
-- `/timeout <seconds>` - Override the request timeout for all providers at runtime
-- `/profile` - Show current provider/model/temp, tokens, streaming/timeout, and registered files
+- `/timeout <seconds|0|off>` - Set the request timeout in seconds, or disable with `0` or `off`
+- `/stream [on|off]` - Toggle or set streaming of assistant responses
+- `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)
+
+**Files**
+- `/file [--force] <path>` - Register a file for use as `@path` in messages (content is expanded when sending, message stores `@path`). Use `--force` for large files above `file_confirm_threshold_bytes`.
 - `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
-- `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
-- `/file <path>` - Register a file for use as `@path` in messages (content is expanded when sending, message stores `@path`). For large files above `file_confirm_threshold_bytes`, use `/file --force <path>`.
-- `/echo <text>` - Print a message to the console without sending to the model
-- `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
+
+**Tags**
 - `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/load`)
 - `/untag <key>` - Remove a metadata tag from the conversation
 - `/tags` - List tags on the current conversation
+
+**Messaging**
+- `/send <message>` - Queue a message (sends immediately if the model is idle)
+- `/history [n|all]` - Show recent user messages in current conversation (persists if saved/loaded; default: last 10)
+- `/note <text>` - Add a note to the conversation (saved and visible, but not sent to model)
+- `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
 - `/retry` - Drop the last assistant message and resend the previous user message
-- `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
-- `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it’s case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
+
+**Testing & Debug**
+- `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it's case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
 - `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
+- `/echo <text>` - Print a message to the console without sending to the model
+- `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
+- `/profile [--full]` - Show current provider/model/temp, tokens, streaming/timeout, and registered files. Use `--full` to show complete system prompt
+
+**Scripting**
+- `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
+- `/sleep <seconds>` - Pause execution for the specified duration (scripts/batch mode only)
+- `/set <name>=<value>` - Define a script variable for use with `${name}` syntax
+- `/vars` - List all defined variables
+
+**System**
 - `/help [command|keyword]` - Show help for all commands, a specific command, or search by keyword.
+- `/keys` - Show keyboard shortcuts
 - `/exit` - Exit ScriptChat
 
 ### Multi-line Messages
@@ -188,9 +211,77 @@ To enter a multi-line message:
 2. Enter your message across multiple lines
 3. Type `"""` on a new line to send
 
+This syntax also works in script files (`/run` or `--run`):
+
+```bash
+"""
+Analyze this code for:
+- Security issues
+- Performance problems
+"""
+```
+
+### Script Variables
+
+Use `/set` to define variables that can be referenced with `${name}` syntax:
+
+```bash
+/set model=llama3
+/model ${model}
+/set greeting=Hello, how are you?
+${greeting}
+```
+
+Variables are expanded in both commands and messages. Variable names must start with a letter or underscore and contain only letters, numbers, and underscores.
+
+**Environment variable fallback:** If a variable isn't defined via `/set`, ScriptChat checks environment variables. This enables parameterized scripts:
+
+```bash
+# Run with different configurations
+LANGUAGE=Python TOPIC="error handling" scriptchat --run test.sc
+LANGUAGE=Rust TOPIC="memory safety" scriptchat --run test.sc
+```
+
+Script variables (`/set`) take precedence over environment variables. Unknown variables are left unexpanded.
+
+**Security:** Sensitive environment variables matching patterns like `*_KEY`, `*_SECRET`, `*_TOKEN`, `*_PASSWORD` are blocked from expansion by default. Configure in `config.toml`:
+
+```toml
+[general]
+# Disable env var expansion entirely
+env_expand_from_environment = false
+
+# Or override the default blocklist with your own patterns
+env_var_blocklist = ["MY_PRIVATE_*", "INTERNAL_*"]
+
+# Use empty list to allow all env vars (no blocklist)
+env_var_blocklist = []
+```
+
+### Keyboard Shortcuts
+
+**Navigation**
+- `Ctrl+Up` - Focus conversation pane for scrolling
+- `Ctrl+Home` - Jump to start of conversation
+- `Ctrl+End` - Jump to end of conversation
+- `Escape` - Return focus to input pane
+- `Tab` - Return to input (when in conversation pane)
+
+**In conversation pane**
+- `Up/Down` - Scroll line by line
+
+**In input pane**
+- `Up/Down` - Navigate command history
+- `Tab` - Command completion
+- `Shift+Tab` - Reverse completion cycling
+
+**General**
+- `Ctrl+C` or `Ctrl+D` - Exit ScriptChat
+- `Escape` twice (within 2s) - Cancel ongoing inference
+
 ### File References
 
-`/file <path>` registers a file for use in messages. Include `@path` in any user message to inline the file contents when sending (the stored message keeps `@path` for readability). Examples:
+`/file [--force] <path>` registers a file for use in messages. Include `@path` in any user message to inline the file contents when sending (the stored message keeps `@path` for readability). Examples:
 
 - Register: `/file docs/plan.md`
 - Send with inline file: `Summarize @docs/plan.md and list action items.` (you can also use `@{docs/plan.md}` or `@plan.md` if unique)
@@ -219,14 +310,17 @@ You can manually edit message files or delete them as needed.
 7. Load a previous conversation: `/load`
 8. Exit when done: `/exit` or Ctrl+C
 
+See the [`examples/`](examples/) folder for runnable scripts demonstrating interactive workflows and batch testing.
+
 ## Status Bar
 
 The status bar shows:
-- Current model name
-- Token usage (input/output)
+- Provider and model (e.g., `ollama/llama3.2`) with optional reasoning level in parentheses
+- Token usage (input/output), with optional context usage percentage
 - Conversation ID (or `<unsaved>` for new conversations)
+- Thinking indicator when the model is processing
 
-Example: `model: llama3.2 | tokens: 1234 in / 567 out | convo: 202511180945_llama32_my-chat`
+Example: `ollama/llama3.2 (high) | 1234 in / 567 out | 202511180945_llama32_my-chat`
 
 ## Troubleshooting
 

@@ -16,7 +16,9 @@ keywords = ["llm", "chat", "cli", "ollama", "openai", "anthropic", "terminal"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
+    "Framework :: Pytest",
     "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -26,6 +28,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Communications :: Chat",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
     "prompt_toolkit>=3.0.0",
@@ -42,9 +45,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/scriptchat/scriptchat"
-Repository = "https://github.com/scriptchat/scriptchat"
-Issues = "https://github.com/scriptchat/scriptchat/issues"
+Homepage = "https://github.com/quasientio/scriptchat"
+Repository = "https://github.com/quasientio/scriptchat"
+Issues = "https://github.com/quasientio/scriptchat/issues"
 
 [project.scripts]
 scriptchat = "scriptchat.__main__:main"
