@@ -222,9 +222,9 @@ COMMAND_REGISTRY = {
     },
     "profile": {
         "category": "Testing & Debug",
-        "usage": "/profile",
-        "description": "Show current session profile (model, tokens, settings).",
-        "examples": ["/profile"],
+        "usage": "/profile [--full]",
+        "description": "Show current session profile (model, tokens, settings). Use --full to show complete system prompt.",
+        "examples": ["/profile", "/profile --full"],
     },
     # Scripting
     "run": {
@@ -887,6 +887,9 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         return CommandResult(message="\n".join(lines))
 
     elif command == 'profile':
+        full = False
+        if len(parts) > 1 and parts[1].strip():
+            full = parts[1].strip() in ("--full", "-f")
         convo = state.current_conversation
         cfg = state.config
         conv_count = 0
@@ -943,10 +946,13 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         if cfg.exports_dir:
             lines.append(f"Exports dir: {cfg.exports_dir} ({exp_count} files)")
         if convo.system_prompt:
-            trimmed = convo.system_prompt.strip().replace("\n", " ")
-            if len(trimmed) > 100:
-                trimmed = trimmed[:97] + "..."
-            lines.append(f"System prompt: {trimmed}")
+            if full:
+                lines.append(f"System prompt:\n{convo.system_prompt}")
+            else:
+                trimmed = convo.system_prompt.strip().replace("\n", " ")
+                if len(trimmed) > 100:
+                    trimmed = trimmed[:97] + "..."
+                lines.append(f"System prompt: {trimmed}")
         else:
             lines.append("System prompt: (none)")
         if file_keys:
