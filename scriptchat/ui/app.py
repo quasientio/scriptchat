@@ -290,10 +290,25 @@ class ScriptChatUI:
             else:
                 # Check if starting multiline mode
                 if text.startswith('"""'):
-                    self.multiline_mode = True
-                    self.multiline_buffer = []
-                    self.input_buffer.text = ''
-                    self.add_system_message("[Multi-line mode active. Type '\"\"\"' on a new line to send]")
+                    # Check if this is a complete pasted block (starts and ends with """)
+                    lines = text.split('\n')
+                    if len(lines) > 1 and lines[-1].strip() == '"""':
+                        # Complete block - extract content between delimiters
+                        # First line might be just """ or """content
+                        first_line = lines[0][3:]  # Remove leading """
+                        middle_lines = lines[1:-1]  # Everything between first and last
+                        content_lines = [first_line] + middle_lines if first_line else middle_lines
+                        full_message = '\n'.join(content_lines)
+                        self.input_buffer.text = ''
+                        if full_message.strip():
+                            self._append_history(full_message)
+                            self.handle_user_message(full_message)
+                    else:
+                        # Incomplete - enter multiline mode
+                        self.multiline_mode = True
+                        self.multiline_buffer = []
+                        self.input_buffer.text = ''
+                        self.add_system_message("[Multi-line mode active. Type '\"\"\"' on a new line to send]")
                 elif text.startswith('/'):
                     # Command
                     if text:
