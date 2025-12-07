@@ -16,6 +16,8 @@ Types of changes:
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-12-07
+
 ### Added
 - This CHANGELOG file
 - A CONTRIBUTING.md guide
