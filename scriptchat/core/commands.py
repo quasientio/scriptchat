@@ -472,7 +472,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     line = line.strip()
 
     # Expand variables (${name}) before processing
-    line = expand_variables(line, state.variables)
+    line = expand_variables(
+        line,
+        state.variables,
+        env_expand=state.config.env_expand_from_environment,
+        env_blocklist=state.config.env_var_blocklist,
+    )
 
     if not line.startswith('/'):
         return CommandResult(message="Commands must start with /")
@@ -1279,14 +1284,47 @@ def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
     return last_user_content, "Retrying last user message."
 
 
-def expand_variables(text: str, variables: dict) -> str:
+# Default patterns for sensitive env vars that should not be expanded
+DEFAULT_ENV_VAR_BLOCKLIST = [
+    "*_KEY",
+    "*_SECRET",
+    "*_TOKEN",
+    "*_PASSWORD",
+    "*_CREDENTIAL",
+    "*_CREDENTIALS",
+    "*_API_KEY",
+]
+
+
+def _matches_blocklist(var_name: str, blocklist: list[str]) -> bool:
+    """Check if a variable name matches any blocklist pattern.
+
+    Patterns support * as wildcard (e.g., *_KEY matches OPENAI_API_KEY).
+    """
+    import fnmatch
+    var_upper = var_name.upper()
+    for pattern in blocklist:
+        if fnmatch.fnmatch(var_upper, pattern.upper()):
+            return True
+    return False
+
+
+def expand_variables(
+    text: str,
+    variables: dict,
+    env_expand: bool = True,
+    env_blocklist: list[str] | None = None,
+) -> str:
     """Expand ${name} variable references in text.
 
-    Checks script variables first, then falls back to environment variables.
+    Checks script variables first, then falls back to environment variables
+    (if env_expand is True and the variable name doesn't match the blocklist).
 
     Args:
         text: Text containing variable references
         variables: Dict mapping variable names to values
+        env_expand: Whether to fall back to environment variables (default: True)
+        env_blocklist: Patterns to block (overrides defaults if provided; use [] to allow all)
 
     Returns:
         Text with variables expanded. Unknown variables are left as-is.
@@ -1294,14 +1332,20 @@ def expand_variables(text: str, variables: dict) -> str:
     import os
     import re
 
+    # Use custom blocklist if provided, otherwise use defaults
+    full_blocklist = env_blocklist if env_blocklist is not None else DEFAULT_ENV_VAR_BLOCKLIST
+
     def replace_var(match):
         var_name = match.group(1)
-        # Check script variables first, then environment
+        # Check script variables first
         if var_name in variables:
             return variables[var_name]
-        env_value = os.environ.get(var_name)
-        if env_value is not None:
-            return env_value
+        # Fall back to environment if enabled and not blocked
+        if env_expand:
+            if not _matches_blocklist(var_name, full_blocklist):
+                env_value = os.environ.get(var_name)
+                if env_value is not None:
+                    return env_value
         return match.group(0)  # Leave as-is if not found
 
     # Match ${name} where name is alphanumeric with underscores

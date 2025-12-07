@@ -68,6 +68,8 @@ LANGUAGE=Python scriptchat --run script.sc
 
 See `batch-testing.sc` and `run-batch-testing.sh` for a complete example of running tests across multiple models and configurations.
 
+**Note:** Sensitive env vars (`*_KEY`, `*_SECRET`, `*_TOKEN`, etc.) are blocked by default. See main README for config options.
+
 ### Multi-line Messages
 
 Use triple quotes for multi-line messages in scripts:

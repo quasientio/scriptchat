@@ -62,6 +62,8 @@ class Config:
     log_file: Optional[Path] = None  # Path to log file (None = stderr)
     providers: list[ProviderConfig] = field(default_factory=list)
     file_confirm_threshold_bytes: int = 40_000  # Require explicit confirmation above this size
+    env_expand_from_environment: bool = True  # Allow ${VAR} to fall back to env vars
+    env_var_blocklist: list[str] = field(default_factory=list)  # Additional patterns to block
 
     def get_provider(self, provider_id: str) -> ProviderConfig:
         """Get provider configuration by id."""
@@ -238,6 +240,16 @@ def load_config() -> Config:
     timeout = general_section.get('timeout', ollama_section.get('timeout', 1200))  # Default: 20 minutes
     file_confirm_threshold_bytes = int(general_section.get('file_confirm_threshold_bytes', 40_000))
 
+    # Environment variable expansion settings
+    env_expand_from_environment = bool(general_section.get('env_expand_from_environment', True))
+    env_var_blocklist_raw = general_section.get('env_var_blocklist', [])
+    if isinstance(env_var_blocklist_raw, str):
+        env_var_blocklist = [p.strip() for p in env_var_blocklist_raw.split(',') if p.strip()]
+    elif isinstance(env_var_blocklist_raw, list):
+        env_var_blocklist = [str(p).strip() for p in env_var_blocklist_raw if p]
+    else:
+        env_var_blocklist = []
+
     default_provider = general_section.get('default_provider', 'ollama')
 
     providers: list[ProviderConfig] = []
@@ -375,7 +387,9 @@ def load_config() -> Config:
         file_confirm_threshold_bytes=file_confirm_threshold_bytes,
         log_level=log_level,
         log_file=log_file,
-        providers=providers
+        providers=providers,
+        env_expand_from_environment=env_expand_from_environment,
+        env_var_blocklist=env_var_blocklist,
     )
 
     # Configure logging based on settings

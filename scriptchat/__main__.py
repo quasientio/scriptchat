@@ -377,7 +377,12 @@ def run_batch_lines(
         logger.debug(f"Executing line {i}: {line}")
 
         # Expand variables (${name}) in the line
-        line = expand_variables(line, state.variables)
+        line = expand_variables(
+            line,
+            state.variables,
+            env_expand=state.config.env_expand_from_environment,
+            env_blocklist=state.config.env_var_blocklist,
+        )
 
         message_to_send = None
         exit_code = None

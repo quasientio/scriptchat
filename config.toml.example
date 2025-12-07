@@ -37,6 +37,16 @@ timeout = 1200
 # File registration confirmation threshold in bytes. Above this size, use /file --force.
 file_confirm_threshold_bytes = 40000
 
+# Environment variable expansion in scripts
+# When true, ${VAR} falls back to environment variables if not set via /set
+# Sensitive patterns (*_KEY, *_SECRET, *_TOKEN, *_PASSWORD) are blocked by default
+env_expand_from_environment = true
+
+# Override the default blocklist with custom patterns (not merged, replaces defaults)
+# Uses wildcard matching (e.g., "*_PRIVATE" matches "MY_PRIVATE", "APP_PRIVATE")
+# env_var_blocklist = ["MY_PRIVATE_*", "INTERNAL_*"]
+# Use empty list to allow all env vars: env_var_blocklist = []
+
 # Provider definitions. Add as many as you need.
 #
 # API keys can be set in config or via environment variables.

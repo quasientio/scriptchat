@@ -1075,6 +1075,89 @@ class ScriptVariablesTests(unittest.TestCase):
         finally:
             del os.environ["ENV_VAR"]
 
+    def test_expand_blocks_sensitive_env_vars_by_default(self):
+        """Default blocklist prevents expansion of sensitive env vars like *_KEY."""
+        import os
+        os.environ["OPENAI_API_KEY"] = "sk-secret123"
+        os.environ["MY_SECRET"] = "hidden"
+        os.environ["AUTH_TOKEN"] = "bearer-xyz"
+        try:
+            # These should NOT be expanded (blocked by default patterns)
+            result = expand_variables("${OPENAI_API_KEY}", {})
+            self.assertEqual(result, "${OPENAI_API_KEY}")
+
+            result = expand_variables("${MY_SECRET}", {})
+            self.assertEqual(result, "${MY_SECRET}")
+
+            result = expand_variables("${AUTH_TOKEN}", {})
+            self.assertEqual(result, "${AUTH_TOKEN}")
+        finally:
+            del os.environ["OPENAI_API_KEY"]
+            del os.environ["MY_SECRET"]
+            del os.environ["AUTH_TOKEN"]
+
+    def test_expand_allows_non_sensitive_env_vars(self):
+        """Non-sensitive env vars are expanded normally."""
+        import os
+        os.environ["LANGUAGE"] = "Python"
+        os.environ["MY_VAR"] = "hello"
+        try:
+            result = expand_variables("${LANGUAGE} ${MY_VAR}", {})
+            self.assertEqual(result, "Python hello")
+        finally:
+            del os.environ["LANGUAGE"]
+            del os.environ["MY_VAR"]
+
+    def test_expand_env_disabled(self):
+        """When env_expand=False, env vars are not expanded."""
+        import os
+        os.environ["SAFE_VAR"] = "value"
+        try:
+            result = expand_variables("${SAFE_VAR}", {}, env_expand=False)
+            self.assertEqual(result, "${SAFE_VAR}")
+        finally:
+            del os.environ["SAFE_VAR"]
+
+    def test_expand_custom_blocklist_overrides_defaults(self):
+        """Custom blocklist replaces defaults entirely."""
+        import os
+        os.environ["MY_PRIVATE_DATA"] = "sensitive"
+        os.environ["OPENAI_API_KEY"] = "sk-secret"  # Normally blocked by default
+        try:
+            # Custom blocklist only blocks MY_PRIVATE_*, not *_KEY
+            result = expand_variables(
+                "${MY_PRIVATE_DATA} ${OPENAI_API_KEY}",
+                {},
+                env_blocklist=["MY_PRIVATE_*"]
+            )
+            # MY_PRIVATE_DATA blocked, but OPENAI_API_KEY now allowed (not in custom list)
+            self.assertEqual(result, "${MY_PRIVATE_DATA} sk-secret")
+        finally:
+            del os.environ["MY_PRIVATE_DATA"]
+            del os.environ["OPENAI_API_KEY"]
+
+    def test_expand_empty_blocklist_allows_all(self):
+        """Empty blocklist allows all env vars including sensitive ones."""
+        import os
+        os.environ["OPENAI_API_KEY"] = "sk-secret"
+        try:
+            result = expand_variables("${OPENAI_API_KEY}", {}, env_blocklist=[])
+            self.assertEqual(result, "sk-secret")
+        finally:
+            del os.environ["OPENAI_API_KEY"]
+
+    def test_expand_script_var_overrides_blocked_env(self):
+        """Script variables can still be set even if env var name is blocked."""
+        import os
+        os.environ["OPENAI_API_KEY"] = "env-secret"
+        try:
+            # Script var takes precedence and is not subject to blocklist
+            variables = {"OPENAI_API_KEY": "explicit-value"}
+            result = expand_variables("${OPENAI_API_KEY}", variables)
+            self.assertEqual(result, "explicit-value")
+        finally:
+            del os.environ["OPENAI_API_KEY"]
+
 
 if __name__ == "__main__":
     unittest.main()
