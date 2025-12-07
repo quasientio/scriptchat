@@ -354,6 +354,86 @@ class CommandHandlersUiTests(unittest.TestCase):
             cb("new prompt")
             self.assertEqual(state.current_conversation.system_prompt, "new prompt")
 
+    def test_load_by_display_name(self):
+        """Load a conversation by its simple save name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_save("my-chat")
+            saved_id = state.current_conversation.id
+
+            # Create a new conversation
+            state.current_conversation = Conversation(
+                id=None, provider_id="ollama", model_name="llama3",
+                temperature=0.5, system_prompt=None, messages=[],
+                tokens_in=0, tokens_out=0,
+            )
+
+            # Load by display name
+            handlers.handle_load("my-chat")
+            self.assertEqual(state.current_conversation.id, saved_id)
+            self.assertIn("loaded", app.messages[-1].lower())
+
+    def test_load_by_full_dir_name(self):
+        """Load a conversation by its full directory name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_save("another-chat")
+            saved_id = state.current_conversation.id
+
+            # Create a new conversation
+            state.current_conversation = Conversation(
+                id=None, provider_id="ollama", model_name="llama3",
+                temperature=0.5, system_prompt=None, messages=[],
+                tokens_in=0, tokens_out=0,
+            )
+
+            # Load by full dir_name
+            handlers.handle_load(saved_id)
+            self.assertEqual(state.current_conversation.id, saved_id)
+            self.assertIn("loaded", app.messages[-1].lower())
+
+    def test_load_by_name_not_found(self):
+        """Error message when conversation name doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            handlers.handle_save("exists")
+
+            handlers.handle_load("nonexistent")
+            self.assertIn("not found", app.messages[-1].lower())
+
+    def test_load_by_name_multiple_matches(self):
+        """Error when multiple conversations match the same name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root)
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            # Manually create two directories with same display_name but different timestamps
+            import json
+            for ts in ["202412010000", "202412020000"]:
+                dir_name = f"{ts}_llama3_samename"
+                conv_dir = root / dir_name
+                conv_dir.mkdir()
+                meta = {"model": "llama3", "provider_id": "ollama", "temperature": 0.7}
+                (conv_dir / "meta.json").write_text(json.dumps(meta))
+
+            # Try to load by name - should fail with multiple matches
+            handlers.handle_load("samename")
+            self.assertIn("multiple", app.messages[-1].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

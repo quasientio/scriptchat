@@ -244,32 +244,51 @@ class CommandHandlers:
         self.app.prompt_message = "Enter conversation index:"
         self.app.prompt_for_input(self._load_callback)
 
-    def _load_callback(self, index_str: str):
+    def _load_callback(self, index_or_name: str):
+        summaries = list_conversations(self.app.state.conversations_root)
+        target = None
+        display = None
+
+        # Try parsing as index first
         try:
-            index = int(index_str)
-            summaries = list_conversations(self.app.state.conversations_root)
+            index = int(index_or_name)
             if 0 <= index < len(summaries):
-                conversation = load_conversation(
-                    self.app.state.conversations_root,
-                    summaries[index].dir_name
-                )
-                self.app.state.current_conversation = conversation
-                # Rehydrate file registry for placeholder expansion
-                self.app.state.file_registry = getattr(conversation, "file_registry", {})
-                missing = [
-                    key for key, entry in self.app.state.file_registry.items()
-                    if isinstance(entry, dict) and entry.get("missing")
-                ]
-                self.app.update_conversation_display()
-                self.app.add_system_message(f"Loaded: {summaries[index].display_name}")
-                if missing:
-                    self.app.add_system_message(
-                        "Warning: missing file(s) referenced: " + ", ".join(sorted(missing))
-                    )
-            else:
-                self.app.add_system_message("Invalid conversation index")
+                target = summaries[index].dir_name
+                display = summaries[index].display_name
         except ValueError:
-            self.app.add_system_message("Invalid index. Please enter a number.")
+            # Try matching by name (display_name or dir_name)
+            name = index_or_name.strip()
+            matches = [
+                s for s in summaries
+                if s.display_name == name or s.dir_name == name
+            ]
+            if len(matches) == 1:
+                target = matches[0].dir_name
+                display = matches[0].display_name
+            elif len(matches) > 1:
+                self.app.add_system_message(
+                    f"Multiple conversations match '{name}'. Use index or full name."
+                )
+                return
+
+        if target is None:
+            self.app.add_system_message(f"Conversation not found: {index_or_name}")
+            return
+
+        conversation = load_conversation(self.app.state.conversations_root, target)
+        self.app.state.current_conversation = conversation
+        # Rehydrate file registry for placeholder expansion
+        self.app.state.file_registry = getattr(conversation, "file_registry", {})
+        missing = [
+            key for key, entry in self.app.state.file_registry.items()
+            if isinstance(entry, dict) and entry.get("missing")
+        ]
+        self.app.update_conversation_display()
+        self.app.add_system_message(f"Loaded: {display}")
+        if missing:
+            self.app.add_system_message(
+                "Warning: missing file(s) referenced: " + ", ".join(sorted(missing))
+            )
 
     def handle_branch(self, args: str = ""):
         if args.strip():
