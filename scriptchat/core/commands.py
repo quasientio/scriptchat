@@ -868,7 +868,11 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
             return CommandResult(message="Usage: /log-level <debug|info|warn|error|critical>")
         import logging
-        logging.getLogger().setLevel(level)
+        root_logger = logging.getLogger()
+        root_logger.setLevel(level)
+        # Also update handler levels so messages actually get output
+        for handler in root_logger.handlers:
+            handler.setLevel(level)
         state.config.log_level = level
         return CommandResult(message=f"Log level set to {level}")
 
