@@ -3,16 +3,26 @@
 A terminal-based, scriptable chat client for interacting with local LLMs (via Ollama)
 and remote LLMs via OpenAI-compatible providers (OpenAI, DeepSeek...) and Anthropic Claude.
 
+## Why ScriptChat?
+
+ScriptChat fills the gap between writing code against LLM APIs and using GUI chat interfaces. APIs give you control but high friction; GUIs are convenient but hard to automate. ScriptChat gives you both: an interactive TUI for exploration, and scriptable automation for testing and iteration.
+
+- **Scriptable**: Write `.sc` scripts with variables and assertions. Pipe into shell workflows. Run prompt regression tests in CI.
+- **Branchable**: Save a conversation, branch it, try different approaches, compare results.
+- **Multi-provider**: Same workflow across Ollama, OpenAI, Anthropic. Switch models mid-conversation.
+- **File-based**: Conversations are directories of text files. Inspect, edit, or version control them.
+
+For developers and power users who want their LLM interactions to be reproducible, scriptable, and under their control.
+
 ## Features
 
 - Full-screen terminal UI with conversation history, status bar, and input pane
-- Multiple pre-configured models with easy switching
-- Persistent, file-based conversations (save, load, and branch)
+- Extended thinking support for reasoning models (`/reason`, `/thinking`)
+- File references: register files and include them in prompts (`/file`, `@path`)
+- Export conversations to Markdown, JSON, or HTML
 - Multi-line message support
-- Send file contents into the chat
-- Token usage tracking
-- Temperature adjustment
-- System prompts
+- Token usage tracking and temperature control
+- System prompts per conversation
 
 ## Requirements
 
@@ -291,13 +301,15 @@ You can register multiple files and mix references in one message. `/profile` li
 
 ### Conversation Storage
 
-Conversations are stored in `~/.scriptchat/conversations/` (or your configured directory) with the following structure:
+Conversations are stored in `~/.scriptchat/conversations/` (or `conversations_dir` in config) with the following structure:
 
 - Each conversation is a directory: `YYYYMMDDHHMM_modelname_savename/`
 - Messages are stored as individual files: `0001_user.txt`, `0002_llm.txt`, etc.
 - Metadata is stored in `meta.json`
 
 You can manually edit message files or delete them as needed.
+
+Exports (`/export`) go to the current working directory by default, or to `exports_dir` if configured.
 
 ## Example Workflow
 
