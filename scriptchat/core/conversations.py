@@ -401,6 +401,12 @@ def save_conversation(
     with open(meta_path, 'w') as f:
         json.dump(meta, f, indent=2)
 
+    # Remove existing message files before writing (handles undo/retry scenarios)
+    msg_pattern = re.compile(r'^\d{4}_(user|llm|note)\.txt$')
+    for existing_file in conv_dir.iterdir():
+        if msg_pattern.match(existing_file.name):
+            existing_file.unlink()
+
     # Write message files
     # Simple approach: renumber all messages from 1..N
     msg_num = 1

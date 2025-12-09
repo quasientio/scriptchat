@@ -1259,7 +1259,7 @@ def undo_last_exchanges(convo: Conversation, count: int) -> int:
 
 
 def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
-    """Drop the last assistant message and return the preceding user message to resend."""
+    """Drop the last assistant message and preceding user message, return user content to resend."""
     # Find last assistant index
     last_assistant = None
     for i in range(len(convo.messages) - 1, -1, -1):
@@ -1270,17 +1270,20 @@ def retry_last_user_message(convo: Conversation) -> tuple[Optional[str], str]:
         return None, "No assistant response to retry."
 
     # Find the user message before that assistant
+    last_user_idx = None
     last_user_content = None
     for j in range(last_assistant - 1, -1, -1):
         if convo.messages[j].role == 'user':
+            last_user_idx = j
             last_user_content = convo.messages[j].content
             break
 
     if last_user_content is None:
         return None, "No user message found to retry."
 
-    # Remove the assistant message
+    # Remove assistant message first (higher index), then user message
     convo.messages.pop(last_assistant)
+    convo.messages.pop(last_user_idx)
     return last_user_content, "Retrying last user message."
 
 

@@ -16,6 +16,10 @@ Types of changes:
 
 ## [Unreleased]
 
+### Fixed
+- /retry and saving works now, removing last response and without user message duplicate
+- /undo and saving deletes stale message files, saved state matches in-memory state
+
 ## [0.2.0] - 2025-12-07
 
 ### Added
