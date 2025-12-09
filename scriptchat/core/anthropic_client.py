@@ -184,6 +184,25 @@ class AnthropicChatClient:
             pass
         return err
 
+    def _log_response_metadata(self, resp, data: dict, usage: dict) -> None:
+        """Log response metadata without message content."""
+        headers = getattr(resp, 'headers', None) or {}
+        interesting_headers = {
+            k: v for k, v in headers.items()
+            if any(x in k.lower() for x in ['x-request', 'anthropic', 'cf-ray', 'retry'])
+        }
+        metadata = {
+            "status": getattr(resp, 'status_code', None),
+            "model": data.get("model"),
+            "id": data.get("id"),
+            "type": data.get("type"),
+            "usage": usage,
+            "stop_reason": data.get("stop_reason"),
+            "headers": interesting_headers,
+        }
+        metadata = {k: v for k, v in metadata.items() if v}
+        logger.debug("Response metadata: %s", metadata)
+
     def _chat_single(self, url: str, payload: dict, convo: Conversation) -> str:
         """Non-streaming chat request."""
         timeout = getattr(self.config, "timeout", None) or self.timeout
@@ -218,11 +237,13 @@ class AnthropicChatClient:
         # Extract content from Anthropic response format
         content = self._extract_content(data)
 
-        # Update conversation
-        convo.messages.append(Message(role='assistant', content=content))
-
         # Track tokens
         usage = data.get("usage", {})
+
+        self._log_response_metadata(resp, data, usage)
+
+        # Update conversation
+        convo.messages.append(Message(role='assistant', content=content))
         convo.tokens_in += usage.get("input_tokens", 0)
         convo.tokens_out += usage.get("output_tokens", 0)
 
@@ -322,6 +343,10 @@ class AnthropicChatClient:
 
         convo.tokens_in += total_input_tokens
         convo.tokens_out += total_output_tokens
+
+        # Log response metadata from streaming
+        final_usage = {"input_tokens": total_input_tokens, "output_tokens": total_output_tokens}
+        self._log_response_metadata(resp, {}, final_usage)
 
         return assistant_msg.content
 

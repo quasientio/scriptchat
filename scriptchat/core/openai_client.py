@@ -184,6 +184,28 @@ class OpenAIChatClient:
             pass
         return err
 
+    def _log_response_metadata(self, resp: requests.Response, data: dict, usage: dict) -> None:
+        """Log response metadata without message content."""
+        # Filter interesting headers (rate limits, request IDs, timing)
+        headers = getattr(resp, 'headers', None) or {}
+        interesting_headers = {
+            k: v for k, v in headers.items()
+            if any(x in k.lower() for x in ['x-request', 'x-ratelimit', 'openai', 'cf-ray', 'x-envoy'])
+        }
+        # Build metadata dict excluding actual content
+        metadata = {
+            "status": getattr(resp, 'status_code', None),
+            "model": data.get("model"),
+            "id": data.get("id"),
+            "created": data.get("created"),
+            "usage": usage,
+            "system_fingerprint": data.get("system_fingerprint"),
+            "headers": interesting_headers,
+        }
+        # Remove None/empty values
+        metadata = {k: v for k, v in metadata.items() if v}
+        logger.debug("Response metadata: %s", metadata)
+
     def _chat_single(self, url: str, payload: dict, convo: Conversation) -> str:
         resp = self._post_with_temperature_retry(url, payload, stream=False, convo=convo)
         data = resp.json()
@@ -194,6 +216,8 @@ class OpenAIChatClient:
             # Responses API
             content = self._extract_responses_text(data)
             usage = data.get("usage", {})
+
+        self._log_response_metadata(resp, data, usage)
 
         # Update conversation
         convo.messages.append(Message(role='assistant', content=content))
@@ -261,6 +285,11 @@ class OpenAIChatClient:
             total_completion += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
         convo.tokens_in += total_prompt
         convo.tokens_out += total_completion
+
+        # Log response metadata from streaming (use last_data for model/id info)
+        final_usage = {"prompt_tokens": total_prompt, "completion_tokens": total_completion}
+        self._log_response_metadata(resp, last_data or {}, final_usage)
+
         return assistant_msg.content
 
     def _post_with_temperature_retry(self, url: str, payload: dict, stream: bool, convo: Conversation | None) -> requests.Response:

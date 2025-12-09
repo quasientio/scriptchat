@@ -950,6 +950,7 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             f"Tokens: {convo.tokens_in} in / {convo.tokens_out} out",
             f"Streaming: {'on' if cfg.enable_streaming else 'off'}",
             f"Timeout: {cfg.timeout}s",
+            f"Log level: {cfg.log_level}",
             f"Conversations dir: {cfg.conversations_dir} ({conv_count} convs)",
         ]
         if cfg.exports_dir:
