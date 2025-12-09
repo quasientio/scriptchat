@@ -597,3 +597,243 @@ def _update_children_parent_id(root: Path, old_parent_id: str, new_parent_id: st
         except Exception:
             # Skip any conversations we can't read/write
             continue
+
+
+def parse_chatgpt_export(
+    zip_path: Path,
+    default_provider_id: str = "openai"
+) -> list[tuple[Conversation, str, Optional[datetime]]]:
+    """Parse conversations from a ChatGPT export ZIP file without saving.
+
+    Args:
+        zip_path: Path to the ChatGPT export ZIP file
+        default_provider_id: Provider ID to use for imported conversations
+
+    Returns:
+        List of (Conversation, title, original_timestamp) tuples
+
+    Raises:
+        FileNotFoundError: If zip file doesn't exist
+        ValueError: If zip doesn't contain conversations.json
+    """
+    import zipfile
+
+    if not zip_path.exists():
+        raise FileNotFoundError(f"ZIP file not found: {zip_path}")
+
+    parsed = []
+
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        if 'conversations.json' not in zf.namelist():
+            raise ValueError("ZIP file does not contain conversations.json")
+
+        with zf.open('conversations.json') as f:
+            data = json.load(f)
+
+        for conv_data in data:
+            try:
+                result = _parse_chatgpt_conversation(conv_data, default_provider_id)
+                if result:
+                    convo, timestamp = result
+                    if convo.messages:
+                        title = conv_data.get('title', 'untitled')
+                        parsed.append((convo, title, timestamp))
+            except Exception:
+                # Skip conversations that fail to parse
+                continue
+
+    return parsed
+
+
+def import_chatgpt_export(
+    zip_path: Path,
+    root: Path,
+    default_provider_id: str = "openai"
+) -> list[Conversation]:
+    """Import conversations from a ChatGPT export ZIP file.
+
+    Args:
+        zip_path: Path to the ChatGPT export ZIP file
+        root: Conversations root directory to save imported conversations
+        default_provider_id: Provider ID to use for imported conversations
+
+    Returns:
+        List of imported Conversation objects
+
+    Raises:
+        FileNotFoundError: If zip file doesn't exist
+        ValueError: If zip doesn't contain conversations.json
+    """
+    parsed = parse_chatgpt_export(zip_path, default_provider_id)
+    imported = []
+
+    for convo, title, timestamp in parsed:
+        saved = save_conversation_with_timestamp(
+            root, convo, save_name=title, timestamp=timestamp
+        )
+        imported.append(saved)
+
+    return imported
+
+
+def save_conversation_with_timestamp(
+    root: Path,
+    convo: Conversation,
+    save_name: str,
+    timestamp: Optional[datetime] = None
+) -> Conversation:
+    """Save a new conversation with a specific timestamp in the directory name.
+
+    Args:
+        root: Conversations root directory
+        convo: Conversation to save (must have id=None)
+        save_name: Save name for the conversation
+        timestamp: Timestamp to use in directory name (defaults to now)
+
+    Returns:
+        Updated Conversation object with id set
+    """
+    dir_name = _create_dir_name(convo.model_name, save_name, timestamp=timestamp)
+    conv_dir = root / dir_name
+
+    # Handle collision: add numeric suffix if directory already exists
+    if conv_dir.exists():
+        base_name = dir_name
+        counter = 2
+        while conv_dir.exists():
+            dir_name = f"{base_name}-{counter}"
+            conv_dir = root / dir_name
+            counter += 1
+
+    conv_dir.mkdir(parents=True, exist_ok=True)
+    convo.id = dir_name
+
+    # Use save_conversation for the rest
+    return save_conversation(root, convo, system_prompt=convo.system_prompt)
+
+
+def _parse_chatgpt_conversation(data: dict, provider_id: str) -> Optional[tuple[Conversation, Optional[datetime]]]:
+    """Parse a single ChatGPT conversation from export data.
+
+    Args:
+        data: Conversation data from ChatGPT export
+        provider_id: Provider ID to assign
+
+    Returns:
+        Tuple of (Conversation, original_timestamp) or None if parsing fails
+    """
+    mapping = data.get('mapping', {})
+    if not mapping:
+        return None
+
+    # Walk the tree to get messages in order
+    messages = _walk_chatgpt_messages(mapping, data.get('current_node'))
+
+    # Extract model name
+    model_slug = data.get('default_model_slug', 'gpt-4')
+
+    # Extract system prompt if present
+    system_prompt = None
+    filtered_messages = []
+    for msg in messages:
+        if msg.role == 'system' and not system_prompt:
+            system_prompt = msg.content
+        elif msg.role in ('user', 'assistant'):
+            filtered_messages.append(msg)
+
+    # Get creation time for the conversation
+    create_time = data.get('create_time')
+    original_timestamp = None
+    if create_time:
+        original_timestamp = datetime.fromtimestamp(create_time)
+
+    convo = Conversation(
+        id=None,  # Will be set when saved
+        provider_id=provider_id,
+        model_name=model_slug,
+        temperature=0.7,  # Default, not stored in ChatGPT exports
+        system_prompt=system_prompt,
+        messages=filtered_messages,
+        tokens_in=0,  # Not available in export
+        tokens_out=0,
+        tags={"imported_from": "chatgpt"},
+    )
+    return convo, original_timestamp
+
+
+def _walk_chatgpt_messages(mapping: dict, current_node: Optional[str]) -> list[Message]:
+    """Walk the ChatGPT message tree and return messages in order.
+
+    Args:
+        mapping: The mapping dict from ChatGPT export
+        current_node: The current_node ID (end of conversation)
+
+    Returns:
+        List of Message objects in conversation order
+    """
+    if not current_node or current_node not in mapping:
+        return []
+
+    # Build path from root to current node by following parents
+    path = []
+    node_id = current_node
+    while node_id and node_id in mapping:
+        path.append(node_id)
+        parent = mapping[node_id].get('parent')
+        if parent == node_id:  # Prevent infinite loop
+            break
+        node_id = parent
+
+    # Reverse to get root-to-leaf order
+    path.reverse()
+
+    # Extract messages
+    messages = []
+    for node_id in path:
+        node = mapping[node_id]
+        msg_data = node.get('message')
+        if not msg_data:
+            continue
+
+        role = msg_data.get('author', {}).get('role')
+        if role not in ('user', 'assistant', 'system'):
+            continue  # Skip tool messages etc.
+
+        content = msg_data.get('content', {})
+        text = _extract_chatgpt_content(content)
+
+        if text:
+            messages.append(Message(role=role, content=text))
+
+    return messages
+
+
+def _extract_chatgpt_content(content: dict) -> str:
+    """Extract text content from ChatGPT message content.
+
+    Handles different content types: text, multimodal_text, code, etc.
+
+    Args:
+        content: Content dict from ChatGPT message
+
+    Returns:
+        Extracted text content
+    """
+    content_type = content.get('content_type', 'text')
+    parts = content.get('parts', [])
+
+    if not parts:
+        return ""
+
+    # For most types, parts is a list of strings or dicts
+    text_parts = []
+    for part in parts:
+        if isinstance(part, str):
+            text_parts.append(part)
+        elif isinstance(part, dict):
+            # Handle multimodal content - extract any text
+            if 'text' in part:
+                text_parts.append(part['text'])
+            # Skip images, files, etc.
+
+    return '\n'.join(text_parts)

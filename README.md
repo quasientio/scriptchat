@@ -169,6 +169,7 @@ All commands start with `/`:
 - `/export [format]` - Export the current conversation (formats: `md`, `json`, `html`; prompts if omitted). `json` includes full metadata; `md`/`html` are minimal, human-friendly transcripts.
 - `/export-all [format]` - Export all saved conversations in the given format.
 - `/import <path>` - Import a conversation exported as `md` or `json` into the conversations folder
+- `/import-chatgpt <path> [--dry-run]` - Import conversations from a ChatGPT export ZIP file. Use `--dry-run` to preview without saving.
 
 **Model & Settings**
 - `/model` - Switch to a different model (for the current provider)

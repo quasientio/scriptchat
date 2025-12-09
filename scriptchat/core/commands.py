@@ -89,6 +89,12 @@ COMMAND_REGISTRY = {
         "description": "Import a conversation from a JSON or Markdown file.",
         "examples": ["/import ~/backup/chat.json"],
     },
+    "import-chatgpt": {
+        "category": "Export/Import",
+        "usage": "/import-chatgpt [--dry-run] <zip-path>",
+        "description": "Import conversations from a ChatGPT export ZIP file. Use --dry-run to preview without saving.",
+        "examples": ["/import-chatgpt ~/downloads/chatgpt-export.zip", "/import-chatgpt --dry-run ~/downloads/export.zip"],
+    },
     # Model & Settings
     "model": {
         "category": "Model & Settings",
@@ -668,6 +674,57 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             needs_ui_interaction=True,
             command_type='import'
         )
+
+    elif command == 'import-chatgpt':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /import-chatgpt [--dry-run] <zip-path>")
+
+        # Parse args
+        args = parts[1].strip().split()
+        dry_run = False
+        zip_arg = None
+        for arg in args:
+            if arg == '--dry-run':
+                dry_run = True
+            elif not zip_arg:
+                zip_arg = arg
+
+        if not zip_arg:
+            return CommandResult(message="Usage: /import-chatgpt [--dry-run] <zip-path>")
+
+        zip_path = Path(zip_arg).expanduser()
+        if not zip_path.exists():
+            return CommandResult(message=f"File not found: {zip_path}")
+        if not zip_path.suffix.lower() == '.zip':
+            return CommandResult(message="File must be a ZIP file")
+        try:
+            from .conversations import import_chatgpt_export, parse_chatgpt_export
+
+            if dry_run:
+                # Preview mode - parse without saving
+                parsed = parse_chatgpt_export(zip_path, state.current_conversation.provider_id)
+                if not parsed:
+                    return CommandResult(message="No conversations found in export")
+                lines = [f"Dry run: {len(parsed)} conversation(s) would be imported:"]
+                for convo, title, timestamp in parsed:
+                    msg_count = len(convo.messages)
+                    date_str = timestamp.strftime("%Y-%m-%d") if timestamp else "unknown"
+                    lines.append(f"  - {title} ({convo.model_name}, {msg_count} messages, {date_str})")
+                return CommandResult(message="\n".join(lines))
+            else:
+                imported = import_chatgpt_export(
+                    zip_path,
+                    state.conversations_root,
+                    default_provider_id=state.current_conversation.provider_id
+                )
+                if not imported:
+                    return CommandResult(message="No conversations found in export")
+                titles = [c.id.split('_', 2)[-1] if c.id else 'untitled' for c in imported]
+                return CommandResult(message=f"Imported {len(imported)} conversation(s):\n" + "\n".join(f"  - {t}" for t in titles))
+        except ValueError as e:
+            return CommandResult(message=f"Import error: {e}")
+        except Exception as e:
+            return CommandResult(message=f"Import failed: {e}")
 
     elif command == 'timeout':
         if len(parts) < 2 or not parts[1].strip():

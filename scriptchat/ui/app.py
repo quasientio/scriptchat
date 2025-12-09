@@ -134,7 +134,7 @@ class ScriptChatUI:
 
         # Create command completer
         command_completer = WordCompleter(
-            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/history', '/export', '/export-all', '/import', '/stream', '/prompt', '/run', '/sleep', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/note', '/tag', '/untag', '/tags', '/set', '/vars', '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
+            ['/new', '/save', '/load', '/branch', '/rename', '/chats', '/send', '/history', '/export', '/export-all', '/import', '/import-chatgpt', '/stream', '/prompt', '/run', '/sleep', '/model', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/echo', '/note', '/tag', '/untag', '/tags', '/set', '/vars', '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
             ignore_case=True,
             sentence=True
         )

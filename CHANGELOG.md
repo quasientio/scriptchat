@@ -17,8 +17,20 @@ Types of changes:
 ## [Unreleased]
 
 ### Fixed
-- /retry and saving works now, removing last response and without user message duplicate
-- /undo and saving deletes stale message files, saved state matches in-memory state
+- `/retry` and saving works now, removing last response and without user message duplicate
+- `/undo` and saving deletes stale message files, saved state matches in-memory state
+- `/log-level` now working as intended (was only updating root logger)
+
+### Added
+- New openai compatible provider config entry for Fireworks AI
+- DEBUG-level logging statements with responses metadata -- content filtered out
+- Configurable `prompt_cache` setting for privacy for fireworks provider
+- `/import-chatgpt <path> [--dry-run]` to import conversations from a ChatGPT export
+  ZIP file. Use `--dry-run` to preview without saving.
+
+
+### Changed
+- Set store=false in openai Responses API to prevent server-side storing of conversations
 
 ## [0.2.0] - 2025-12-07
 

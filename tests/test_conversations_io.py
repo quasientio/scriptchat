@@ -21,10 +21,15 @@ from scriptchat.core.conversations import (
     Conversation,
     Message,
     branch_conversation,
+    import_chatgpt_export,
     list_conversations,
     load_conversation,
+    parse_chatgpt_export,
     rename_conversation,
     save_conversation,
+    _parse_chatgpt_conversation,
+    _walk_chatgpt_messages,
+    _extract_chatgpt_content,
 )
 
 
@@ -260,6 +265,332 @@ class ConversationIoTests(unittest.TestCase):
             # Verify loaded conversations maintain parent chain
             loaded_branch2 = load_conversation(root, branch2.id)
             self.assertEqual(loaded_branch2.parent_id, branch1.id)
+
+
+class ChatGptImportTests(unittest.TestCase):
+    def test_extract_chatgpt_content_text(self):
+        """Extract text content from simple text type."""
+        content = {"content_type": "text", "parts": ["Hello world"]}
+        result = _extract_chatgpt_content(content)
+        self.assertEqual(result, "Hello world")
+
+    def test_extract_chatgpt_content_multipart(self):
+        """Extract text from multiple parts."""
+        content = {"content_type": "text", "parts": ["Line 1", "Line 2"]}
+        result = _extract_chatgpt_content(content)
+        self.assertEqual(result, "Line 1\nLine 2")
+
+    def test_extract_chatgpt_content_empty(self):
+        """Handle empty parts gracefully."""
+        content = {"content_type": "text", "parts": []}
+        result = _extract_chatgpt_content(content)
+        self.assertEqual(result, "")
+
+    def test_extract_chatgpt_content_dict_parts(self):
+        """Extract text from dict parts (multimodal)."""
+        content = {
+            "content_type": "multimodal_text",
+            "parts": [{"text": "Caption for image"}]
+        }
+        result = _extract_chatgpt_content(content)
+        self.assertEqual(result, "Caption for image")
+
+    def test_walk_chatgpt_messages_simple(self):
+        """Walk a simple linear conversation."""
+        mapping = {
+            "root": {"id": "root", "message": None, "parent": None, "children": ["msg1"]},
+            "msg1": {
+                "id": "msg1",
+                "message": {
+                    "author": {"role": "user"},
+                    "content": {"content_type": "text", "parts": ["Hello"]}
+                },
+                "parent": "root",
+                "children": ["msg2"]
+            },
+            "msg2": {
+                "id": "msg2",
+                "message": {
+                    "author": {"role": "assistant"},
+                    "content": {"content_type": "text", "parts": ["Hi there!"]}
+                },
+                "parent": "msg1",
+                "children": []
+            }
+        }
+        messages = _walk_chatgpt_messages(mapping, "msg2")
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[0].role, "user")
+        self.assertEqual(messages[0].content, "Hello")
+        self.assertEqual(messages[1].role, "assistant")
+        self.assertEqual(messages[1].content, "Hi there!")
+
+    def test_walk_chatgpt_messages_skips_tool_role(self):
+        """Tool messages should be skipped."""
+        mapping = {
+            "root": {"id": "root", "message": None, "parent": None, "children": ["msg1"]},
+            "msg1": {
+                "id": "msg1",
+                "message": {
+                    "author": {"role": "user"},
+                    "content": {"content_type": "text", "parts": ["Search for X"]}
+                },
+                "parent": "root",
+                "children": ["msg2"]
+            },
+            "msg2": {
+                "id": "msg2",
+                "message": {
+                    "author": {"role": "tool"},
+                    "content": {"content_type": "text", "parts": ["Tool result"]}
+                },
+                "parent": "msg1",
+                "children": ["msg3"]
+            },
+            "msg3": {
+                "id": "msg3",
+                "message": {
+                    "author": {"role": "assistant"},
+                    "content": {"content_type": "text", "parts": ["Based on search..."]}
+                },
+                "parent": "msg2",
+                "children": []
+            }
+        }
+        messages = _walk_chatgpt_messages(mapping, "msg3")
+        self.assertEqual(len(messages), 2)  # user and assistant only
+        self.assertEqual(messages[0].role, "user")
+        self.assertEqual(messages[1].role, "assistant")
+
+    def test_parse_chatgpt_conversation(self):
+        """Parse a complete ChatGPT conversation structure."""
+        data = {
+            "title": "Test Conversation",
+            "default_model_slug": "gpt-4o",
+            "create_time": 1234567890.0,
+            "current_node": "msg2",
+            "mapping": {
+                "root": {"id": "root", "message": None, "parent": None, "children": ["msg1"]},
+                "msg1": {
+                    "id": "msg1",
+                    "message": {
+                        "author": {"role": "user"},
+                        "content": {"content_type": "text", "parts": ["Question?"]}
+                    },
+                    "parent": "root",
+                    "children": ["msg2"]
+                },
+                "msg2": {
+                    "id": "msg2",
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "content": {"content_type": "text", "parts": ["Answer!"]}
+                    },
+                    "parent": "msg1",
+                    "children": []
+                }
+            }
+        }
+        result = _parse_chatgpt_conversation(data, "openai")
+        self.assertIsNotNone(result)
+        convo, timestamp = result
+        self.assertEqual(convo.model_name, "gpt-4o")
+        self.assertEqual(convo.provider_id, "openai")
+        self.assertEqual(len(convo.messages), 2)
+        self.assertEqual(convo.messages[0].content, "Question?")
+        self.assertEqual(convo.messages[1].content, "Answer!")
+        self.assertEqual(convo.tags.get("imported_from"), "chatgpt")
+        self.assertIsNotNone(timestamp)
+        self.assertEqual(timestamp.year, 2009)  # 1234567890 = 2009-02-13
+
+    def test_parse_chatgpt_conversation_with_system_prompt(self):
+        """System prompt should be extracted separately."""
+        data = {
+            "title": "Test",
+            "default_model_slug": "gpt-4",
+            "current_node": "msg2",
+            "mapping": {
+                "root": {"id": "root", "message": None, "parent": None, "children": ["sys"]},
+                "sys": {
+                    "id": "sys",
+                    "message": {
+                        "author": {"role": "system"},
+                        "content": {"content_type": "text", "parts": ["You are helpful."]}
+                    },
+                    "parent": "root",
+                    "children": ["msg1"]
+                },
+                "msg1": {
+                    "id": "msg1",
+                    "message": {
+                        "author": {"role": "user"},
+                        "content": {"content_type": "text", "parts": ["Hi"]}
+                    },
+                    "parent": "sys",
+                    "children": ["msg2"]
+                },
+                "msg2": {
+                    "id": "msg2",
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "content": {"content_type": "text", "parts": ["Hello!"]}
+                    },
+                    "parent": "msg1",
+                    "children": []
+                }
+            }
+        }
+        result = _parse_chatgpt_conversation(data, "openai")
+        convo, timestamp = result
+        self.assertEqual(convo.system_prompt, "You are helpful.")
+        self.assertEqual(len(convo.messages), 2)  # Only user and assistant
+
+    def test_import_chatgpt_export_zip(self):
+        """Test importing from a ZIP file."""
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+
+            # Create a mock ChatGPT export ZIP
+            zip_path = root / "export.zip"
+            conversations_data = [{
+                "title": "Test Chat",
+                "default_model_slug": "gpt-4",
+                "current_node": "msg2",
+                "mapping": {
+                    "root": {"id": "root", "message": None, "parent": None, "children": ["msg1"]},
+                    "msg1": {
+                        "id": "msg1",
+                        "message": {
+                            "author": {"role": "user"},
+                            "content": {"content_type": "text", "parts": ["Hello"]}
+                        },
+                        "parent": "root",
+                        "children": ["msg2"]
+                    },
+                    "msg2": {
+                        "id": "msg2",
+                        "message": {
+                            "author": {"role": "assistant"},
+                            "content": {"content_type": "text", "parts": ["Hi!"]}
+                        },
+                        "parent": "msg1",
+                        "children": []
+                    }
+                }
+            }]
+
+            with zipfile.ZipFile(zip_path, 'w') as zf:
+                zf.writestr('conversations.json', json.dumps(conversations_data))
+
+            # Import
+            convos_dir = root / "conversations"
+            convos_dir.mkdir()
+            imported = import_chatgpt_export(zip_path, convos_dir, "openai")
+
+            self.assertEqual(len(imported), 1)
+            self.assertEqual(imported[0].model_name, "gpt-4")
+            self.assertEqual(len(imported[0].messages), 2)
+
+            # Verify it was saved
+            saved_dirs = list(convos_dir.iterdir())
+            self.assertEqual(len(saved_dirs), 1)
+
+    def test_import_chatgpt_export_missing_conversations_json(self):
+        """Raise error if ZIP doesn't contain conversations.json."""
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            zip_path = root / "bad.zip"
+
+            with zipfile.ZipFile(zip_path, 'w') as zf:
+                zf.writestr('other.json', '{}')
+
+            with self.assertRaises(ValueError) as ctx:
+                import_chatgpt_export(zip_path, root, "openai")
+
+            self.assertIn("conversations.json", str(ctx.exception))
+
+    def test_parse_chatgpt_export_dry_run(self):
+        """parse_chatgpt_export returns parsed conversations without saving."""
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+
+            # Create a mock ChatGPT export ZIP
+            zip_path = root / "export.zip"
+            conversations_data = [
+                {
+                    "title": "First Chat",
+                    "default_model_slug": "gpt-4",
+                    "current_node": "msg2",
+                    "mapping": {
+                        "root": {"id": "root", "message": None, "parent": None, "children": ["msg1"]},
+                        "msg1": {
+                            "id": "msg1",
+                            "message": {
+                                "author": {"role": "user"},
+                                "content": {"content_type": "text", "parts": ["Hello"]}
+                            },
+                            "parent": "root",
+                            "children": ["msg2"]
+                        },
+                        "msg2": {
+                            "id": "msg2",
+                            "message": {
+                                "author": {"role": "assistant"},
+                                "content": {"content_type": "text", "parts": ["Hi!"]}
+                            },
+                            "parent": "msg1",
+                            "children": []
+                        }
+                    }
+                },
+                {
+                    "title": "Second Chat",
+                    "default_model_slug": "o3",
+                    "current_node": "msg2",
+                    "mapping": {
+                        "root": {"id": "root", "message": None, "parent": None, "children": ["msg1"]},
+                        "msg1": {
+                            "id": "msg1",
+                            "message": {
+                                "author": {"role": "user"},
+                                "content": {"content_type": "text", "parts": ["Question"]}
+                            },
+                            "parent": "root",
+                            "children": ["msg2"]
+                        },
+                        "msg2": {
+                            "id": "msg2",
+                            "message": {
+                                "author": {"role": "assistant"},
+                                "content": {"content_type": "text", "parts": ["Answer"]}
+                            },
+                            "parent": "msg1",
+                            "children": []
+                        }
+                    }
+                }
+            ]
+
+            with zipfile.ZipFile(zip_path, 'w') as zf:
+                zf.writestr('conversations.json', json.dumps(conversations_data))
+
+            # Parse without saving
+            parsed = parse_chatgpt_export(zip_path, "openai")
+
+            self.assertEqual(len(parsed), 2)
+            convo1, title1, ts1 = parsed[0]
+            convo2, title2, ts2 = parsed[1]
+            self.assertEqual(title1, "First Chat")
+            self.assertEqual(convo1.model_name, "gpt-4")
+            self.assertEqual(title2, "Second Chat")
+            self.assertEqual(convo2.model_name, "o3")
+
+            # Verify nothing was saved
+            convos_dir = root / "conversations"
+            self.assertFalse(convos_dir.exists())
 
 
 if __name__ == "__main__":
