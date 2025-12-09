@@ -641,5 +641,373 @@ models = "gpt-4o"
         self.assertIn("/timeout", str(ctx.exception))
 
 
+    def test_api_format_responses_uses_responses_endpoint_with_store_false(self):
+        """When api_format='responses', should use /v1/responses with store=false."""
+        provider = ProviderConfig(
+            id="fireworks",
+            type="openai-compatible",
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="test-model",
+            api_format="responses",
+        )
+        cfg = Config(
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="fireworks",
+            default_model="test-model",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class CaptureSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json})
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "output_text": ["response"],
+                            "usage": {"input_tokens": 1, "output_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="fireworks",
+            model_name="test-model",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = CaptureSession()
+
+        client.chat(convo, "hello")
+
+        self.assertTrue(client.session.calls[0]["url"].endswith("/v1/responses"))
+        self.assertIn("store", client.session.calls[0]["json"])
+        self.assertEqual(client.session.calls[0]["json"]["store"], False)
+        self.assertIn("input", client.session.calls[0]["json"])
+
+    def test_api_format_chat_uses_chat_completions_endpoint(self):
+        """When api_format='chat', should use /v1/chat/completions without store."""
+        provider = ProviderConfig(
+            id="fireworks",
+            type="openai-compatible",
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="test-model",
+            api_format="chat",
+        )
+        cfg = Config(
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="fireworks",
+            default_model="test-model",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class CaptureSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json})
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "choices": [{"message": {"content": "response"}}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="fireworks",
+            model_name="test-model",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = CaptureSession()
+
+        client.chat(convo, "hello")
+
+        self.assertTrue(client.session.calls[0]["url"].endswith("/v1/chat/completions"))
+        self.assertNotIn("store", client.session.calls[0]["json"])
+        self.assertIn("messages", client.session.calls[0]["json"])
+
+    def test_api_format_unset_non_openai_uses_chat_completions(self):
+        """When api_format is not set and id != 'openai', should use chat completions."""
+        provider = ProviderConfig(
+            id="deepseek",
+            type="openai-compatible",
+            api_url="https://api.deepseek.com",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="deepseek-chat",
+            # api_format not set
+        )
+        cfg = Config(
+            api_url="https://api.deepseek.com",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="deepseek",
+            default_model="deepseek-chat",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class CaptureSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json})
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "choices": [{"message": {"content": "response"}}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="deepseek",
+            model_name="deepseek-chat",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = CaptureSession()
+
+        client.chat(convo, "hello")
+
+        self.assertTrue(client.session.calls[0]["url"].endswith("/v1/chat/completions"))
+        self.assertNotIn("store", client.session.calls[0]["json"])
+
+    def test_prompt_cache_false_adds_prompt_cache_max_len_zero(self):
+        """When prompt_cache=false, should add prompt_cache_max_len=0 to payload."""
+        provider = ProviderConfig(
+            id="fireworks",
+            type="openai-compatible",
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="test-model",
+            prompt_cache=False,
+        )
+        cfg = Config(
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="fireworks",
+            default_model="test-model",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class CaptureSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json})
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "choices": [{"message": {"content": "response"}}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="fireworks",
+            model_name="test-model",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = CaptureSession()
+
+        client.chat(convo, "hello")
+
+        self.assertIn("prompt_cache_max_len", client.session.calls[0]["json"])
+        self.assertEqual(client.session.calls[0]["json"]["prompt_cache_max_len"], 0)
+
+    def test_prompt_cache_true_default_does_not_add_prompt_cache_max_len(self):
+        """When prompt_cache=true (default), should not add prompt_cache_max_len."""
+        provider = ProviderConfig(
+            id="fireworks",
+            type="openai-compatible",
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="test-model",
+            # prompt_cache defaults to True
+        )
+        cfg = Config(
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="fireworks",
+            default_model="test-model",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class CaptureSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                self.calls.append({"url": url, "json": json})
+
+                class Resp:
+                    status_code = 200
+                    reason = "OK"
+                    text = "{}"
+
+                    def raise_for_status(self_inner):
+                        return None
+
+                    def json(self_inner):
+                        return {
+                            "choices": [{"message": {"content": "response"}}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                        }
+
+                    def iter_lines(self_inner):
+                        return iter([])
+
+                return Resp()
+
+        convo = Conversation(
+            id=None,
+            provider_id="fireworks",
+            model_name="test-model",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = CaptureSession()
+
+        client.chat(convo, "hello")
+
+        self.assertNotIn("prompt_cache_max_len", client.session.calls[0]["json"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -64,11 +64,13 @@ models = [
 ]
 
 # OpenAI-compatible provider (OpenAI)
+# Uses Responses API by default (store=false) when id="openai"
 [[providers]]
 id = "openai"
 type = "openai-compatible"
 api_url = "https://api.openai.com"
 # api_key = "sk-..."  # Or set OPENAI_API_KEY env var
+# api_format = "responses"  # Default for id="openai"; use "chat" for Chat Completions API
 models = [
   { name = "gpt-5-mini", reasoning_levels = ["minimal", "medium", "high"], reasoning_default = "medium" },
   { name = "gpt-5.1-mini", reasoning_levels = ["none", "low", "medium", "high"], reasoning_default = "none" }

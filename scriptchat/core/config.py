@@ -43,6 +43,8 @@ class ProviderConfig:
     streaming: bool = True
     headers: dict = None
     default_model: Optional[str] = None
+    api_format: Optional[str] = None  # "responses" or "chat" (default: "responses" for openai, "chat" otherwise)
+    prompt_cache: bool = True  # Set to false to disable prompt caching (adds prompt_cache_max_len=0)
 
 
 @dataclass

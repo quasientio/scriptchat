@@ -75,7 +75,11 @@ class OpenAIChatClient:
         if convo.provider_id != self.provider.id:
             raise ValueError(f"Provider mismatch: expected {self.provider.id} got {convo.provider_id}")
 
-        use_responses_api = self.provider.id == "openai"
+        # Use Responses API if explicitly configured, or default for "openai" provider
+        use_responses_api = (
+            self.provider.api_format == "responses" or
+            (self.provider.api_format is None and self.provider.id == "openai")
+        )
 
         # Build messages array, filtering out display-only messages
         messages_payload = []
@@ -94,6 +98,7 @@ class OpenAIChatClient:
                 "input": messages_payload,
                 "stream": streaming and self.provider.streaming,
                 "temperature": convo.temperature,
+                "store": False,
             }
             if getattr(convo, "reasoning_level", None):
                 payload["reasoning"] = {"effort": convo.reasoning_level}
@@ -108,6 +113,10 @@ class OpenAIChatClient:
             if getattr(convo, "reasoning_level", None):
                 payload["reasoning"] = {"effort": convo.reasoning_level}
             url = f"{self.provider.api_url.rstrip('/')}/v1/chat/completions"
+
+        # Disable prompt caching if configured (for privacy)
+        if not self.provider.prompt_cache:
+            payload["prompt_cache_max_len"] = 0
 
         if streaming:
             return self._chat_stream(url, payload, convo, on_chunk)
