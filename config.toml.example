@@ -77,13 +77,28 @@ models = [
 ]
 # headers = { OpenAI-Organization = "org_id" }
 
-# OpenAI-compatible provider (DeepSeek)
+# OpenAI-compatible provider (DeepSeek direct - no zero retention policy)
 [[providers]]
 id = "deepseek"
 type = "openai-compatible"
 api_url = "https://api.deepseek.com"
 # api_key = "sk-..."  # Or set DEEPSEEK_API_KEY env var
 models = "deepseek-chat,deepseek-reasoner"
+
+# Fireworks AI - zero data retention by default
+# Use prompt_cache = false to also disable volatile memory caching
+[[providers]]
+id = "fireworks"
+type = "openai-compatible"
+api_url = "https://api.fireworks.ai/inference"
+# api_format = "responses"  # Optional: use Responses API with store=false (only some models)
+prompt_cache = false  # Disable prompt caching for full privacy (no data in volatile memory)
+# api_key = "..."  # Or set FIREWORKS_API_KEY env var
+models = [
+  { name = "accounts/fireworks/models/gpt-oss-120b" },
+  { name = "accounts/fireworks/models/deepseek-v3" },
+  { name = "accounts/fireworks/models/deepseek-r1" }
+]
 
 # Anthropic Claude provider
 [[providers]]
