@@ -20,6 +20,7 @@ Types of changes:
 - `/retry` and saving works now, removing last response and without user message duplicate
 - `/undo` and saving deletes stale message files, saved state matches in-memory state
 - `/log-level` now working as intended (was only updating root logger)
+- UI status messages no longer sent to LLM (was using `role='system'`, now uses `role='status'`)
 
 ### Added
 - New openai compatible provider config entry for Fireworks AI

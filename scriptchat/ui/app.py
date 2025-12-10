@@ -542,6 +542,12 @@ class ScriptChatUI:
             elif msg.role == 'note':
                 # Note messages in magenta with [note] prefix
                 lines.append(f"{MAGENTA}[note]{RESET} {msg.content}")
+            elif msg.role == 'status':
+                # UI status messages in gray (not sent to LLM, not saved)
+                content = msg.content
+                is_error = content.strip().lower().startswith("error")
+                color = RED if is_error else GRAY
+                lines.append(f"{color}[system] {content}{RESET}")
 
         return '\n'.join(lines)
 
@@ -559,14 +565,16 @@ class ScriptChatUI:
         self.app.invalidate()
 
     def add_system_message(self, text: str):
-        """Add a system message to the conversation display.
+        """Add a UI status message to the conversation display.
+
+        These are display-only messages (not sent to LLM, not saved).
 
         Args:
-            text: System message text
+            text: Status message text
         """
         from ..core.conversations import Message
         self.state.current_conversation.messages.append(
-            Message(role='system', content=text)
+            Message(role='status', content=text)
         )
         self.update_conversation_display()
 

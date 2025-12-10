@@ -85,7 +85,7 @@ class OpenAIChatClient:
         messages_payload = []
         history = expanded_history if expanded_history is not None else convo.messages
         for msg in history:
-            if msg.role not in ('echo', 'note'):
+            if msg.role not in ('echo', 'note', 'status'):
                 messages_payload.append({
                     "role": msg.role,
                     "content": msg.content

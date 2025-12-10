@@ -453,7 +453,8 @@ def save_conversation(
     msg_num = 1
     for message in convo.messages:
         # Skip system messages (not saved to files in minimal implementation)
-        if message.role == 'system':
+        # Skip status/echo messages (display-only, not persisted)
+        if message.role in ('system', 'status', 'echo'):
             continue
 
         # Determine suffix based on role

@@ -100,7 +100,7 @@ class AnthropicChatClient:
                     "role": msg.role,
                     "content": msg.content
                 })
-            # Skip 'echo', 'note', and other non-chat roles
+            # Skip 'echo', 'note', 'status', and other non-chat roles
 
         messages_payload.append({"role": "user", "content": new_user_message})
 
