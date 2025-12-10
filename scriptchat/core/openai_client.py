@@ -256,7 +256,7 @@ class OpenAIChatClient:
             if "choices" in data:
                 delta = data.get("choices", [{}])[0].get("delta", {})
                 content_piece = delta.get("content", "")
-                usage = data.get("usage", {})
+                usage = data.get("usage") or {}
                 # Chat Completions API uses prompt_tokens/completion_tokens
                 total_prompt += usage.get("prompt_tokens", 0)
                 total_completion += usage.get("completion_tokens", 0)
@@ -265,7 +265,7 @@ class OpenAIChatClient:
             else:
                 # Responses API streaming - uses input_tokens/output_tokens
                 content_piece = self._extract_responses_text(data)
-                usage = data.get("usage", {})
+                usage = data.get("usage") or {}
                 total_prompt += usage.get("input_tokens", 0)
                 total_completion += usage.get("output_tokens", 0)
                 if usage:
