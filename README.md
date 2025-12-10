@@ -159,7 +159,7 @@ All commands start with `/`:
 **Conversation**
 - `/new` - Start a new conversation
 - `/save` - Save the current conversation
-- `/load [--archived] [index|name]` - Load a saved conversation by index or name. Use `--archived` to load from archive.
+- `/load [--archived] [name]` - Load a saved conversation. Use `--archived` to load from archive. Without args, shows interactive selection menu.
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats [--archived|--all]` - List saved conversations. Use `--archived` for archived only, `--all` for both.
@@ -174,9 +174,9 @@ All commands start with `/`:
 - `/import-chatgpt <path> [--dry-run]` - Import conversations from a ChatGPT export ZIP file. Use `--dry-run` to preview without saving.
 
 **Model & Settings**
-- `/model` - Switch to a different model (for the current provider)
+- `/model [provider/name]` - Switch model. Without args, shows interactive selection menu. With args, switches directly (e.g., `/model ollama/llama3`).
 - `/temp` - Change the temperature setting
-- `/reason [level]` - Show or set the reasoning level (`low`, `medium`, `high`, `max`). For Anthropic Claude, these map to thinking budgets (4K, 16K, 32K, 55K tokens). `/reason` alone lists available levels.
+- `/reason [level]` - Set reasoning level (`low`, `medium`, `high`, `max`). Without args, shows interactive selection menu. For Anthropic Claude, these map to thinking budgets (4K, 16K, 32K, 55K tokens).
 - `/thinking [tokens]` - Set exact thinking budget in tokens for Anthropic Claude (1024-128000). Use `/thinking off` to disable. Overrides `/reason` presets.
 - `/timeout <seconds|0|off>` - Set the request timeout in seconds, or disable with `0` or `off`
 - `/stream [on|off]` - Toggle or set streaming of assistant responses

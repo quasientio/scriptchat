@@ -32,9 +32,12 @@ Types of changes:
   stored in `.archive/` subdirectory.
 - `/chats --archived` and `/chats --all` flags to list archived or all conversations
 - `/load --archived` flag to load conversations from the archive
-
+- Interactive selection menu for `/model`, `/load`, `/reason`, and `/log-level`
+  commands. Navigate with arrow keys or j/k, select with Enter/Tab, cancel with Escape.
 
 ### Changed
+- `/model`, `/load`, `/reason`, `/log-level` no longer accept index arguments;
+  use the interactive menu or pass a name directly (e.g., `/model ollama/llama3`)
 - Set store=false in openai Responses API to prevent server-side storing of conversations
 
 ## [0.2.0] - 2025-12-07

@@ -140,14 +140,28 @@ class CommandHandlers:
                 self.app.update_conversation_display()
             elif result.command_type == 'files':
                 pass
+            elif result.command_type == 'reason':
+                self.handle_reason(args)
+            elif result.command_type == 'log-level':
+                self.handle_log_level(args)
 
     def handle_model(self, args: str = ""):
+        # If name provided directly, apply it (for scripting)
         if args.strip():
-            self._model_callback(args.strip())
+            arg = args.strip()
+            if '/' in arg:
+                provider_id, model_name = arg.split('/', 1)
+                self._apply_model_selection(provider_id.strip(), model_name.strip())
+            else:
+                # Just model name - use current provider
+                self._apply_model_selection(
+                    self.app.state.current_conversation.provider_id,
+                    arg
+                )
             return
+
+        # Build options list for selection menu
         options = []
-        lines = ["Available models (all providers):"]
-        idx = 0
         for provider in self.app.state.config.providers:
             names = [m.name for m in (provider.models or [])]
             if not names and provider.default_model:
@@ -157,36 +171,26 @@ class CommandHandlers:
                 models = provider.models or []
                 for m in models:
                     if m.name == name and m.contexts:
-                        ctx_display = f" (contexts: {', '.join(str(c) for c in m.contexts)})"
+                        ctx_display = f" (ctx: {', '.join(str(c) for c in m.contexts)})"
                         break
-                lines.append(f"  [{idx}] {provider.id}/{name}{ctx_display}")
-                options.append((provider.id, name))
-                idx += 1
-        if not options:
-            lines.append("  (no models listed; enter provider/model manually)")
-        self.last_model_options = options
-        self.app.add_system_message('\n'.join(lines))
-        self.app.prompt_message = "Enter model index or provider/model:"
-        self.app.prompt_for_input(self._model_callback)
+                display = f"{provider.id}/{name}{ctx_display}"
+                options.append(((provider.id, name), display))
 
-    def _model_callback(self, index_str: str):
-        try:
-            index = int(index_str)
-            if 0 <= index < len(self.last_model_options):
-                provider_id, model_name = self.last_model_options[index]
-                self._apply_model_selection(provider_id, model_name)
-                return
-        except ValueError:
-            pass
-        if '/' in index_str:
-            provider_id, model_name = index_str.split('/', 1)
-            self._apply_model_selection(provider_id.strip(), model_name.strip())
+        if not options:
+            self.app.add_system_message("No models configured")
             return
-        model_name = index_str.strip()
-        if model_name:
-            self._apply_model_selection(self.app.state.current_conversation.provider_id, model_name)
-        else:
-            self.app.add_system_message("Invalid input. Enter model index or provider/model.")
+
+        # Show selection menu
+        self.app.selection_menu.show(
+            items=options,
+            on_select=self._on_model_selected,
+            on_cancel=lambda: self.app.add_system_message("Model selection cancelled")
+        )
+
+    def _on_model_selected(self, value: tuple):
+        """Handle model selection from menu."""
+        provider_id, model_name = value
+        self._apply_model_selection(provider_id, model_name)
 
     def _apply_model_selection(self, provider_id: str, model_name: str):
         try:
@@ -253,54 +257,58 @@ class CommandHandlers:
             self.app.add_system_message(f"No {label} conversations found")
             return
         if args:
-            self._load_callback(args, from_archived=from_archived)
+            self._load_by_name(args, from_archived=from_archived)
             return
-        lines = format_conversation_list(summaries)
-        self.app.add_system_message('\n'.join(lines))
-        self.app.prompt_message = "Enter conversation index:"
+
+        # Build options for selection menu
+        options = []
+        for summary in summaries:
+            meta_parts = [summary.model_name]
+            if summary.last_modified:
+                meta_parts.append(summary.last_modified.split("T", 1)[0])
+            display = f"{summary.display_name} ({' - '.join(meta_parts)})"
+            options.append((summary.dir_name, display))
+
         # Store from_archived state for callback
         self._load_from_archived = from_archived
-        self.app.prompt_for_input(self._load_callback_wrapper)
 
-    def _load_callback_wrapper(self, index_or_name: str):
-        """Wrapper to pass archived state to callback."""
+        # Show selection menu
+        self.app.selection_menu.show(
+            items=options,
+            on_select=self._on_load_selected,
+            on_cancel=lambda: self.app.add_system_message("Load cancelled")
+        )
+
+    def _on_load_selected(self, dir_name: str):
+        """Handle conversation selection from menu."""
         from_archived = getattr(self, '_load_from_archived', False)
-        self._load_callback(index_or_name, from_archived=from_archived)
+        self._load_by_name(dir_name, from_archived=from_archived)
 
-    def _load_callback(self, index_or_name: str, from_archived: bool = False):
+    def _load_by_name(self, name: str, from_archived: bool = False):
         from ..core.conversations import ARCHIVE_DIR
 
         filter_mode = "archived" if from_archived else "active"
         summaries = list_conversations(self.app.state.conversations_root, filter=filter_mode)
-        target = None
-        display = None
 
-        # Try parsing as index first
-        try:
-            index = int(index_or_name)
-            if 0 <= index < len(summaries):
-                target = summaries[index].dir_name
-                display = summaries[index].display_name
-        except ValueError:
-            # Try matching by name (display_name or dir_name)
-            name = index_or_name.strip()
-            matches = [
-                s for s in summaries
-                if s.display_name == name or s.dir_name == name
-                or name in s.display_name or name in s.dir_name
-            ]
-            if len(matches) == 1:
-                target = matches[0].dir_name
-                display = matches[0].display_name
-            elif len(matches) > 1:
-                self.app.add_system_message(
-                    f"Multiple conversations match '{name}'. Use index or full name."
-                )
-                return
+        # Match by name (display_name or dir_name)
+        name = name.strip()
+        matches = [
+            s for s in summaries
+            if s.display_name == name or s.dir_name == name
+            or name in s.display_name or name in s.dir_name
+        ]
 
-        if target is None:
-            self.app.add_system_message(f"Conversation not found: {index_or_name}")
+        if len(matches) == 0:
+            self.app.add_system_message(f"Conversation not found: {name}")
             return
+        if len(matches) > 1:
+            self.app.add_system_message(
+                f"Multiple conversations match '{name}'. Be more specific."
+            )
+            return
+
+        target = matches[0].dir_name
+        display = matches[0].display_name
 
         # Determine load directory
         if from_archived:
@@ -423,6 +431,88 @@ class CommandHandlers:
             return
         lines = format_conversation_list(summaries)
         self.app.add_system_message('\n'.join(lines))
+
+    def handle_reason(self, args: str = ""):
+        """Handle /reason command with selection menu."""
+        from ..core.commands import set_reasoning_level
+        from ..core.config import reasoning_levels_for_model
+
+        if args.strip():
+            # Direct argument provided - use existing logic
+            result = set_reasoning_level(self.app.state, args.strip())
+            self.app.add_system_message(result.message)
+            return
+
+        # Check if reasoning is available for current model
+        available = reasoning_levels_for_model(
+            self.app.state.config,
+            self.app.state.current_conversation.provider_id,
+            self.app.state.current_conversation.model_name
+        )
+
+        if not available:
+            self.app.add_system_message("Reasoning controls not available for this model/provider.")
+            return
+
+        # Build options
+        options = [(level, level.capitalize()) for level in available]
+        options.append(("clear", "Clear (provider default)"))
+
+        self.app.selection_menu.show(
+            items=options,
+            on_select=self._on_reason_selected,
+            on_cancel=lambda: self.app.add_system_message("Reason selection cancelled")
+        )
+
+    def _on_reason_selected(self, level: str):
+        """Handle reason level selection from menu."""
+        from ..core.commands import set_reasoning_level
+        result = set_reasoning_level(self.app.state, level)
+        self.app.add_system_message(result.message)
+
+    def handle_log_level(self, args: str = ""):
+        """Handle /log-level command with selection menu."""
+        if args.strip():
+            # Direct argument provided
+            level = args.strip().upper()
+            if level == "WARN":
+                level = "WARNING"
+            if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+                self.app.add_system_message("Invalid level. Options: debug, info, warn, error, critical")
+                return
+            import logging
+            root_logger = logging.getLogger()
+            root_logger.setLevel(level)
+            for handler in root_logger.handlers:
+                handler.setLevel(level)
+            self.app.state.config.log_level = level
+            self.app.add_system_message(f"Log level set to {level}")
+            return
+
+        # Show selection menu
+        levels = [
+            ("DEBUG", "Debug - Detailed diagnostic information"),
+            ("INFO", "Info - General operational messages"),
+            ("WARNING", "Warning - Potential issues"),
+            ("ERROR", "Error - Error conditions"),
+            ("CRITICAL", "Critical - Severe errors"),
+        ]
+
+        self.app.selection_menu.show(
+            items=levels,
+            on_select=self._on_log_level_selected,
+            on_cancel=lambda: self.app.add_system_message("Log level selection cancelled")
+        )
+
+    def _on_log_level_selected(self, level: str):
+        """Handle log level selection from menu."""
+        import logging
+        root_logger = logging.getLogger()
+        root_logger.setLevel(level)
+        for handler in root_logger.handlers:
+            handler.setLevel(level)
+        self.app.state.config.log_level = level
+        self.app.add_system_message(f"Log level set to {level}")
 
     def handle_archive(self, args: str):
         """Archive conversations by index, name, range, or tag filter."""

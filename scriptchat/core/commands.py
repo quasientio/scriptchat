@@ -42,9 +42,9 @@ COMMAND_REGISTRY = {
     },
     "load": {
         "category": "Conversation",
-        "usage": "/load [--archived] [index|name]",
-        "description": "Load a saved conversation by index or name. Use --archived to load from archive.",
-        "examples": ["/load", "/load 0", "/load my-chat", "/load --archived 0"],
+        "usage": "/load [--archived] [name]",
+        "description": "Load a saved conversation. Without args, shows interactive selection menu. Use --archived to load from archive.",
+        "examples": ["/load", "/load my-chat", "/load --archived my-chat"],
     },
     "branch": {
         "category": "Conversation",
@@ -110,9 +110,9 @@ COMMAND_REGISTRY = {
     # Model & Settings
     "model": {
         "category": "Model & Settings",
-        "usage": "/model [index|provider/model]",
-        "description": "Switch to a different model or list available models.",
-        "examples": ["/model", "/model 2", "/model ollama/llama3"],
+        "usage": "/model [provider/name]",
+        "description": "Switch model. Without args, shows interactive selection menu.",
+        "examples": ["/model", "/model ollama/llama3", "/model llama3"],
     },
     "temp": {
         "category": "Model & Settings",
@@ -123,7 +123,7 @@ COMMAND_REGISTRY = {
     "reason": {
         "category": "Model & Settings",
         "usage": "/reason [level]",
-        "description": "Set reasoning level: low, medium, high, max (presets for thinking budget).",
+        "description": "Set reasoning level. Without args, shows interactive selection menu. Levels: low, medium, high, max.",
         "examples": ["/reason", "/reason low", "/reason high", "/reason max"],
     },
     "thinking": {
@@ -234,9 +234,9 @@ COMMAND_REGISTRY = {
     },
     "log-level": {
         "category": "Testing & Debug",
-        "usage": "/log-level <level>",
-        "description": "Set log level: debug, info, warn, error, critical.",
-        "examples": ["/log-level debug", "/log-level info", "/log-level warn"],
+        "usage": "/log-level [level]",
+        "description": "Set log level. Without args, shows interactive selection menu. Levels: debug, info, warn, error, critical.",
+        "examples": ["/log-level", "/log-level debug", "/log-level info"],
     },
     "profile": {
         "category": "Testing & Debug",
@@ -387,6 +387,11 @@ Keyboard Shortcuts:
     Up/Down          Navigate command history
     Tab              Command completion
     Shift+Tab        Reverse completion cycling
+
+  In selection menu (/model, /load, /reason, /log-level):
+    j/k or Up/Down   Navigate items
+    Enter or Tab     Select item
+    Escape           Cancel selection
 
   General:
     Ctrl+C, Ctrl+D   Exit ScriptChat
@@ -685,6 +690,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
     elif command == 'reason':
         level_arg = parts[1].strip() if len(parts) > 1 else ""
+        if not level_arg:
+            # No args - delegate to UI for selection menu
+            return CommandResult(
+                needs_ui_interaction=True,
+                command_type='reason'
+            )
         return set_reasoning_level(state, level_arg)
 
     elif command == 'thinking':
@@ -942,7 +953,11 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
     elif command == 'log-level':
         if len(parts) < 2 or not parts[1].strip():
-            return CommandResult(message="Usage: /log-level <debug|info|warn>")
+            # No args - delegate to UI for selection menu
+            return CommandResult(
+                needs_ui_interaction=True,
+                command_type='log-level'
+            )
         level = parts[1].strip().upper()
         if level == "WARN":
             level = "WARNING"

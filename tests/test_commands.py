@@ -580,6 +580,11 @@ class CommandTests(unittest.TestCase):
     def test_log_level_command(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
+            # Without args, delegates to UI for selection menu
+            res_no_args = handle_command("/log-level", state)
+            self.assertTrue(res_no_args.needs_ui_interaction)
+            self.assertEqual(res_no_args.command_type, 'log-level')
+            # With valid level
             res = handle_command("/log-level debug", state)
             self.assertIn("Log level set to DEBUG", res.message)
             res_bad = handle_command("/log-level nope", state)
@@ -599,8 +604,10 @@ class CommandTests(unittest.TestCase):
             # Enable reasoning on the configured model
             state.config.providers[0].models[0].reasoning_levels = ["none", "medium", "high"]
 
+            # Without args, it delegates to UI for selection menu
             show = handle_command("/reason", state)
-            self.assertIn("Available", show.message)
+            self.assertTrue(show.needs_ui_interaction)
+            self.assertEqual(show.command_type, 'reason')
 
             bad = handle_command("/reason low", state)
             self.assertIn("Unsupported", bad.message)
@@ -614,9 +621,18 @@ class CommandTests(unittest.TestCase):
             self.assertIsNone(state.current_conversation.reasoning_level)
 
     def test_reason_command_not_available_when_unsupported(self):
+        # When /reason is called with no args, it delegates to UI for selection menu.
+        # The UI handler then checks if reasoning is available.
+        # Here we test that calling with an invalid level on unsupported model
+        # returns the "not available" message.
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
+            # Without args, it returns UI interaction request
             res = handle_command("/reason", state)
+            self.assertTrue(res.needs_ui_interaction)
+            self.assertEqual(res.command_type, 'reason')
+            # With an invalid level on unsupported model
+            res = handle_command("/reason high", state)
             self.assertIn("not available", res.message.lower())
 
     def test_set_model_applies_reasoning_default(self):

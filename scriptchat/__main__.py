@@ -136,29 +136,19 @@ def handle_batch_command(
 
     if command == 'model':
         if not args:
-            print(f"[{line_num}] Error: /model requires an argument (model index or name)")
+            print(f"[{line_num}] Error: /model requires a model name (e.g., /model llama3 or /model ollama/llama3)")
             return True, None, None
-        try:
-            index = int(args)
-            if 0 <= index < len(state.config.models):
-                model_name = state.config.models[index].name
-                result = set_model(state, model_name)
-                print(f"[{line_num}] {result.message}")
-            else:
-                print(f"[{line_num}] Error: Invalid model index: {index}")
-        except ValueError:
-            # Accept provider/model or just model name
-            if '/' in args:
-                provider_id, model_name = args.split('/', 1)
-                provider_id = provider_id.strip()
-                model_name = model_name.strip()
-                if provider_id:
-                    state.current_conversation.provider_id = provider_id
-                result = set_model(state, model_name)
-                print(f"[{line_num}] {result.message} (provider: {provider_id})")
-            else:
-                result = set_model(state, args)
-                print(f"[{line_num}] {result.message}")
+        # Accept provider/model or just model name
+        if '/' in args:
+            provider_id, model_name = args.split('/', 1)
+            provider_id = provider_id.strip()
+            model_name = model_name.strip()
+            if provider_id:
+                state.current_conversation.provider_id = provider_id
+            result = set_model(state, model_name)
+            print(f"[{line_num}] {result.message} (provider: {provider_id})")
+        else:
+            result = set_model(state, args)
             print(f"[{line_num}] {result.message}")
         return True, None, None
 

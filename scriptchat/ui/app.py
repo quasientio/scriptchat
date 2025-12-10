@@ -23,7 +23,7 @@ from typing import Optional
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
-from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl, FloatContainer, Float
 from prompt_toolkit.layout.containers import WindowAlign
 from prompt_toolkit.layout.controls import BufferControl
@@ -41,6 +41,7 @@ from ..core.conversations import (
     branch_conversation, delete_conversation, Conversation, Message
 )
 from .command_handlers import CommandHandlers
+from .selection_menu import SelectionMenu
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,9 @@ class ScriptChatUI:
 
         # Create command handlers
         self.handlers = CommandHandlers(self)
+
+        # Create selection menu for interactive command selection
+        self.selection_menu = SelectionMenu(self)
 
         # Create command completer
         command_completer = WordCompleter(
@@ -230,7 +234,7 @@ class ScriptChatUI:
             input_container
         ])
 
-        # Wrap in FloatContainer to support completion menu popup
+        # Wrap in FloatContainer to support completion menu popup and selection menu
         float_container = FloatContainer(
             content=root_container,
             floats=[
@@ -238,6 +242,12 @@ class ScriptChatUI:
                     xcursor=True,
                     ycursor=True,
                     content=CompletionsMenu(max_height=10)
+                ),
+                # Selection menu for interactive command selection
+                Float(
+                    bottom=2,
+                    left=1,
+                    content=self.selection_menu.get_container()
                 )
             ]
         )
@@ -326,6 +336,11 @@ class ScriptChatUI:
         def handle_escape(event):
             """Handle Escape to cancel inference or return focus to input."""
             import time
+
+            # If selection menu is visible, let its handler deal with it
+            if self.selection_menu.is_visible:
+                self.selection_menu.cancel()
+                return
 
             # If LLM is thinking, handle cancellation with confirmation
             if self.thinking:
@@ -452,7 +467,8 @@ class ScriptChatUI:
             """Handle Ctrl+C or Ctrl+D to exit."""
             event.app.exit()
 
-        return kb
+        # Merge selection menu key bindings
+        return merge_key_bindings([kb, self.selection_menu.get_key_bindings()])
 
 
     def _get_status_bar(self):

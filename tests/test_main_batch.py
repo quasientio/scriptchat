@@ -172,8 +172,8 @@ class MainBatchTests(unittest.TestCase):
             # prompt clear
             handle_batch_command("/prompt clear", state, 3)
             self.assertIsNone(state.current_conversation.system_prompt)
-            # model by index
-            handle_batch_command("/model 0", state, 4)
+            # model by name
+            handle_batch_command("/model llama3", state, 4)
             self.assertEqual(state.current_conversation.model_name, "llama3")
             # send returns message
             cont, send_msg, _ = handle_batch_command("/send hi", state, 5)
