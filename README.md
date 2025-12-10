@@ -159,10 +159,12 @@ All commands start with `/`:
 **Conversation**
 - `/new` - Start a new conversation
 - `/save` - Save the current conversation
-- `/load [index|name]` - Load a saved conversation by index or name
+- `/load [--archived] [index|name]` - Load a saved conversation by index or name. Use `--archived` to load from archive.
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
-- `/chats` - List saved conversations
+- `/chats [--archived|--all]` - List saved conversations. Use `--archived` for archived only, `--all` for both.
+- `/archive [index|name|range] [--tag key=value]` - Archive conversations by index (`3`), name, range (`1-5`), or tag filter
+- `/unarchive [index|name|range] [--tag key=value]` - Restore archived conversations (same syntax as `/archive`)
 - `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
 
 **Export/Import**

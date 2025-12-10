@@ -22,6 +22,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+# Archive subdirectory name (hidden directory)
+ARCHIVE_DIR = ".archive"
+
 
 @dataclass
 class Message:
@@ -117,11 +120,18 @@ def _create_dir_name(model_name: str, save_name: str, timestamp: Optional[dateti
     return f"{time_prefix}_{model_slug}_{save_slug}"
 
 
-def list_conversations(root: Path) -> list[ConversationSummary]:
-    """List all saved conversations in the conversations directory.
+def list_conversations(
+    root: Path,
+    filter: str = "active"
+) -> list[ConversationSummary]:
+    """List saved conversations in the conversations directory.
 
     Args:
         root: Conversations root directory
+        filter: Which conversations to list:
+            - "active" (default): Only non-archived conversations
+            - "archived": Only archived conversations
+            - "all": Both active and archived
 
     Returns:
         List of ConversationSummary objects, sorted newest-first
@@ -130,58 +140,89 @@ def list_conversations(root: Path) -> list[ConversationSummary]:
         return []
 
     summaries = []
+    dirs_to_scan = []
 
-    for conv_dir in root.iterdir():
-        if not conv_dir.is_dir():
-            continue
+    if filter in ("active", "all"):
+        dirs_to_scan.append((root, False))
+    if filter in ("archived", "all"):
+        archive_dir = root / ARCHIVE_DIR
+        if archive_dir.exists():
+            dirs_to_scan.append((archive_dir, True))
 
-        # Try to load meta.json
-        meta_path = conv_dir / "meta.json"
-        if meta_path.exists():
-            try:
-                with open(meta_path, 'r') as f:
-                    meta = json.load(f)
-                created_at = meta.get('created_at', '')
-                model_name = meta.get('model', 'unknown')
-                tags = meta.get('tags', {}) or {}
-                last_modified = meta.get('last_modified', '')
-                parent_id = meta.get('parent_id')
-            except (json.JSONDecodeError, IOError):
-                created_at = ''
-                model_name = 'unknown'
-                tags = {}
-                last_modified = ''
-                parent_id = None
-        else:
-            created_at = ''
-            model_name = 'unknown'
-            tags = {}
-            last_modified = ''
-            parent_id = None
+    for scan_dir, is_archived in dirs_to_scan:
+        for conv_dir in scan_dir.iterdir():
+            if not conv_dir.is_dir():
+                continue
+            # Skip archive dir when scanning root
+            if conv_dir.name == ARCHIVE_DIR:
+                continue
 
-        # Parse directory name for display
-        dir_name = conv_dir.name
-        # Extract savename from directory name (after second underscore)
-        parts = dir_name.split('_', 2)
-        if len(parts) >= 3:
-            display_name = parts[2]
-        else:
-            display_name = dir_name
-
-        summaries.append(ConversationSummary(
-            dir_name=dir_name,
-            created_at=created_at,
-            model_name=model_name,
-            display_name=display_name,
-            last_modified=last_modified,
-            tags=tags,
-            parent_id=parent_id
-        ))
+            summary = _load_conversation_summary(conv_dir, is_archived)
+            if summary:
+                summaries.append(summary)
 
     # Sort by directory name (which starts with timestamp) in reverse
     summaries.sort(key=lambda s: s.dir_name, reverse=True)
 
     return summaries
+
+
+def _load_conversation_summary(conv_dir: Path, is_archived: bool = False) -> Optional[ConversationSummary]:
+    """Load summary information from a conversation directory.
+
+    Args:
+        conv_dir: Path to conversation directory
+        is_archived: Whether this conversation is in the archive
+
+    Returns:
+        ConversationSummary or None if invalid
+    """
+    # Try to load meta.json
+    meta_path = conv_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            with open(meta_path, 'r') as f:
+                meta = json.load(f)
+            created_at = meta.get('created_at', '')
+            model_name = meta.get('model', 'unknown')
+            tags = meta.get('tags', {}) or {}
+            last_modified = meta.get('last_modified', '')
+            parent_id = meta.get('parent_id')
+        except (json.JSONDecodeError, IOError):
+            created_at = ''
+            model_name = 'unknown'
+            tags = {}
+            last_modified = ''
+            parent_id = None
+    else:
+        created_at = ''
+        model_name = 'unknown'
+        tags = {}
+        last_modified = ''
+        parent_id = None
+
+    # Parse directory name for display
+    dir_name = conv_dir.name
+    # Extract savename from directory name (after second underscore)
+    parts = dir_name.split('_', 2)
+    if len(parts) >= 3:
+        display_name = parts[2]
+    else:
+        display_name = dir_name
+
+    # Prefix archived conversations for clarity
+    if is_archived:
+        display_name = f"[archived] {display_name}"
+
+    return ConversationSummary(
+        dir_name=dir_name,
+        created_at=created_at,
+        model_name=model_name,
+        display_name=display_name,
+        last_modified=last_modified,
+        tags=tags,
+        parent_id=parent_id
+    )
 
 
 def load_conversation(root: Path, dir_name: str) -> Conversation:
@@ -522,6 +563,55 @@ def delete_conversation(root: Path, dir_name: str) -> None:
     conv_dir = root / dir_name
     if conv_dir.exists():
         shutil.rmtree(conv_dir)
+
+
+def archive_conversation(root: Path, dir_name: str) -> None:
+    """Move a conversation to the archive.
+
+    Args:
+        root: Conversations root directory
+        dir_name: Directory name to archive
+
+    Raises:
+        FileNotFoundError: If conversation doesn't exist
+        FileExistsError: If conversation is already archived
+    """
+    conv_dir = root / dir_name
+    if not conv_dir.exists():
+        raise FileNotFoundError(f"Conversation not found: {dir_name}")
+
+    archive_dir = root / ARCHIVE_DIR
+    archive_dir.mkdir(exist_ok=True)
+
+    dest = archive_dir / dir_name
+    if dest.exists():
+        raise FileExistsError(f"Conversation already archived: {dir_name}")
+
+    shutil.move(str(conv_dir), str(dest))
+
+
+def unarchive_conversation(root: Path, dir_name: str) -> None:
+    """Restore a conversation from the archive.
+
+    Args:
+        root: Conversations root directory
+        dir_name: Directory name to unarchive
+
+    Raises:
+        FileNotFoundError: If archived conversation doesn't exist
+        FileExistsError: If an active conversation with that name exists
+    """
+    archive_dir = root / ARCHIVE_DIR
+    archived_conv = archive_dir / dir_name
+
+    if not archived_conv.exists():
+        raise FileNotFoundError(f"Archived conversation not found: {dir_name}")
+
+    dest = root / dir_name
+    if dest.exists():
+        raise FileExistsError(f"Active conversation already exists: {dir_name}")
+
+    shutil.move(str(archived_conv), str(dest))
 
 
 def rename_conversation(root: Path, convo: Conversation, new_save_name: str) -> Conversation:

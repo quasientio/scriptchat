@@ -18,8 +18,10 @@ import unittest
 from pathlib import Path
 
 from scriptchat.core.conversations import (
+    ARCHIVE_DIR,
     Conversation,
     Message,
+    archive_conversation,
     branch_conversation,
     import_chatgpt_export,
     list_conversations,
@@ -27,6 +29,7 @@ from scriptchat.core.conversations import (
     parse_chatgpt_export,
     rename_conversation,
     save_conversation,
+    unarchive_conversation,
     _parse_chatgpt_conversation,
     _walk_chatgpt_messages,
     _extract_chatgpt_content,
@@ -591,6 +594,164 @@ class ChatGptImportTests(unittest.TestCase):
             # Verify nothing was saved
             convos_dir = root / "conversations"
             self.assertFalse(convos_dir.exists())
+
+
+class ArchiveTests(unittest.TestCase):
+    """Tests for archive/unarchive functionality."""
+
+    def _create_test_convo(self, root: Path, name: str, tags: dict = None) -> Conversation:
+        """Helper to create and save a test conversation."""
+        convo = Conversation(
+            id=None,
+            provider_id="ollama",
+            model_name="test-model",
+            temperature=0.7,
+            messages=[Message(role="user", content="test")],
+            tags=tags or {},
+        )
+        return save_conversation(root, convo, name)
+
+    def test_archive_conversation_moves_to_archive_dir(self):
+        """Test archiving moves conversation to .archive directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = self._create_test_convo(root, "test-convo")
+
+            # Verify it exists in root
+            self.assertTrue((root / convo.id).exists())
+
+            # Archive it
+            archive_conversation(root, convo.id)
+
+            # Verify moved to archive
+            self.assertFalse((root / convo.id).exists())
+            self.assertTrue((root / ARCHIVE_DIR / convo.id).exists())
+
+    def test_archive_conversation_not_found_raises(self):
+        """Test archiving non-existent conversation raises FileNotFoundError."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            with self.assertRaises(FileNotFoundError):
+                archive_conversation(root, "nonexistent")
+
+    def test_archive_already_archived_raises(self):
+        """Test archiving already archived conversation raises FileExistsError."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = self._create_test_convo(root, "test-convo")
+
+            archive_conversation(root, convo.id)
+            # Try to archive again
+            with self.assertRaises(FileNotFoundError):
+                archive_conversation(root, convo.id)
+
+    def test_unarchive_conversation_restores_to_root(self):
+        """Test unarchiving moves conversation back to root."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = self._create_test_convo(root, "test-convo")
+            dir_name = convo.id
+
+            archive_conversation(root, dir_name)
+            self.assertFalse((root / dir_name).exists())
+
+            unarchive_conversation(root, dir_name)
+            self.assertTrue((root / dir_name).exists())
+            self.assertFalse((root / ARCHIVE_DIR / dir_name).exists())
+
+    def test_unarchive_not_found_raises(self):
+        """Test unarchiving non-existent conversation raises FileNotFoundError."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            with self.assertRaises(FileNotFoundError):
+                unarchive_conversation(root, "nonexistent")
+
+    def test_list_conversations_filter_active(self):
+        """Test list_conversations with filter='active' excludes archived."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo1 = self._create_test_convo(root, "active-convo")
+            convo2 = self._create_test_convo(root, "archived-convo")
+            archive_conversation(root, convo2.id)
+
+            summaries = list_conversations(root, filter="active")
+            dir_names = [s.dir_name for s in summaries]
+
+            self.assertIn(convo1.id, dir_names)
+            self.assertNotIn(convo2.id, dir_names)
+
+    def test_list_conversations_filter_archived(self):
+        """Test list_conversations with filter='archived' shows only archived."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo1 = self._create_test_convo(root, "active-convo")
+            convo2 = self._create_test_convo(root, "archived-convo")
+            archive_conversation(root, convo2.id)
+
+            summaries = list_conversations(root, filter="archived")
+            dir_names = [s.dir_name for s in summaries]
+
+            self.assertNotIn(convo1.id, dir_names)
+            self.assertIn(convo2.id, dir_names)
+            # Archived display name should have prefix
+            self.assertTrue(summaries[0].display_name.startswith("[archived]"))
+
+    def test_list_conversations_filter_all(self):
+        """Test list_conversations with filter='all' shows both."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo1 = self._create_test_convo(root, "active-convo")
+            convo2 = self._create_test_convo(root, "archived-convo")
+            archive_conversation(root, convo2.id)
+
+            summaries = list_conversations(root, filter="all")
+            dir_names = [s.dir_name for s in summaries]
+
+            self.assertIn(convo1.id, dir_names)
+            self.assertIn(convo2.id, dir_names)
+
+    def test_list_conversations_default_filter_is_active(self):
+        """Test list_conversations defaults to active filter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo1 = self._create_test_convo(root, "active-convo")
+            convo2 = self._create_test_convo(root, "archived-convo")
+            archive_conversation(root, convo2.id)
+
+            # Default (no filter arg)
+            summaries = list_conversations(root)
+            dir_names = [s.dir_name for s in summaries]
+
+            self.assertIn(convo1.id, dir_names)
+            self.assertNotIn(convo2.id, dir_names)
+
+    def test_archive_preserves_conversation_data(self):
+        """Test that archived conversations can still be loaded."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            convo = Conversation(
+                id=None,
+                provider_id="ollama",
+                model_name="test-model",
+                temperature=0.7,
+                messages=[
+                    Message(role="user", content="hello"),
+                    Message(role="assistant", content="hi there"),
+                ],
+                tags={"key": "value"},
+            )
+            saved = save_conversation(root, convo, "test-convo")
+            dir_name = saved.id
+
+            archive_conversation(root, dir_name)
+
+            # Load from archive location
+            archive_dir = root / ARCHIVE_DIR
+            loaded = load_conversation(archive_dir, dir_name)
+
+            self.assertEqual(loaded.model_name, "test-model")
+            self.assertEqual(len(loaded.messages), 2)
+            self.assertEqual(loaded.tags, {"key": "value"})
 
 
 if __name__ == "__main__":

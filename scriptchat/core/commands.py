@@ -42,9 +42,9 @@ COMMAND_REGISTRY = {
     },
     "load": {
         "category": "Conversation",
-        "usage": "/load [index|name]",
-        "description": "Load a saved conversation by index or name.",
-        "examples": ["/load", "/load 0", "/load my-chat"],
+        "usage": "/load [--archived] [index|name]",
+        "description": "Load a saved conversation by index or name. Use --archived to load from archive.",
+        "examples": ["/load", "/load 0", "/load my-chat", "/load --archived 0"],
     },
     "branch": {
         "category": "Conversation",
@@ -60,15 +60,27 @@ COMMAND_REGISTRY = {
     },
     "chats": {
         "category": "Conversation",
-        "usage": "/chats",
-        "description": "List all saved conversations.",
-        "examples": ["/chats"],
+        "usage": "/chats [--archived|--all]",
+        "description": "List saved conversations. Use --archived for archived only, --all for both.",
+        "examples": ["/chats", "/chats --archived", "/chats --all"],
     },
     "clear": {
         "category": "Conversation",
         "usage": "/clear [index]",
         "description": "Clear current conversation or delete a saved one by index.",
         "examples": ["/clear", "/clear 2"],
+    },
+    "archive": {
+        "category": "Conversation",
+        "usage": "/archive [index|name|range] [--tag key=value]",
+        "description": "Archive conversations. Supports index (3), name, range (1-5), or --tag filter.",
+        "examples": ["/archive 0", "/archive 1-5", "/archive --tag imported_from=chatgpt"],
+    },
+    "unarchive": {
+        "category": "Conversation",
+        "usage": "/unarchive [index|name|range] [--tag key=value]",
+        "description": "Restore archived conversations. Same syntax as /archive.",
+        "examples": ["/unarchive 0", "/unarchive 1-3", "/unarchive --tag imported_from=chatgpt"],
     },
     # Export/Import
     "export": {
@@ -556,6 +568,18 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         return CommandResult(
             needs_ui_interaction=True,
             command_type='chats'
+        )
+
+    elif command == 'archive':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='archive'
+        )
+
+    elif command == 'unarchive':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='unarchive'
         )
 
     elif command == 'send':

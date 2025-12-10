@@ -15,13 +15,15 @@
 """Command handlers for ScriptChat UI."""
 
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from ..core.commands import handle_command, set_model, set_temperature
 from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
-    branch_conversation, delete_conversation, rename_conversation, ConversationSummary
+    branch_conversation, delete_conversation, rename_conversation, ConversationSummary,
+    archive_conversation, unarchive_conversation
 )
 from ..core.exports import (
     export_conversation_md,
@@ -107,7 +109,11 @@ class CommandHandlers:
             elif result.command_type == 'rename':
                 self.handle_rename(args)
             elif result.command_type == 'chats':
-                self.handle_chats()
+                self.handle_chats(args)
+            elif result.command_type == 'archive':
+                self.handle_archive(args)
+            elif result.command_type == 'unarchive':
+                self.handle_unarchive(args)
             elif result.command_type == 'send':
                 self.handle_send(args)
             elif result.command_type == 'export':
@@ -232,20 +238,40 @@ class CommandHandlers:
             self.app.add_system_message(f"Error saving: {str(e)}")
 
     def handle_load(self, args: str = ""):
-        summaries = list_conversations(self.app.state.conversations_root)
+        # Parse --archived flag
+        args = args.strip()
+        from_archived = False
+        if args.startswith("--archived"):
+            from_archived = True
+            args = args[10:].strip()  # Remove --archived prefix
+
+        filter_mode = "archived" if from_archived else "active"
+        summaries = list_conversations(self.app.state.conversations_root, filter=filter_mode)
+        label = "archived" if from_archived else "saved"
+
         if not summaries:
-            self.app.add_system_message("No saved conversations found")
+            self.app.add_system_message(f"No {label} conversations found")
             return
-        if args.strip():
-            self._load_callback(args.strip())
+        if args:
+            self._load_callback(args, from_archived=from_archived)
             return
         lines = format_conversation_list(summaries)
         self.app.add_system_message('\n'.join(lines))
         self.app.prompt_message = "Enter conversation index:"
-        self.app.prompt_for_input(self._load_callback)
+        # Store from_archived state for callback
+        self._load_from_archived = from_archived
+        self.app.prompt_for_input(self._load_callback_wrapper)
 
-    def _load_callback(self, index_or_name: str):
-        summaries = list_conversations(self.app.state.conversations_root)
+    def _load_callback_wrapper(self, index_or_name: str):
+        """Wrapper to pass archived state to callback."""
+        from_archived = getattr(self, '_load_from_archived', False)
+        self._load_callback(index_or_name, from_archived=from_archived)
+
+    def _load_callback(self, index_or_name: str, from_archived: bool = False):
+        from ..core.conversations import ARCHIVE_DIR
+
+        filter_mode = "archived" if from_archived else "active"
+        summaries = list_conversations(self.app.state.conversations_root, filter=filter_mode)
         target = None
         display = None
 
@@ -261,6 +287,7 @@ class CommandHandlers:
             matches = [
                 s for s in summaries
                 if s.display_name == name or s.dir_name == name
+                or name in s.display_name or name in s.dir_name
             ]
             if len(matches) == 1:
                 target = matches[0].dir_name
@@ -275,7 +302,13 @@ class CommandHandlers:
             self.app.add_system_message(f"Conversation not found: {index_or_name}")
             return
 
-        conversation = load_conversation(self.app.state.conversations_root, target)
+        # Determine load directory
+        if from_archived:
+            load_root = self.app.state.conversations_root / ARCHIVE_DIR
+        else:
+            load_root = self.app.state.conversations_root
+
+        conversation = load_conversation(load_root, target)
         self.app.state.current_conversation = conversation
         # Rehydrate file registry for placeholder expansion
         self.app.state.file_registry = getattr(conversation, "file_registry", {})
@@ -368,13 +401,126 @@ class CommandHandlers:
         except Exception as e:
             self.app.add_system_message(f"Error renaming: {str(e)}")
 
-    def handle_chats(self):
-        summaries = list_conversations(self.app.state.conversations_root)
+    def handle_chats(self, args: str = ""):
+        # Parse flags
+        args = args.strip()
+        if args == "--archived":
+            filter_mode = "archived"
+            label = "archived"
+        elif args == "--all":
+            filter_mode = "all"
+            label = "all"
+        elif args:
+            self.app.add_system_message("Usage: /chats [--archived|--all]")
+            return
+        else:
+            filter_mode = "active"
+            label = "saved"
+
+        summaries = list_conversations(self.app.state.conversations_root, filter=filter_mode)
         if not summaries:
-            self.app.add_system_message("No saved conversations found")
+            self.app.add_system_message(f"No {label} conversations found")
             return
         lines = format_conversation_list(summaries)
         self.app.add_system_message('\n'.join(lines))
+
+    def handle_archive(self, args: str):
+        """Archive conversations by index, name, range, or tag filter."""
+        self._handle_archive_operation(args, is_archive=True)
+
+    def handle_unarchive(self, args: str):
+        """Unarchive conversations by index, name, range, or tag filter."""
+        self._handle_archive_operation(args, is_archive=False)
+
+    def _handle_archive_operation(self, args: str, is_archive: bool):
+        """Common handler for archive/unarchive operations."""
+        args = args.strip()
+        cmd = "archive" if is_archive else "unarchive"
+        source_filter = "active" if is_archive else "archived"
+        op_func = archive_conversation if is_archive else unarchive_conversation
+
+        if not args:
+            self.app.add_system_message(f"Usage: /{cmd} [index|name|range] [--tag key=value]")
+            return
+
+        # Get source conversation list
+        summaries = list_conversations(self.app.state.conversations_root, filter=source_filter)
+        if not summaries:
+            label = "active" if is_archive else "archived"
+            self.app.add_system_message(f"No {label} conversations found")
+            return
+
+        # Check for --tag flag
+        if args.startswith("--tag "):
+            tag_arg = args[6:].strip()
+            if "=" not in tag_arg:
+                self.app.add_system_message(f"Usage: /{cmd} --tag key=value")
+                return
+            key, value = tag_arg.split("=", 1)
+            key, value = key.strip(), value.strip()
+
+            # Filter by tag
+            matches = [s for s in summaries if s.tags.get(key) == value]
+            if not matches:
+                self.app.add_system_message(f"No conversations found with tag {key}={value}")
+                return
+
+            self._perform_archive_batch(matches, op_func, cmd)
+            return
+
+        # Check for range (e.g., "1-5")
+        range_match = re.match(r'^(\d+)-(\d+)$', args)
+        if range_match:
+            start, end = int(range_match.group(1)), int(range_match.group(2))
+            if start > end:
+                start, end = end, start
+            if start < 0 or end >= len(summaries):
+                self.app.add_system_message(f"Index range out of bounds (0-{len(summaries)-1})")
+                return
+            matches = summaries[start:end+1]
+            self._perform_archive_batch(matches, op_func, cmd)
+            return
+
+        # Check for single index
+        if args.isdigit():
+            idx = int(args)
+            if idx < 0 or idx >= len(summaries):
+                self.app.add_system_message(f"Index out of range (0-{len(summaries)-1})")
+                return
+            matches = [summaries[idx]]
+            self._perform_archive_batch(matches, op_func, cmd)
+            return
+
+        # Try to match by name (partial match)
+        matches = [s for s in summaries if args.lower() in s.display_name.lower() or args.lower() in s.dir_name.lower()]
+        if not matches:
+            self.app.add_system_message(f"No conversation found matching '{args}'")
+            return
+        if len(matches) > 1:
+            self.app.add_system_message(f"Multiple matches for '{args}'. Use index or be more specific:")
+            for i, s in enumerate(summaries):
+                if s in matches:
+                    self.app.add_system_message(f"  {i}: {s.display_name}")
+            return
+
+        self._perform_archive_batch(matches, op_func, cmd)
+
+    def _perform_archive_batch(self, summaries: list, op_func, cmd: str):
+        """Perform archive/unarchive operation on a batch of conversations."""
+        success = 0
+        errors = []
+        for s in summaries:
+            try:
+                op_func(self.app.state.conversations_root, s.dir_name)
+                success += 1
+            except Exception as e:
+                errors.append(f"{s.display_name}: {e}")
+
+        past_tense = "archived" if cmd == "archive" else "unarchived"
+        if success:
+            self.app.add_system_message(f"{past_tense.capitalize()} {success} conversation(s)")
+        for err in errors:
+            self.app.add_system_message(f"Error: {err}")
 
     def handle_send(self, args: str):
         msg = args.strip()

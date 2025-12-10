@@ -27,6 +27,11 @@ Types of changes:
 - Configurable `prompt_cache` setting for privacy for fireworks provider
 - `/import-chatgpt <path> [--dry-run]` to import conversations from a ChatGPT export
   ZIP file. Use `--dry-run` to preview without saving.
+- `/archive` and `/unarchive` commands to organize conversations. Supports index,
+  name, range (`1-5`), and `--tag key=value` filter. Archived conversations are
+  stored in `.archive/` subdirectory.
+- `/chats --archived` and `/chats --all` flags to list archived or all conversations
+- `/load --archived` flag to load conversations from the archive
 
 
 ### Changed
