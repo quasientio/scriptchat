@@ -377,7 +377,7 @@ Keyboard Shortcuts:
     Ctrl+Up          Focus conversation pane for scrolling
     Ctrl+Home        Jump to start of conversation
     Ctrl+End         Jump to end of conversation
-    Escape           Return focus to input pane
+    Escape           Clear input (if in input pane), or return focus to input
     Tab              Return to input (when in conversation pane)
 
   In conversation pane:

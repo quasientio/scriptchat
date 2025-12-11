@@ -357,8 +357,14 @@ class ScriptChatUI:
                     self.add_system_message("⚠ Press ESC again within 2 seconds to cancel inference")
                 return
 
-            # Return focus to input (same pattern as TAB)
+            # If focus is in input and has text, clear it
             buff = event.current_buffer
+            if buff == self.input_buffer and self.input_buffer.text:
+                self.input_buffer.text = ''
+                event.app.invalidate()
+                return
+
+            # Return focus to input (same pattern as TAB)
             if buff != self.input_buffer:
                 event.app.layout.focus(self.input_window)
 
