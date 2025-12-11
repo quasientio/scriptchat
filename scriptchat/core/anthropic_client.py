@@ -23,6 +23,7 @@ import requests
 
 from .config import Config, ProviderConfig
 from .conversations import Conversation, Message
+from .model_defaults import get_default_context_limit
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,13 @@ class AnthropicChatClient:
         convo.tokens_in += usage.get("input_tokens", 0)
         convo.tokens_out += usage.get("output_tokens", 0)
 
+        # Update context tracking (config override > built-in defaults)
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        context_length = model_cfg.context or get_default_context_limit(convo.model_name)
+        if context_length:
+            convo.context_length_configured = context_length
+            convo.context_length_used = convo.tokens_in
+
         return content
 
     def _chat_stream(self, url: str, payload: dict, convo: Conversation, on_chunk=None) -> str:
@@ -343,6 +351,13 @@ class AnthropicChatClient:
 
         convo.tokens_in += total_input_tokens
         convo.tokens_out += total_output_tokens
+
+        # Update context tracking (config override > built-in defaults)
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        context_length = model_cfg.context or get_default_context_limit(convo.model_name)
+        if context_length:
+            convo.context_length_configured = context_length
+            convo.context_length_used = convo.tokens_in
 
         # Log response metadata from streaming
         final_usage = {"input_tokens": total_input_tokens, "output_tokens": total_output_tokens}

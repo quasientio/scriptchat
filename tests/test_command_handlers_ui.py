@@ -30,7 +30,7 @@ def make_config(root: Path, system_prompt: str | None = None):
         type="ollama",
         api_url="http://localhost:11434/api",
         api_key="",
-        models=[ModelConfig(name="llama3", contexts=[1024])],
+        models=[ModelConfig(name="llama3", context=1024)],
         streaming=True,
         headers={},
         default_model="llama3",

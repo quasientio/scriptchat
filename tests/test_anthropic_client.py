@@ -31,7 +31,7 @@ def make_config(tmp_path: Path):
         type="anthropic",
         api_url="https://api.anthropic.com",
         api_key="test-key",
-        models=[ModelConfig(name="claude-3-5-sonnet", contexts=[200000])],
+        models=[ModelConfig(name="claude-3-5-sonnet", context=200000)],
         streaming=True,
         headers={},
         default_model="claude-3-5-sonnet",

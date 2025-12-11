@@ -53,14 +53,14 @@ env_expand_from_environment = true
 # If api_key is empty/missing, ScriptChat will look for {PROVIDER_ID}_API_KEY
 # (e.g., OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY).
 
-# Ollama provider with contexts
+# Ollama provider with context window sizes
 [[providers]]
 id = "ollama"
 type = "ollama"
 api_url = "http://localhost:11434/api"
 models = [
-  { name = "llama3.2", contexts = "8192" },
-  { name = "phi3",     contexts = "8192,32768" }
+  { name = "llama3.2", context = 8192 },
+  { name = "phi3",     context = 32768 }
 ]
 
 # OpenAI-compatible provider (OpenAI)
@@ -111,4 +111,3 @@ models = [
   { name = "claude-3-5-sonnet-20241022" },
   { name = "claude-3-5-haiku-20241022" }
 ]
-default_model = "claude-sonnet-4-20250514"

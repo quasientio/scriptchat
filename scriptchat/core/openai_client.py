@@ -23,6 +23,7 @@ import requests
 
 from .config import Config, ProviderConfig
 from .conversations import Conversation, Message
+from .model_defaults import get_default_context_limit
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +226,14 @@ class OpenAIChatClient:
         # Responses API uses input_tokens/output_tokens
         convo.tokens_in += usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
         convo.tokens_out += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+
+        # Update context tracking (config override > built-in defaults)
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        context_length = model_cfg.context or get_default_context_limit(convo.model_name)
+        if context_length:
+            convo.context_length_configured = context_length
+            convo.context_length_used = convo.tokens_in
+
         return content
 
     def _chat_stream(self, url: str, payload: dict, convo: Conversation, on_chunk=None) -> str:
@@ -285,6 +294,13 @@ class OpenAIChatClient:
             total_completion += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
         convo.tokens_in += total_prompt
         convo.tokens_out += total_completion
+
+        # Update context tracking (config override > built-in defaults)
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        context_length = model_cfg.context or get_default_context_limit(convo.model_name)
+        if context_length:
+            convo.context_length_configured = context_length
+            convo.context_length_used = convo.tokens_in
 
         # Log response metadata from streaming (use last_data for model/id info)
         final_usage = {"prompt_tokens": total_prompt, "completion_tokens": total_completion}

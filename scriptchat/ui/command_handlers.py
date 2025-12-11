@@ -170,8 +170,8 @@ class CommandHandlers:
                 ctx_display = ""
                 models = provider.models or []
                 for m in models:
-                    if m.name == name and m.contexts:
-                        ctx_display = f" (ctx: {', '.join(str(c) for c in m.contexts)})"
+                    if m.name == name and m.context:
+                        ctx_display = f" (ctx: {m.context})"
                         break
                 display = f"{provider.id}/{name}{ctx_display}"
                 options.append(((provider.id, name), display))

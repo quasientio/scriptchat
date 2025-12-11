@@ -1029,8 +1029,8 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         # Get context length from model config
         try:
             model_cfg = cfg.get_model(convo.provider_id, convo.model_name)
-            if model_cfg.contexts:
-                context_display = ", ".join(str(c) for c in model_cfg.contexts)
+            if model_cfg.context:
+                context_display = str(model_cfg.context)
             else:
                 context_display = "(not configured)"
         except ValueError:

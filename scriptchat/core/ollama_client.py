@@ -309,9 +309,7 @@ class OllamaChatClient:
             raise ValueError(f"Provider '{convo.provider_id}' not supported by Ollama client")
         # Look up model configuration
         model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
-        context_length = model_cfg.contexts[0] if model_cfg.contexts else None
-        if context_length is None:
-            context_length = 8192  # fallback if not provided
+        context_length = model_cfg.context or 8192  # fallback if not provided
 
         # Track current model for cleanup
         self.current_model = convo.model_name

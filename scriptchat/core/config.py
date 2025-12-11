@@ -27,7 +27,7 @@ import toml
 class ModelConfig:
     """Configuration for a single model."""
     name: str
-    contexts: list[int] = None  # Optional; used for Ollama/ctx-length
+    context: int | None = None  # Optional; context window size in tokens
     reasoning_levels: list[str] | None = None  # Optional; available reasoning levels for this model
     reasoning_default: str | None = None  # Optional; default reasoning level for this model
 
@@ -93,7 +93,7 @@ class Config:
                 if model.name == name:
                     return model
         # If models not specified, allow dynamic model names
-        return ModelConfig(name=name, contexts=None, reasoning_levels=None)
+        return ModelConfig(name=name, context=None, reasoning_levels=None)
 
     def list_models(self, provider_id: str) -> list[ModelConfig]:
         provider = self.get_provider(provider_id)
@@ -261,7 +261,7 @@ def load_config() -> Config:
             return []
         if isinstance(value, str):
             names = [n.strip() for n in value.split(',') if n.strip()]
-            return [ModelConfig(name=n, contexts=None, reasoning_levels=None, reasoning_default=None) for n in names]
+            return [ModelConfig(name=n, context=None, reasoning_levels=None, reasoning_default=None) for n in names]
         if isinstance(value, list):
             result = []
             for entry in value:
@@ -269,13 +269,13 @@ def load_config() -> Config:
                     name = entry.get('name')
                     if not name:
                         continue
-                    contexts_val = entry.get('contexts')
-                    contexts = None
-                    if contexts_val:
+                    context = None
+                    context_val = entry.get('context')
+                    if context_val:
                         try:
-                            contexts = [int(c.strip()) for c in str(contexts_val).split(',')]
-                        except Exception:
-                            contexts = None
+                            context = int(context_val)
+                        except (ValueError, TypeError):
+                            context = None
                     reasoning_levels = None
                     levels_val = entry.get('reasoning_levels')
                     if levels_val:
@@ -288,12 +288,12 @@ def load_config() -> Config:
                         reasoning_default = str(entry.get('reasoning_default')).strip().lower()
                     result.append(ModelConfig(
                         name=name,
-                        contexts=contexts,
+                        context=context,
                         reasoning_levels=reasoning_levels,
                         reasoning_default=reasoning_default,
                     ))
                 elif isinstance(entry, str):
-                    result.append(ModelConfig(name=entry.strip(), contexts=None, reasoning_levels=None, reasoning_default=None))
+                    result.append(ModelConfig(name=entry.strip(), context=None, reasoning_levels=None, reasoning_default=None))
             return result
         return []
 
@@ -323,16 +323,16 @@ def load_config() -> Config:
             if not name:
                 raise ValueError("Model missing 'name' field")
 
-            contexts_str = model_data.get('contexts', '')
-            if not contexts_str:
-                raise ValueError(f"Model '{name}' missing 'contexts' field")
+            context_val = model_data.get('context')
+            if not context_val:
+                raise ValueError(f"Model '{name}' missing 'context' field")
 
             try:
-                contexts = [int(c.strip()) for c in contexts_str.split(',')]
-            except ValueError:
-                raise ValueError(f"Invalid contexts format for model '{name}': {contexts_str}")
+                context = int(context_val)
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid context format for model '{name}': {context_val}")
 
-            legacy_models.append(ModelConfig(name=name, contexts=contexts))
+            legacy_models.append(ModelConfig(name=name, context=context))
 
         providers.append(ProviderConfig(
             id='ollama',

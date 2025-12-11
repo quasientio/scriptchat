@@ -23,6 +23,9 @@ Types of changes:
 - UI status messages no longer sent to LLM (was using `role='system'`, now uses `role='status'`)
 
 ### Added
+- Context usage percentage in status bar for all providers (OpenAI, Anthropic, Ollama)
+- Built-in context window limits for well-known models (no config required)
+- `scripts/update_model_defaults.py` to refresh model limits from upstream
 - New openai compatible provider config entry for Fireworks AI
 - DEBUG-level logging statements with responses metadata -- content filtered out
 - Configurable `prompt_cache` setting for privacy for fireworks provider
@@ -37,6 +40,7 @@ Types of changes:
   commands. Navigate with arrow keys or j/k, select with Enter/Tab, cancel with Escape.
 
 ### Changed
+- Model config `contexts` (list) simplified to `context` (single int) in config.toml
 - `/model`, `/load`, `/reason`, `/log-level` no longer accept index arguments;
   use the interactive menu or pass a name directly (e.g., `/model ollama/llama3`)
 - Set store=false in openai Responses API to prevent server-side storing of conversations

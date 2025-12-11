@@ -80,7 +80,7 @@ Key configuration options:
 - `conversations_dir`: Where to store conversations (set in `[general]`)
 - `exports_dir`: Where to write exports (defaults to current working directory if not set)
 - `enable_streaming`: Enable token streaming (default: false)
-- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama`, `openai-compatible`, or `anthropic`), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `contexts` (for Ollama), `reasoning_levels` (for `/reason` on reasoning-capable models), and `reasoning_default` to pick the level applied when you select that model.
+- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama`, `openai-compatible`, or `anthropic`), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `context` (context window size in tokens), `reasoning_levels` (for `/reason` on reasoning-capable models), and `reasoning_default` to pick the level applied when you select that model.
 
 **API Keys:** If `api_key` is not set in config, ScriptChat will look for `{PROVIDER_ID}_API_KEY` environment variable (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`).
 
@@ -335,7 +335,7 @@ The status bar shows:
 - Conversation ID (or `<unsaved>` for new conversations)
 - Thinking indicator when the model is processing
 
-Example: `ollama/llama3.2 (high) | 1234 in / 567 out | 202511180945_llama32_my-chat`
+Example: `ollama/llama3.2 (high) | 1234 in / 567 out | 1801/8192 (22.0%) | 202511180945_llama32_my-chat`
 
 ## Troubleshooting
 

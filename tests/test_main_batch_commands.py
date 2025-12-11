@@ -30,7 +30,7 @@ def make_state(tmp_path: Path):
         type="ollama",
         api_url="http://localhost:11434/api",
         api_key="",
-        models=[ModelConfig(name="llama3", contexts=[512])],
+        models=[ModelConfig(name="llama3", context=512)],
         streaming=True,
         headers={},
         default_model="llama3",

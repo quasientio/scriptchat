@@ -30,7 +30,7 @@ def make_config(tmp_path: Path, system_prompt: str | None = "system says"):
         type="ollama",
         api_url="http://localhost:11434/api",
         api_key="",
-        models=[ModelConfig(name="llama3", contexts=[2048])],
+        models=[ModelConfig(name="llama3", context=2048)],
         streaming=True,
         headers={},
         default_model="llama3",
@@ -172,7 +172,7 @@ class CommandTests(unittest.TestCase):
                 type="openai-compatible",
                 api_url="http://example",
                 api_key="",
-                models=[ModelConfig(name="gpt-5.1", contexts=[1024])],
+                models=[ModelConfig(name="gpt-5.1", context=1024)],
                 streaming=True,
                 headers={},
                 default_model="gpt-5.1",
@@ -182,6 +182,28 @@ class CommandTests(unittest.TestCase):
             self.assertIn("provider: remote", result.message)
             self.assertEqual(state.current_conversation.provider_id, "remote")
             self.assertEqual(state.current_conversation.model_name, "gpt-5.1")
+
+    def test_set_model_requires_model_name_not_just_provider(self):
+        """Switching to just a provider without a model is not supported."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            other = ProviderConfig(
+                id="remote",
+                type="openai-compatible",
+                api_url="http://example",
+                api_key="",
+                models=[ModelConfig(name="gpt-5.1", context=1024)],
+                streaming=True,
+                headers={},
+                default_model=None,
+            )
+            state.config.providers.append(other)
+            # Trying to switch to just a provider name should fail
+            result = set_model(state, "remote")
+            self.assertIn("not found", result.message)
+            # Should stay on original provider/model
+            self.assertEqual(state.current_conversation.provider_id, "ollama")
+            self.assertEqual(state.current_conversation.model_name, "llama3")
 
     def test_set_temperature_clamps_range(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -257,7 +279,7 @@ class CommandTests(unittest.TestCase):
     def test_profile_shows_context_length_when_configured(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
-            # Model already has contexts=[2048] from make_config
+            # Model already has context=2048 from make_config
             result = handle_command("/profile", state)
             msg = result.message or ""
             self.assertIn("Context: 2048", msg)
@@ -265,8 +287,8 @@ class CommandTests(unittest.TestCase):
     def test_profile_shows_context_not_configured_when_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
-            # Remove contexts from model
-            state.config.providers[0].models[0].contexts = None
+            # Remove context from model
+            state.config.providers[0].models[0].context = None
             result = handle_command("/profile", state)
             msg = result.message or ""
             self.assertIn("Context: (not configured)", msg)
@@ -640,7 +662,7 @@ class CommandTests(unittest.TestCase):
             state = make_state(Path(tmpdir))
             # Add another model with a default reasoning level
             state.config.providers[0].models.append(
-                ModelConfig(name="llama-reason", contexts=None, reasoning_levels=["none", "high"], reasoning_default="high")
+                ModelConfig(name="llama-reason", context=None, reasoning_levels=["none", "high"], reasoning_default="high")
             )
 
             res = set_model(state, "llama-reason")

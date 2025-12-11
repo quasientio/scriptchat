@@ -51,7 +51,7 @@ class OllamaClientTests(unittest.TestCase):
             type="ollama",
             api_url="http://localhost:11434/api",
             api_key="",
-            models=[ModelConfig(name="llama3", contexts=[context])],
+            models=[ModelConfig(name="llama3", context=context)],
             streaming=True,
             headers={},
             default_model="llama3",
