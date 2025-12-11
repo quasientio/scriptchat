@@ -302,8 +302,12 @@ class CommandHandlers:
             self.app.add_system_message(f"Conversation not found: {name}")
             return
         if len(matches) > 1:
+            match_names = [m.display_name for m in matches[:5]]
+            hint = ", ".join(match_names)
+            if len(matches) > 5:
+                hint += f", ... ({len(matches)} total)"
             self.app.add_system_message(
-                f"Multiple conversations match '{name}'. Be more specific."
+                f"Multiple conversations match '{name}': {hint}"
             )
             return
 
