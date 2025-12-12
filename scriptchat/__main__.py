@@ -661,20 +661,12 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
 
     try:
         # Load configuration (this also initializes logging)
-        if not args.run:
-            print("Loading configuration from ~/.scriptchat/config.toml...")
         config = load_config()
 
-        # Log startup information
+        # Log startup information (logger is now configured)
         logger.info("=== ScriptChat starting ===")
-        logger.info(f"Configuration loaded: api_url={config.api_url}, default_model={config.default_model}")
-
-        # Inform user where logs are being written (only in interactive mode)
-        if not args.run:
-            if config.log_file:
-                print(f"Logging to: {config.log_file} (level: {config.log_level})")
-            else:
-                print(f"Logging to stderr (level: {config.log_level})")
+        logger.info("Loaded configuration from ~/.scriptchat/config.toml")
+        logger.info(f"api_url={config.api_url}, default_model={config.default_model}")
 
         # Initialize provider clients
         is_interactive = not args.run
