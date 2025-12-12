@@ -60,39 +60,38 @@ pip install scriptchat
 
 ## Quickstart
 
-Run the interactive setup to create your configuration:
-
+**Step 1**: Run interactive setup (one-time)
 ```bash
 scriptchat --init
 ```
-
-This guides you through selecting a provider (Ollama, OpenAI, Anthropic, or DeepSeek) and generates `~/.scriptchat/config.toml` with sensible defaults.
-
-Then start chatting:
-
+ 
+**Step 2**: Test it immediately with a real example
 ```bash
-scriptchat
-# or use the shorter alias:
+# Download and run a working script
+curl -s https://raw.githubusercontent.com/quasientio/scriptchat/main/examples/quickstart.sc | sc
+```
+ 
+**Step 3**: Start chatting
+```bash
 sc
 ```
+ 
+**Step 4**: Explore more examples
+[See the Examples Gallery →](#examples-gallery)
 
 ### Configuration
 
-For more control, edit `~/.scriptchat/config.toml` directly. See `config.toml.example` for a complete example.
+Edit `~/.scriptchat/config.toml` directly. See [`config.toml.example`](config.toml.example) for the full specification.
 
-Key configuration options:
+Key options:
+- `default_model` - Model on startup in `provider/model` format (e.g., `ollama/llama3.2`)
+- `default_temperature` - Temperature for new conversations (0.0-2.0)
+- `system_prompt` - Default system prompt (override with `/prompt`)
+- `[[providers]]` - Provider configs with `id`, `type`, `api_url`, `models`
 
-- `default_model`: Model to use on startup, in `provider/model` format (e.g., `ollama/llama3.2`, `openai/gpt-4o`)
-- `default_temperature`: Temperature for new conversations (0.0-2.0)
-- `system_prompt`: System prompt for all conversations (override per conversation with `/prompt`)
-- `conversations_dir`: Where to store conversations (set in `[general]`)
-- `exports_dir`: Where to write exports (defaults to current working directory if not set)
-- `enable_streaming`: Enable token streaming (default: false)
-- `[[providers]]`: List of model providers. Each has an `id`, `type` (`ollama`, `openai-compatible`, or `anthropic`), `api_url`, optional `api_key`, `models` (comma-separated or list of tables), optional `default_model`, and optional `streaming`/`headers`. A model entry can include `context` (context window size in tokens), `reasoning_levels` (for `/reason` on reasoning-capable models), and `reasoning_default` to pick the level applied when you select that model.
+**API Keys:** Set `api_key` in config or use environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
 
-**API Keys:** If `api_key` is not set in config, ScriptChat will look for `{PROVIDER_ID}_API_KEY` environment variable (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`).
-
-Example providers:
+Minimal example:
 ```toml
 [general]
 default_model = "ollama/llama3"
@@ -102,68 +101,39 @@ id = "ollama"
 type = "ollama"
 api_url = "http://localhost:11434/api"
 models = "llama3,phi3"
-
-[[providers]]
-id = "openai"
-type = "openai-compatible"
-api_url = "https://api.openai.com"
-api_key = "sk-..."
-models = [
-  { name = "gpt-5-mini", reasoning_levels = ["minimal", "medium", "high"], reasoning_default = "medium" },
-  { name = "gpt-5.1-mini", reasoning_levels = ["none", "low", "medium", "high"], reasoning_default = "none" }
-]
-
-[[providers]]
-id = "deepseek"
-type = "openai-compatible"
-api_url = "https://api.deepseek.com"
-api_key = "sk-..."
-models = "deepseek-chat,deepseek-coder"
-
-[[providers]]
-id = "anthropic"
-type = "anthropic"
-api_url = "https://api.anthropic.com"
-api_key = "sk-ant-..."
-models = [
-  { name = "claude-sonnet-4-20250514", reasoning_levels = ["low", "medium", "high", "max"] },
-  { name = "claude-3-5-sonnet-20241022" }
-]
 ```
 
 ## Usage
 
-Run ScriptChat:
+### Batch Mode
+
+Run a script file:
 
 ```bash
-scriptchat
-# or use the shorter alias:
-sc
+scriptchat --run script.sc
 ```
 
-In batch mode you can allow assertions to log but keep running using `--continue-on-error` (exit code will still be 1 if any assertion fails):
+Use `--continue-on-error` to run all assertions even if some fail (exit code is still 1 if any fail):
 
 ```bash
-scriptchat --run tests/demo.txt --continue-on-error
+scriptchat --run tests/prompt-tests.sc --continue-on-error
 ```
 
-You can also pipe a script via stdin (no `--run` needed):
+### CLI Flags
 
-```bash
-cat tests/demo.txt | scriptchat
-```
+| Flag | Description |
+|------|-------------|
+| `--init` | Interactive configuration setup |
+| `--run FILE` | Run a script file in batch mode |
+| `--continue-on-error` | Don't stop on assertion failures |
+| `--version` | Show version |
 
-Check version:
+### Exit Codes
 
-```bash
-scriptchat --version
-```
-
-Run interactive setup (create or overwrite config):
-
-```bash
-scriptchat --init
-```
+| Code | Meaning |
+|------|---------|
+| `0` | Success (all assertions passed) |
+| `1` | Failure (assertion failed, config error, or runtime error) |
 
 ### Commands
 
@@ -212,11 +182,10 @@ All commands start with `/`:
 - `/retry` - Drop the last assistant message and resend the previous user message
 
 **Testing & Debug**
-- `/assert <pattern>` - Assert the last assistant response contains the given text/regex (exits with error in batch mode). `/assert` checks only the last assistant message; it's case-insensitive and treats the pattern as a regex (falls back to substring if the regex is invalid).
-- `/assert-not <pattern>` - Assert the last assistant response does NOT contain the text/regex (same matching rules as `/assert`).
-- `/echo <text>` - Print a message to the console without sending to the model
-- `/log-level <debug|info|warn|error|critical>` - Adjust runtime logging verbosity without restarting
-- `/profile [--full]` - Show current provider/model/temp, tokens, streaming/timeout, and registered files. Use `--full` to show complete system prompt
+- `/assert <pattern>`, `/assert-not <pattern>` - Assert the last response contains (or doesn't contain) a text/regex pattern. Case-insensitive. Exits with error in batch mode if assertion fails.
+- `/echo <text>` - Print a message without sending to model
+- `/log-level <level>` - Adjust logging verbosity (debug/info/warn/error/critical)
+- `/profile [--full]` - Show current settings and registered files
 
 **Scripting**
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
@@ -286,24 +255,17 @@ env_var_blocklist = []
 
 ### Keyboard Shortcuts
 
-**Navigation**
-- `Ctrl+Up` - Focus conversation pane for scrolling
-- `Ctrl+Home` - Jump to start of conversation
-- `Ctrl+End` - Jump to end of conversation
-- `Escape` - Return focus to input pane
-- `Tab` - Return to input (when in conversation pane)
+| Key | Action |
+|-----|--------|
+| `Ctrl+Up` | Focus conversation pane |
+| `Ctrl+Home/End` | Jump to start/end of conversation |
+| `Up/Down` | Scroll (conversation) or history (input) |
+| `Tab` | Command completion or return to input |
+| `Escape` | Clear input or return to input pane |
+| `Escape` ×2 | Cancel ongoing inference |
+| `Ctrl+C/D` | Exit |
 
-**In conversation pane**
-- `Up/Down` - Scroll line by line
-
-**In input pane**
-- `Up/Down` - Navigate command history
-- `Tab` - Command completion
-- `Shift+Tab` - Reverse completion cycling
-
-**General**
-- `Ctrl+C` or `Ctrl+D` - Exit ScriptChat
-- `Escape` twice (within 2s) - Cancel ongoing inference
+Use `/keys` for the full list.
 
 ### File References
 
@@ -329,7 +291,7 @@ Exports (`/export`) go to the current working directory by default, or to `expor
 
 ## Example Workflow
 
-1. Start ScriptChat: `python -m scriptchat`
+1. Start ScriptChat: `scriptchat` or `sc`
 2. Chat with the default model
 3. Save your conversation: `/save` then enter a name
 4. Switch models: `/model` then select a model
@@ -338,7 +300,76 @@ Exports (`/export`) go to the current working directory by default, or to `expor
 7. Load a previous conversation: `/load`
 8. Exit when done: `/exit` or Ctrl+C
 
-See the [`examples/`](examples/) folder for runnable scripts demonstrating interactive workflows and batch testing.
+## Examples Gallery
+
+<details>
+<summary><b>Click to expand example scripts</b></summary>
+
+### Quickstart (batch)
+```bash
+/model ollama/llama3.2
+What is 2+2?
+/assert 4
+```
+*[View quickstart.sc →](examples/quickstart.sc)*
+
+### CI Prompt Testing (batch)
+```bash
+/temp 0.1
+/prompt You are a math tutor. Give clear, concise explanations.
+Explain the Pythagorean theorem in one sentence.
+/assert theorem|triangle|hypotenuse
+/assert-not calculus|derivative
+```
+*[View ci-prompt-testing.sc →](examples/ci-prompt-testing.sc)*
+
+### Security Audit (batch)
+```bash
+# FILE=app.py scriptchat --run examples/security-audit.sc
+/file ${FILE}
+"""
+Review @${FILE} for security vulnerabilities:
+- Hardcoded secrets, SQL injection, XSS, command injection...
+"""
+/assert-not admin123|sk-1234567890
+```
+*[View security-audit.sc →](examples/security-audit.sc)*
+
+### Prompt Engineering (interactive)
+```bash
+What are the key principles of REST API design?
+/save rest-api-baseline
+/branch rest-api-detailed
+/prompt You are an expert API architect. Be concise and technical.
+/retry
+```
+*[View prompt-engineering.sc →](examples/prompt-engineering.sc)*
+
+### Code Review (interactive)
+```bash
+/file examples/files/src/api/routes.py
+/file examples/files/tests/test_routes.py
+"""
+Review @routes.py for security vulnerabilities, focusing on:
+- Input validation, authentication, SQL injection...
+"""
+```
+*[View code-review.sc →](examples/code-review.sc)*
+
+### Research with Reasoning (interactive)
+```bash
+/model anthropic/claude-sonnet-4-20250514
+/reason high
+/timeout off
+"""
+Analyze the trade-offs between microservices and monolithic architecture...
+"""
+```
+*[View research-reasoning.sc →](examples/research-reasoning.sc)*
+
+</details>
+
+See the [`examples/`](examples/) folder for full scripts and documentation.
 
 ## Status Bar
 

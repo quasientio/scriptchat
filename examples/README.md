@@ -20,8 +20,10 @@ These examples are designed to run non-interactively via `--run` or stdin.
 
 | File | Description | Key Commands |
 |------|-------------|--------------|
+| [quickstart.sc](quickstart.sc) | Simple test to verify ScriptChat is working | /model, /assert, /echo |
 | [ci-prompt-testing.sc](ci-prompt-testing.sc) | Automated prompt regression testing | /assert, /assert-not, /temp |
 | [batch-testing.sc](batch-testing.sc) | Parameterized testing with model comparison | ${VAR}, /model, /assert, /save |
+| [security-audit.sc](security-audit.sc) | Security vulnerability scanner for code files | /file, ${VAR}, /assert-not |
 | [run-batch-testing.sh](run-batch-testing.sh) | Bash wrapper to run tests across models and languages | - |
 
 ## Running Examples
@@ -100,11 +102,13 @@ The `files/` subdirectory contains sample files for use with examples:
 
 ```
 examples/files/
+├── app.py                 # Flask app with intentional security vulnerabilities
 ├── src/api/routes.py      # Flask routes with intentional issues
 └── tests/test_routes.py   # Incomplete test coverage
 ```
 
-These are used by `code-review.sc` to demonstrate file-based code review.
+- `app.py` is used by `security-audit.sc` to demonstrate vulnerability scanning
+- `src/` and `tests/` are used by `code-review.sc` for file-based code review
 
 ## Tips
 
