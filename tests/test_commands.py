@@ -15,6 +15,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import json
 
@@ -149,7 +150,8 @@ class CommandTests(unittest.TestCase):
             self.assertIn(f"@{file_path} -> {expected_full} (2 bytes) sha256:{digest}", lines[1:])
             self.assertIn(f"@{file_path.name} -> {expected_full} (2 bytes) sha256:{digest}", lines[1:])
 
-    def test_set_model_resets_token_counters_and_validates(self):
+    @patch('scriptchat.core.commands.check_ollama_running', return_value=True)
+    def test_set_model_resets_token_counters_and_validates(self, mock_check):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
             state.current_conversation.tokens_in = 10

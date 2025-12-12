@@ -352,16 +352,11 @@ Example: `ollama/llama3.2 (high) | 1234 in / 567 out | 1801/8192 (22.0%) | 20251
 
 ## Troubleshooting
 
-**"Ollama executable not found"**: Ensure Ollama is installed and in your PATH.
+**"Configuration file not found"**: Create `~/.scriptchat/config.toml` from the example, or run `scriptchat --init`.
 
-**"Configuration file not found"**: Create `~/.scriptchat/config.toml` from the example.
+**"Ollama is not running"**: Start Ollama with `ollama serve` before using ScriptChat with an Ollama provider.
 
-**"An Ollama instance is already running"**: ScriptChat detects if Ollama is already running on the configured port. You can:
-- Use the existing instance (recommended for most cases)
-- Start a new ScriptChat-managed instance on an alternative port
-- Exit and stop the existing instance first
-
-**Connection errors**: If using an external Ollama instance, check that it's still running. If ScriptChat manages the instance, check that Ollama is installed and the port is available.
+**Connection errors**: Check that Ollama is running (`ollama serve`) and accessible at the configured URL.
 
 **Model not found**: Make sure the model is pulled in Ollama (`ollama pull modelname`) and configured in `config.toml`.
 

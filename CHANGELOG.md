@@ -49,6 +49,9 @@ Types of changes:
 - `/model`, `/load`, `/reason`, `/log-level` no longer accept index arguments;
   use the interactive menu or pass a name directly (e.g., `/model ollama/llama3`)
 - Set store=false in openai Responses API to prevent server-side storing of conversations
+- Ollama: no longer spawns/manages server process. Uses `num_ctx` per-request instead
+  of `OLLAMA_CONTEXT_LENGTH` environment variable. Shows warning on startup if Ollama
+  is not running.
 
 ## [0.2.0] - 2025-12-07
 

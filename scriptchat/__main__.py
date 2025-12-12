@@ -28,7 +28,7 @@ from .core.exports import (
     import_conversation_from_file,
     generate_html_index,
 )
-from .core.ollama_client import OllamaServerManager, OllamaChatClient
+from .core.ollama_client import OllamaChatClient
 from .core.openai_client import OpenAIChatClient
 from .core.provider_dispatcher import ProviderDispatcher
 from .core.commands import AppState, assert_last_response, handle_command, set_model, set_temperature, set_timeout, retry_last_user_message, resolve_placeholders, expand_variables
@@ -682,8 +682,7 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         for p in config.providers:
             if p.type == "ollama":
                 logger.debug("Initializing Ollama provider '%s'", p.id)
-                server_manager = OllamaServerManager(p.api_url, interactive=is_interactive)
-                provider_clients[p.id] = OllamaChatClient(config, server_manager, base_url=p.api_url)
+                provider_clients[p.id] = OllamaChatClient(config, p.api_url, interactive=is_interactive)
             elif p.type == "openai-compatible":
                 logger.debug("Initializing OpenAI-compatible provider '%s'", p.id)
                 provider_clients[p.id] = OpenAIChatClient(config, p, timeout=config.timeout)
@@ -736,23 +735,12 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         if args.run:
             # Run script in batch mode
             exit_code = run_batch(args.run, state, continue_on_error=args.continue_on_error)
-            # Cleanup
-            try:
-                client.unload_model()
-                client.server_manager.stop()
-            except Exception as e:
-                logger.error(f"Error during cleanup: {e}")
             sys.exit(exit_code)
 
         # If stdin is not a TTY and no --run provided, treat stdin as a script
         if not sys.stdin.isatty():
             stdin_lines = sys.stdin.read().splitlines()
             exit_code = run_batch_lines(stdin_lines, state, continue_on_error=args.continue_on_error, source_label="<stdin>")
-            try:
-                client.unload_model()
-                client.server_manager.stop()
-            except Exception as e:
-                logger.error(f"Error during cleanup: {e}")
             sys.exit(exit_code)
 
         # Run the UI

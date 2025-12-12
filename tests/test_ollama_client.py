@@ -14,34 +14,13 @@
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import requests
 
 from scriptchat.core.config import Config, ModelConfig, ProviderConfig
 from scriptchat.core.conversations import Conversation, Message
-from scriptchat.core.ollama_client import OllamaChatClient
-
-
-class FakeServerManager:
-    def __init__(self, api_url="http://localhost:11434/api"):
-        self.called_with = []
-        self.api_url = api_url
-        self.using_external_instance = False
-        self._alternative_port = None
-
-    def ensure_running(self, context_length: int):
-        self.called_with.append(context_length)
-
-    def stop(self):
-        self.called_with.append("stop")
-
-    def _get_effective_api_url(self) -> str:
-        """Get the API URL, accounting for alternative port if set."""
-        if self._alternative_port is None:
-            return self.api_url
-        from urllib.parse import urlparse
-        parsed = urlparse(self.api_url)
-        return f"{parsed.scheme}://{parsed.hostname}:{self._alternative_port}/api"
+from scriptchat.core.ollama_client import OllamaChatClient, check_ollama_running
 
 
 class OllamaClientTests(unittest.TestCase):
@@ -73,10 +52,10 @@ class OllamaClientTests(unittest.TestCase):
             providers=[provider],
         )
 
-    def test_chat_sends_request_and_updates_conversation(self):
+    @patch('scriptchat.core.ollama_client.check_ollama_running', return_value=True)
+    def test_chat_sends_request_and_updates_conversation(self, mock_check):
         cfg = self.make_config(context=4096)
-        server = FakeServerManager()
-        client = OllamaChatClient(cfg, server_manager=server)
+        client = OllamaChatClient(cfg, "http://localhost:11434/api", interactive=False)
         convo = Conversation(
             id=None,
             provider_id="ollama",
@@ -116,17 +95,18 @@ class OllamaClientTests(unittest.TestCase):
 
         reply = client.chat(convo, "hello?", streaming=False)
         self.assertEqual(reply, "hello")
-        self.assertEqual(server.called_with[-1], 4096)
         self.assertEqual(convo.tokens_in, 5)
         self.assertEqual(convo.tokens_out, 2)
         self.assertEqual(convo.messages[-1].role, "assistant")
         self.assertEqual(convo.context_length_configured, 4096)
         self.assertEqual(convo.context_length_used, 5)
+        # Verify num_ctx was sent in request
+        self.assertEqual(client.session.posts[0]["json"]["options"]["num_ctx"], 4096)
 
-    def test_chat_streaming_aggregates_chunks_and_tokens(self):
+    @patch('scriptchat.core.ollama_client.check_ollama_running', return_value=True)
+    def test_chat_streaming_aggregates_chunks_and_tokens(self, mock_check):
         cfg = self.make_config(context=1024)
-        server = FakeServerManager()
-        client = OllamaChatClient(cfg, server_manager=server)
+        client = OllamaChatClient(cfg, "http://localhost:11434/api", interactive=False)
         convo = Conversation(
             id=None,
             provider_id="ollama",
@@ -156,8 +136,10 @@ class OllamaClientTests(unittest.TestCase):
         class StreamSession:
             def __init__(self, lines):
                 self.lines = lines
+                self.posts = []
 
             def post(self, url, json=None, timeout=None, stream=False):
+                self.posts.append({"url": url, "json": json})
                 return StreamResponse(self.lines)
 
         lines = [
@@ -178,12 +160,13 @@ class OllamaClientTests(unittest.TestCase):
         self.assertEqual(convo.tokens_in, 7)
         self.assertEqual(convo.tokens_out, 3)
         self.assertEqual(convo.context_length_configured, 1024)
-        self.assertIn(1024, server.called_with)
+        # Verify num_ctx was sent in request
+        self.assertEqual(client.session.posts[0]["json"]["options"]["num_ctx"], 1024)
 
-    def test_invalid_provider_id_raises(self):
+    @patch('scriptchat.core.ollama_client.check_ollama_running', return_value=True)
+    def test_invalid_provider_id_raises(self, mock_check):
         cfg = self.make_config()
-        server = FakeServerManager()
-        client = OllamaChatClient(cfg, server_manager=server)
+        client = OllamaChatClient(cfg, "http://localhost:11434/api", interactive=False)
         convo = Conversation(
             id=None,
             provider_id="other",
@@ -196,10 +179,10 @@ class OllamaClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             client.chat(convo, "hi")
 
-    def test_chat_single_http_error_and_unload(self):
+    @patch('scriptchat.core.ollama_client.check_ollama_running', return_value=True)
+    def test_chat_single_http_error_and_unload(self, mock_check):
         cfg = self.make_config()
-        server = FakeServerManager()
-        client = OllamaChatClient(cfg, server_manager=server)
+        client = OllamaChatClient(cfg, "http://localhost:11434/api", interactive=False)
         convo = Conversation(
             id=None,
             provider_id="ollama",
@@ -245,6 +228,19 @@ class OllamaClientTests(unittest.TestCase):
         client.session = UnloadSession()
         client.unload_model()
         self.assertTrue(calls)
+
+    def test_check_ollama_running_returns_true_on_200(self):
+        with patch('scriptchat.core.ollama_client.requests.get') as mock_get:
+            mock_get.return_value.status_code = 200
+            result = check_ollama_running("http://localhost:11434/api")
+            self.assertTrue(result)
+            mock_get.assert_called_once_with("http://localhost:11434/api/tags", timeout=2.0)
+
+    def test_check_ollama_running_returns_false_on_error(self):
+        with patch('scriptchat.core.ollama_client.requests.get') as mock_get:
+            mock_get.side_effect = requests.ConnectionError("refused")
+            result = check_ollama_running("http://localhost:11434/api")
+            self.assertFalse(result)
 
 
 if __name__ == "__main__":

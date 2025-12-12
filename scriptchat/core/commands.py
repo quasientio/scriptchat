@@ -21,7 +21,7 @@ import re
 
 from .config import Config, reasoning_levels_for_model, reasoning_default_for_model
 from .conversations import Conversation, Message, save_conversation
-from .ollama_client import OllamaChatClient
+from .ollama_client import OllamaChatClient, check_ollama_running
 from .provider_dispatcher import ProviderDispatcher
 
 
@@ -1136,6 +1136,16 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
         default_reason = reasoning_default_for_model(state.config, state.current_conversation.provider_id, state.current_conversation.model_name)
         state.current_conversation.reasoning_level = default_reason
 
+    def _check_ollama_warning(provider_id: str) -> str:
+        """Return warning message if switching to Ollama and it's not running."""
+        try:
+            p = state.config.get_provider(provider_id)
+            if p.type == "ollama" and not check_ollama_running(p.api_url):
+                return f"\nWarning: Ollama is not running at {p.api_url}. Start it with: ollama serve"
+        except ValueError:
+            pass
+        return ""
+
     if available_models and model_name not in available_models:
         # Try to find the model in other providers
         matches = []
@@ -1152,7 +1162,8 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
             state.current_conversation.tokens_in = 0
             state.current_conversation.tokens_out = 0
             _apply_reasoning_default()
-            return CommandResult(message=f"Switched to model: {model_name} (provider: {matches[0]})")
+            warning = _check_ollama_warning(matches[0])
+            return CommandResult(message=f"Switched to model: {model_name} (provider: {matches[0]}){warning}")
         options = available_models if available_models else []
         return CommandResult(
             message=f"Model '{model_name}' not found for provider '{provider.id}'. Options: {options}"
@@ -1162,7 +1173,8 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
     state.current_conversation.tokens_in = 0
     state.current_conversation.tokens_out = 0
     _apply_reasoning_default()
-    return CommandResult(message=f"Switched to model: {model_name}")
+    warning = _check_ollama_warning(state.current_conversation.provider_id)
+    return CommandResult(message=f"Switched to model: {model_name}{warning}")
 
 
 def set_temperature(state: AppState, temperature: float) -> CommandResult:
