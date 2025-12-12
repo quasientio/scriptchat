@@ -22,6 +22,7 @@ Types of changes:
 - `/log-level` now working as intended (was only updating root logger)
 - UI status messages no longer sent to LLM (was using `role='system'`, now uses `role='status'`)
 - ESC+ESC to cancel inference now properly discards the response instead of showing it
+- File reference inside triple backticks now expands
 
 ### Added
 - Context usage percentage in status bar for all providers (OpenAI, Anthropic, Ollama)

@@ -1475,7 +1475,9 @@ def resolve_placeholders(text: str, registry: dict) -> tuple[Optional[str], Opti
     other @-prefixed tokens (e.g., Java annotations like @Override) are left untouched.
     """
     import re
-    pattern = re.compile(r'@(?:\{([^}]+)\}|(\S+))')
+    # Match @{path} or @path where path contains valid file path characters
+    # (excludes backticks, quotes, brackets to handle markdown code blocks)
+    pattern = re.compile(r'@(?:\{([^}]+)\}|([a-zA-Z0-9_./-]+))')
 
     def repl(match):
         key = match.group(1) or match.group(2)

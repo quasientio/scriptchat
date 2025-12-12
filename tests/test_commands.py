@@ -862,6 +862,23 @@ class ResolvePlaceholdersTests(unittest.TestCase):
         self.assertIsNone(err)
         self.assertEqual(result, text)
 
+    def test_expands_inside_markdown_code_blocks(self):
+        """Test that @references inside backticks are expanded correctly."""
+        registry = {"README.md": {"content": "# My Project", "full_path": "/README.md"}}
+        # Triple backticks adjacent to @reference
+        text = "what do you think? ```@README.md```"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "what do you think? ```# My Project```")
+
+    def test_expands_inside_single_backticks(self):
+        """Test that @references inside single backticks are expanded."""
+        registry = {"file.py": {"content": "code here", "full_path": "/file.py"}}
+        text = "Look at `@file.py` please"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Look at `code here` please")
+
 
 class ScriptVariablesTests(unittest.TestCase):
     """Tests for /set, /vars commands and variable expansion."""
