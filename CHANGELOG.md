@@ -21,6 +21,7 @@ Types of changes:
 - `/undo` and saving deletes stale message files, saved state matches in-memory state
 - `/log-level` now working as intended (was only updating root logger)
 - UI status messages no longer sent to LLM (was using `role='system'`, now uses `role='status'`)
+- ESC+ESC to cancel inference now properly discards the response instead of showing it
 
 ### Added
 - Context usage percentage in status bar for all providers (OpenAI, Anthropic, Ollama)

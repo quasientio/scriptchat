@@ -121,7 +121,7 @@ class ScriptChatUI:
         self.expecting_single_key = False
         self.thinking = False  # Track if LLM is processing
         self.thinking_dots = 0  # Animation counter for thinking indicator
-        self.current_inference_thread = None  # Track current LLM thread for cancellation
+        self.inference_cancelled = False  # Track if current inference was cancelled
         self.cancel_requested_at = None  # Timestamp of first ESC press for double-ESC cancel
         self.input_history: list[str] = []
         self.input_history_index: Optional[int] = None
@@ -623,6 +623,7 @@ class ScriptChatUI:
         # Start thinking animation
         self.thinking = True
         self.thinking_dots = 0
+        self.inference_cancelled = False
 
         def animate_thinking():
             import time
@@ -641,6 +642,9 @@ class ScriptChatUI:
                 streaming = bool(self.state.config.enable_streaming)
 
                 def on_chunk(_):
+                    # Don't update display if cancelled
+                    if self.inference_cancelled:
+                        return
                     self.update_conversation_display()
                     self.app.invalidate()
 
@@ -651,6 +655,15 @@ class ScriptChatUI:
                     on_chunk=on_chunk if streaming else None,
                     expanded_history=expanded_messages[:-1]
                 )
+
+                # If cancelled, remove the assistant response that was added
+                if self.inference_cancelled:
+                    # Remove the last assistant message if present
+                    msgs = self.state.current_conversation.messages
+                    if msgs and msgs[-1].role == 'assistant':
+                        msgs.pop()
+                    logger.info("Inference cancelled - discarding response")
+                    return
 
                 end_time = time.time()
                 duration_secs = int(end_time - start_time)
@@ -664,6 +677,9 @@ class ScriptChatUI:
                 self.add_system_message(duration_msg)
                 self.app.invalidate()
             except Exception as e:
+                # Don't show error if cancelled
+                if self.inference_cancelled:
+                    return
                 logger.exception("Chat error")
                 self.thinking = False
                 self.cancel_requested_at = None
@@ -829,31 +845,13 @@ class ScriptChatUI:
 
         logger.info("Cancelling inference")
 
-        # Show cancelling message immediately
-        self.add_system_message("Cancelling...")
-        self.app.invalidate()
-
-        # Stop Ollama server to kill the running inference
-        # Only do this for Ollama provider
-        if self.state.current_conversation.provider_id == 'ollama':
-            try:
-                # Access Ollama client from dispatcher
-                ollama_client = self.state.client.clients.get('ollama')
-                if ollama_client and hasattr(ollama_client, 'server_manager'):
-                    ollama_client.server_manager.stop()
-                    self.add_system_message("⚠ Inference cancelled (Ollama stopped)")
-                else:
-                    self.add_system_message("⚠ Inference cancelled (soft)")
-            except Exception as e:
-                logger.error(f"Error stopping Ollama: {e}")
-                self.add_system_message(f"⚠ Error cancelling: {e}")
-        else:
-            # For non-Ollama providers, just set thinking to false
-            # The request will complete in background but we ignore it
-            self.add_system_message("⚠ Inference cancelled (request continues in background)")
-
+        # Set cancelled flag - the background thread will check this and discard the response
+        self.inference_cancelled = True
         self.thinking = False
         self.cancel_requested_at = None
+
+        # Note: The HTTP request continues in background but response will be discarded
+        self.add_system_message("⚠ Inference cancelled")
         self.app.invalidate()
 
     def _cleanup(self):
