@@ -14,4 +14,4 @@
 
 """ScriptChat: CLI-based chat interface for local LLMs via Ollama."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
