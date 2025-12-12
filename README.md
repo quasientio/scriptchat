@@ -49,7 +49,7 @@ pip install scriptchat
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/scriptchat/scriptchat.git
+   git clone https://github.com/quasientio/scriptchat.git
    cd scriptchat
    ```
 
