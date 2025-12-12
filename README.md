@@ -58,23 +58,31 @@ pip install scriptchat
    pip install -e ".[dev]"
    ```
 
-### Configuration
+## Quickstart
 
-After installation, create your configuration file:
+Run the interactive setup to create your configuration:
 
 ```bash
-mkdir -p ~/.scriptchat
-# Copy the example config (if installing from source)
-cp config.toml.example ~/.scriptchat/config.toml
-# Or create a new one based on the example in the repository
+scriptchat --init
 ```
 
-Edit `~/.scriptchat/config.toml` to configure your models and preferences. See `config.toml.example` for a complete example.
+This guides you through selecting a provider (Ollama, OpenAI, Anthropic, or DeepSeek) and generates `~/.scriptchat/config.toml` with sensible defaults.
+
+Then start chatting:
+
+```bash
+scriptchat
+# or use the shorter alias:
+sc
+```
+
+### Configuration
+
+For more control, edit `~/.scriptchat/config.toml` directly. See `config.toml.example` for a complete example.
 
 Key configuration options:
 
-- `default_provider`: Provider id to use on startup (see `[[providers]]`)
-- `default_model`: Model to use on startup (for the default provider)
+- `default_model`: Model to use on startup, in `provider/model` format (e.g., `ollama/llama3.2`, `openai/gpt-4o`)
 - `default_temperature`: Temperature for new conversations (0.0-2.0)
 - `system_prompt`: System prompt for all conversations (override per conversation with `/prompt`)
 - `conversations_dir`: Where to store conversations (set in `[general]`)
@@ -87,8 +95,7 @@ Key configuration options:
 Example providers:
 ```toml
 [general]
-default_provider = "ollama"
-default_model = "llama3"
+default_model = "ollama/llama3"
 
 [[providers]]
 id = "ollama"
@@ -150,6 +157,12 @@ Check version:
 
 ```bash
 scriptchat --version
+```
+
+Run interactive setup (create or overwrite config):
+
+```bash
+scriptchat --init
 ```
 
 ### Commands

@@ -20,9 +20,8 @@ conversations_dir = "~/.scriptchat/conversations"
 # Streaming (optional; default false)
 # enable_streaming = true
 
-# Default provider/model
-default_provider = "ollama"
-default_model = "llama3.2"
+# Default model in provider/model format (e.g., "ollama/llama3.2", "openai/gpt-4o")
+default_model = "ollama/llama3.2"
 
 # System prompt to use for all conversations
 system_prompt = "You are a helpful assistant."

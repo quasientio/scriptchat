@@ -56,8 +56,8 @@ class Config:
     exports_dir: Optional[Path]
     enable_streaming: bool
     system_prompt: Optional[str]
-    default_provider: str
-    default_model: str
+    default_provider: str  # Derived from default_model (provider/model format)
+    default_model: str  # Model name only (without provider prefix)
     default_temperature: float
     timeout: Optional[int]  # API request timeout in seconds (None = no timeout)
     log_level: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR
@@ -252,8 +252,6 @@ def load_config() -> Config:
     else:
         env_var_blocklist = []
 
-    default_provider = general_section.get('default_provider', 'ollama')
-
     providers: list[ProviderConfig] = []
 
     def parse_models_field(value) -> list[ModelConfig]:
@@ -344,36 +342,52 @@ def load_config() -> Config:
             headers={},
             default_model=default_model
         ))
-        default_provider = 'ollama'
+
+    # Parse default_model which should be in "provider/model" format
+    # For backwards compatibility, also support just "model" (uses first provider)
+    provider_ids = [p.id for p in providers]
+    default_provider = None
+
+    if default_model and '/' in default_model:
+        # New format: provider/model
+        parts = default_model.split('/', 1)
+        default_provider = parts[0]
+        default_model = parts[1]
+    elif default_model:
+        # Legacy: just model name - find which provider has it
+        for p in providers:
+            model_names = [m.name for m in p.models or []]
+            if default_model in model_names:
+                default_provider = p.id
+                break
+        if not default_provider:
+            # Fall back to first provider
+            default_provider = providers[0].id if providers else None
+
+    # If default_model not set, use first provider's first model
+    if not default_model and providers:
+        default_provider = providers[0].id
+        p = providers[0]
+        if p.default_model:
+            default_model = p.default_model
+        elif p.models:
+            default_model = p.models[0].name
 
     # Validate default provider exists
-    provider_ids = [p.id for p in providers]
-    if default_provider not in provider_ids:
-        raise ValueError(f"default_provider '{default_provider}' not found in providers {provider_ids}")
+    if default_provider and default_provider not in provider_ids:
+        raise ValueError(f"default_model provider '{default_provider}' not found. Available: {provider_ids}")
 
-    # If default_model not set, try provider default or first model
-    if not default_model:
+    # Validate default model exists in provider
+    if default_provider and default_model:
         try:
             default_provider_obj = next(p for p in providers if p.id == default_provider)
+            model_names = [m.name for m in default_provider_obj.models or []]
+            if model_names and default_model not in model_names:
+                raise ValueError(
+                    f"default_model '{default_model}' not found in provider '{default_provider}'. Options: {model_names}"
+                )
         except StopIteration:
-            default_provider_obj = None
-        if default_provider_obj:
-            if default_provider_obj.default_model:
-                default_model = default_provider_obj.default_model
-            elif default_provider_obj.models:
-                default_model = default_provider_obj.models[0].name
-
-    # Validate default model exists in default provider if available
-    try:
-        default_provider_obj = next(p for p in providers if p.id == default_provider)
-    except StopIteration:
-        default_provider_obj = None
-    if default_provider_obj and default_model:
-        model_names = [m.name for m in default_provider_obj.models or []]
-        if model_names and default_model not in model_names:
-            raise ValueError(
-                f"default_model '{default_model}' not found in provider '{default_provider}'. Options: {model_names}"
-            )
+            pass
 
     config = Config(
         api_url=api_url,

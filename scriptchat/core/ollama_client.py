@@ -101,12 +101,12 @@ class OllamaServerManager:
 
         while True:
             try:
-                choice = input("\nChoice [1/2/3]: ").strip()
+                choice = input("\nChoice (Enter for 1): ").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\nExiting...")
                 raise SystemExit(0)
 
-            if choice == '1':
+            if choice in ('1', ''):
                 logger.info("User chose to use existing Ollama instance")
                 self.using_external_instance = True
                 print("Using existing Ollama instance.")

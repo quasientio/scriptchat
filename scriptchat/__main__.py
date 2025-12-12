@@ -466,6 +466,163 @@ def run_batch(script_path: str, state: AppState, continue_on_error: bool = False
     return run_batch_lines(lines, state, continue_on_error=continue_on_error, source_label=str(script_path))
 
 
+def run_init():  # pragma: no cover - interactive init not exercised in unit tests
+    """Run interactive configuration setup."""
+    config_dir = Path.home() / ".scriptchat"
+    config_path = config_dir / "config.toml"
+
+    print()
+    print(" ╔═══════════════════════════════════╗")
+    print(" ║   ScriptChat Configuration Setup  ║")
+    print(" ╚═══════════════════════════════════╝")
+    print()
+
+    # Check if config already exists
+    if config_path.exists():
+        print(f"Configuration file already exists: {config_path}")
+        response = input("Overwrite? [y/N] ").strip().lower()
+        if response not in ("y", "yes"):
+            print("Aborted.")
+            return
+        print()
+
+    # Provider selection
+    print("Which provider do you want to use?")
+    print()
+    print("  1. Ollama (local, free)")
+    print("  2. OpenAI")
+    print("  3. Anthropic")
+    print("  4. DeepSeek")
+    print("  5. Skip - I'll configure manually")
+    print()
+
+    choice = input("Enter choice [1-5]: ").strip()
+
+    provider_config = None
+    default_model = None  # Will be in provider/model format
+    next_steps = []
+
+    if choice == "1":
+        # Ollama
+        model = input("Model name (Enter for llama3.2): ").strip() or "llama3.2"
+        default_model = f"ollama/{model}"
+        provider_config = f'''[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = [
+  {{ name = "{model}", context = 8192 }}
+]'''
+        next_steps = [
+            f"Install Ollama from https://ollama.ai if not already installed",
+            f"Run: ollama pull {model}",
+            "Run: scriptchat",
+        ]
+
+    elif choice == "2":
+        # OpenAI
+        print()
+        print("API key can be set here or via OPENAI_API_KEY environment variable.")
+        api_key = input("OpenAI API key (leave empty to use env var): ").strip()
+        model = input("Model name (Enter for gpt-4o-mini): ").strip() or "gpt-4o-mini"
+        default_model = f"openai/{model}"
+        api_key_line = f'api_key = "{api_key}"' if api_key else "# api_key = \"...\"  # Or set OPENAI_API_KEY env var"
+        provider_config = f'''[[providers]]
+id = "openai"
+type = "openai-compatible"
+api_url = "https://api.openai.com"
+{api_key_line}
+models = [
+  {{ name = "{model}" }}
+]'''
+        next_steps = [
+            "Set OPENAI_API_KEY environment variable (if not configured above)",
+            "Run: scriptchat",
+        ]
+
+    elif choice == "3":
+        # Anthropic
+        print()
+        print("API key can be set here or via ANTHROPIC_API_KEY environment variable.")
+        api_key = input("Anthropic API key (leave empty to use env var): ").strip()
+        model = input("Model name (Enter for claude-sonnet-4-20250514): ").strip() or "claude-sonnet-4-20250514"
+        default_model = f"anthropic/{model}"
+        api_key_line = f'api_key = "{api_key}"' if api_key else "# api_key = \"...\"  # Or set ANTHROPIC_API_KEY env var"
+        provider_config = f'''[[providers]]
+id = "anthropic"
+type = "anthropic"
+api_url = "https://api.anthropic.com"
+{api_key_line}
+models = [
+  {{ name = "{model}" }}
+]'''
+        next_steps = [
+            "Set ANTHROPIC_API_KEY environment variable (if not configured above)",
+            "Run: scriptchat",
+        ]
+
+    elif choice == "4":
+        # DeepSeek
+        print()
+        print("API key can be set here or via DEEPSEEK_API_KEY environment variable.")
+        api_key = input("DeepSeek API key (leave empty to use env var): ").strip()
+        model = input("Model name (Enter for deepseek-chat): ").strip() or "deepseek-chat"
+        default_model = f"deepseek/{model}"
+        api_key_line = f'api_key = "{api_key}"' if api_key else "# api_key = \"...\"  # Or set DEEPSEEK_API_KEY env var"
+        provider_config = f'''[[providers]]
+id = "deepseek"
+type = "openai-compatible"
+api_url = "https://api.deepseek.com"
+{api_key_line}
+models = [
+  {{ name = "{model}" }}
+]'''
+        next_steps = [
+            "Set DEEPSEEK_API_KEY environment variable (if not configured above)",
+            "Run: scriptchat",
+        ]
+
+    elif choice == "5":
+        # Skip - manual config
+        next_steps = [
+            f"Edit {config_path} to add your providers",
+            "See config.toml.example for reference",
+            "Run: scriptchat",
+        ]
+
+    else:
+        print("Invalid choice. Aborted.")
+        return
+
+    # Build config content
+    config_content = '''# ScriptChat configuration
+# See config.toml.example for all options
+
+[general]
+log_level = "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+log_file = "~/.scriptchat/logs/scriptchat.log"
+conversations_dir = "~/.scriptchat/conversations"
+'''
+
+    if default_model:
+        config_content += f'default_model = "{default_model}"  # provider/model format\n'
+
+    if provider_config:
+        config_content += f"\n{provider_config}\n"
+
+    # Create directory and write config
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(config_content)
+
+    print()
+    print(f"Configuration saved to: {config_path}")
+    print()
+    print("Next steps:")
+    for i, step in enumerate(next_steps, 1):
+        print(f"  {i}. {step}")
+    print()
+
+
 def main():  # pragma: no cover - interactive entrypoint not exercised in unit tests
     """Main entry point for the application."""
     from . import __version__
@@ -490,7 +647,17 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         action='store_true',
         help='In batch mode, continue running after assertion failures (exit code 1 if any fail)'
     )
+    parser.add_argument(
+        '--init',
+        action='store_true',
+        help='Create initial configuration file interactively'
+    )
     args = parser.parse_args()
+
+    # Handle --init before anything else
+    if args.init:
+        run_init()
+        return
 
     try:
         # Load configuration (this also initializes logging)
@@ -541,17 +708,8 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
                 content=config.system_prompt
             ))
 
-        # Pick initial model: config.default_model, provider.default_model, or first provider model
+        # config.default_model and config.default_provider are set by load_config()
         initial_model = config.default_model
-        try:
-            default_provider_obj = config.get_provider(config.default_provider)
-            if not initial_model:
-                if default_provider_obj.default_model:
-                    initial_model = default_provider_obj.default_model
-                elif default_provider_obj.models:
-                    initial_model = default_provider_obj.models[0].name
-        except ValueError:
-            pass
 
         initial_conversation = Conversation(
             id=None,

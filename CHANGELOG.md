@@ -38,9 +38,14 @@ Types of changes:
 - `/load --archived` flag to load conversations from the archive
 - Interactive selection menu for `/model`, `/load`, `/reason`, and `/log-level`
   commands. Navigate with arrow keys or j/k, select with Enter/Tab, cancel with Escape.
+- Typing ESC in the input area clears message or command typed so far
+- `--init` flag for interactive first-run configuration setup. Supports Ollama,
+  OpenAI, Anthropic, and DeepSeek providers with guided API key/model setup.
 
 ### Changed
 - Model config `contexts` (list) simplified to `context` (single int) in config.toml
+- `default_provider` + `default_model` merged into single `default_model` setting
+  using `provider/model` format (e.g., `default_model = "ollama/llama3.2"`)
 - `/model`, `/load`, `/reason`, `/log-level` no longer accept index arguments;
   use the interactive menu or pass a name directly (e.g., `/model ollama/llama3`)
 - Set store=false in openai Responses API to prevent server-side storing of conversations

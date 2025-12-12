@@ -30,13 +30,8 @@ class ConfigProviderTests(unittest.TestCase):
     def test_loads_providers_and_default_provider(self):
         toml_text = """
 [general]
-default_provider = "ollama"
-default_model = "llama3.1"
+default_model = "ollama/llama3.1"
 conversations_dir = "{conv}"
-
-[ollama]
-api_url = "http://localhost:11434/api"
-default_model = "llama3.1"
 
 [[providers]]
 id = "ollama"
@@ -56,9 +51,10 @@ models = "llama3.1,phi3"
             self.assertTrue(any(m.name == "llama3.1" for m in models))
 
     def test_missing_default_provider_raises(self):
+        # default_model with non-existent provider should raise
         toml_text = """
 [general]
-default_provider = "missing"
+default_model = "missing/somemodel"
 conversations_dir = "{conv}"
 
 [[providers]]
@@ -76,10 +72,10 @@ models = "llama3"
                 load_config()
 
     def test_invalid_provider_entry_and_legacy_model_contexts(self):
-        # Missing required provider fields
+        # Missing required provider fields (api_url)
         toml_text = """
 [general]
-default_provider = "ollama"
+default_model = "ollama/llama3"
 conversations_dir = "{conv}"
 
 [[providers]]
@@ -93,10 +89,9 @@ type = "ollama"
             with self.assertRaises(ValueError):
                 load_config()
 
-        # Legacy models missing contexts should raise
+        # Legacy models missing context should raise
         legacy_text = """
 [general]
-default_provider = "ollama"
 conversations_dir = "{conv}"
 
 [ollama]
