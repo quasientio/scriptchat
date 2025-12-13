@@ -271,6 +271,30 @@ Use `/keys` for the full list.
 
 You can register multiple files and mix references in one message. `/profile` lists full paths of registered files.
 
+### Token Estimation
+
+When registering files with `/file`, ScriptChat shows the token count and context percentage:
+
+```
+Registered @README.md (14234 chars, 3548 tokens / 2.7% ctx)
+```
+
+Token counting accuracy varies by provider:
+
+| Model/Provider | Method | Accuracy |
+|----------------|--------|----------|
+| DeepSeek (any provider) | transformers | exact |
+| OpenAI (gpt-3/gpt-4/o1/o3) | tiktoken | exact |
+| Anthropic | tiktoken cl100k_base | ~approximate |
+| Ollama | tiktoken cl100k_base | ~approximate |
+| Other openai-compatible | tiktoken cl100k_base | ~approximate |
+
+Approximate counts are prefixed with `~`. For exact DeepSeek tokenization, install the optional dependency:
+
+```bash
+pip install scriptchat[deepseek]   # or: pipx inject scriptchat transformers
+```
+
 ### Conversation Storage
 
 Conversations are stored in `~/.scriptchat/conversations/` (or `conversations_dir` in config) with the following structure:

@@ -35,6 +35,7 @@ dependencies = [
     "Pygments>=2.0.0",
     "requests>=2.25.0",
     "toml>=0.10.0",
+    "tiktoken>=0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +43,9 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "coverage>=7.0.0",
+]
+deepseek = [
+    "transformers>=4.30.0",  # DeepSeek/Llama/open model tokenizers
 ]
 
 [project.urls]
@@ -59,6 +63,9 @@ version = {attr = "scriptchat.__version__"}
 [tool.setuptools.packages.find]
 include = ["scriptchat*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"scriptchat.data.deepseek_tokenizer" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

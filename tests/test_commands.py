@@ -96,6 +96,9 @@ class CommandTests(unittest.TestCase):
             result = handle_command(f"/file {file_path}", state)
             self.assertIsNone(result.file_content)
             self.assertIn("Registered", result.message)
+            self.assertIn("5 chars", result.message)
+            self.assertIn("tokens", result.message)  # Token estimate included
+            self.assertIn("% ctx", result.message)  # Context percentage included
             entry = state.file_registry[str(file_path)]
             self.assertEqual(entry["content"], "hello")
 

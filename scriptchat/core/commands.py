@@ -854,7 +854,40 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         except Exception:
             pass
 
-        return CommandResult(message=f"Registered @{file_path}{alt} ({len(content)} chars)")
+        # Estimate tokens for the file
+        from .tokenizer import estimate_tokens
+        from .model_defaults import get_default_context_limit
+        token_count, token_method = estimate_tokens(
+            content,
+            provider_id=state.current_conversation.provider_id,
+            model_name=state.current_conversation.model_name
+        )
+        # Show ~ prefix for estimates and approximations
+        is_approximate = token_method == "estimate" or token_method.endswith("~")
+        token_prefix = "~" if is_approximate else ""
+
+        # Get context length for percentage calculation
+        context_length = state.current_conversation.context_length_configured
+        if context_length is None:
+            try:
+                model_cfg = state.config.get_model(
+                    state.current_conversation.provider_id,
+                    state.current_conversation.model_name
+                )
+                context_length = model_cfg.context
+            except Exception:
+                pass
+        if context_length is None:
+            context_length = get_default_context_limit(state.current_conversation.model_name)
+
+        # Build token info with optional context percentage
+        if context_length:
+            pct = token_count / context_length * 100
+            token_info = f", {token_prefix}{token_count} tokens / {pct:.1f}% ctx"
+        else:
+            token_info = f", {token_prefix}{token_count} tokens"
+
+        return CommandResult(message=f"Registered @{file_path}{alt} ({len(content)} chars{token_info})")
 
     elif command == 'echo':
         # Echo command - print message without sending to LLM

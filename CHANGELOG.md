@@ -18,6 +18,9 @@ Types of changes:
 
 ### Added
 - Context usage warning colors in status bar: yellow at 75%, red at 90%
+- Token estimation for `/file` command shows chars, tokens, and context percentage
+- `tiktoken` dependency for accurate OpenAI token counting
+- Optional `deepseek` extra for DeepSeek tokenizer (`pip install scriptchat[deepseek]`)
 
 ### Fixed
 - Ignore hidden directories inside conversations (e.g. .git if convos are versioned)
