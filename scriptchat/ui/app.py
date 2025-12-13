@@ -492,22 +492,30 @@ class ScriptChatUI:
             dots = "." * ((self.thinking_dots % 3) + 1)
             thinking_indicator = f" | Thinking{dots}"
 
-        # Build context usage display
-        context_display = ""
+        # Build context usage display with color warning
+        context_parts = []
         if convo.context_length_configured is not None and convo.context_length_used is not None:
             percentage = (convo.context_length_used / convo.context_length_configured * 100) if convo.context_length_configured > 0 else 0
-            context_display = f" | {convo.context_length_used}/{convo.context_length_configured} ({percentage:.1f}%)"
+            context_text = f"{convo.context_length_used}/{convo.context_length_configured} ({percentage:.1f}%)"
+            # Color based on usage: red >= 90%, orange/yellow >= 75%
+            if percentage >= 90:
+                context_style = 'reverse fg:ansired bold'
+            elif percentage >= 75:
+                context_style = 'reverse fg:ansiyellow'
+            else:
+                context_style = 'reverse'
+            context_parts = [('reverse', ' | '), (context_style, context_text)]
 
         reasoning_display = f" ({convo.reasoning_level})" if getattr(convo, "reasoning_level", None) else ""
 
-        text = (
+        prefix = (
             f"{convo.provider_id}/{convo.model_name}{reasoning_display} | "
-            f"{convo.tokens_in} in / {convo.tokens_out} out{context_display} | "
-            f"{conv_id}{thinking_indicator}"
+            f"{convo.tokens_in} in / {convo.tokens_out} out"
         )
+        suffix = f" | {conv_id}{thinking_indicator}"
 
-        # Return with reverse video (inverted colors)
-        return [('reverse', text)]
+        # Return with reverse video, context portion colored if needed
+        return [('reverse', prefix)] + context_parts + [('reverse', suffix)]
 
     def _get_prompt_prefix(self) -> str:
         """Get prompt prefix text."""

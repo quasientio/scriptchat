@@ -81,8 +81,10 @@ class AppHelperTests(unittest.TestCase):
         ui.prompt_message = "Enter"
 
         status = ui._get_status_bar()
-        self.assertIn("ollama/llama3", status[0][1])
-        self.assertIn("Thinking", status[0][1])
+        # Status bar returns list of (style, text) tuples
+        full_text = ''.join(text for _, text in status)
+        self.assertIn("ollama/llama3", full_text)
+        self.assertIn("Thinking", full_text)
         self.assertEqual(ui._get_prompt_prefix(), "Enter ")
 
     def test_build_conversation_text_and_lexer(self):

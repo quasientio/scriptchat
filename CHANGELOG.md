@@ -16,6 +16,12 @@ Types of changes:
 
 ## [Unreleased]
 
+### Added
+- Context usage warning colors in status bar: yellow at 75%, red at 90%
+
+### Fixed
+- Ignore hidden directories inside conversations (e.g. .git if convos are versioned)
+
 ## [0.3.0] - 2025-12-12
 
 ### Fixed
