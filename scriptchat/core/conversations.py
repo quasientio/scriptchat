@@ -153,8 +153,8 @@ def list_conversations(
         for conv_dir in scan_dir.iterdir():
             if not conv_dir.is_dir():
                 continue
-            # Skip archive dir when scanning root
-            if conv_dir.name == ARCHIVE_DIR:
+            # Skip hidden directories (e.g., .git, .archive)
+            if conv_dir.name.startswith('.'):
                 continue
 
             summary = _load_conversation_summary(conv_dir, is_archived)
