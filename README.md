@@ -39,12 +39,6 @@ pipx install scriptchat
 
 This installs the `scriptchat` command (and the shorter `sc` alias) globally.
 
-### Via pip
-
-```bash
-pip install scriptchat
-```
-
 ### From source
 
 1. Clone this repository:
