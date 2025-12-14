@@ -21,9 +21,14 @@ Types of changes:
 - Token estimation for `/file` command shows chars, tokens, and context percentage
 - `tiktoken` dependency for accurate OpenAI token counting
 - Optional `deepseek` extra for DeepSeek tokenizer (`pip install scriptchat[deepseek]`)
+- `auth_format` provider config option for non-Bearer auth (e.g., Baseten uses `api-key`)
+- Baseten provider example in config.toml.example
 
 ### Fixed
 - Ignore hidden directories inside conversations (e.g. .git if convos are versioned)
+- Strip leaked stop tokens (`<|im_end|>`, `<|endoftext|>`, etc.) from model responses
+- Avoid duplicate `/v1` in API URLs when api_url already includes version
+- `/profile` now shows context from built-in model defaults when not explicitly configured
 
 ## [0.3.0] - 2025-12-12
 

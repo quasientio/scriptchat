@@ -60,10 +60,56 @@ class OpenAIChatClient:
         }
         api_key = _resolve_api_key(provider)
         if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+            auth_format = getattr(provider, 'auth_format', 'bearer')
+            if auth_format == "api-key":
+                headers["Authorization"] = f"Api-Key {api_key}"
+            else:
+                headers["Authorization"] = f"Bearer {api_key}"
         if provider.headers:
             headers.update(provider.headers)
         self.session.headers.update(headers)
+
+    # Common stop tokens that may leak through from various models
+    STOP_TOKENS = [
+        "<|im_end|>",
+        "<|endoftext|>",
+        "<|im_start|>",
+        "<|end|>",
+        "</s>",
+        "<|eot_id|>",
+    ]
+
+    def _strip_stop_tokens(self, content: str) -> str:
+        """Strip common stop tokens from the end of model output."""
+        if not content:
+            return content
+        for token in self.STOP_TOKENS:
+            if content.endswith(token):
+                content = content[:-len(token)].rstrip()
+        return content
+
+    def _build_url(self, endpoint: str) -> str:
+        """Build URL for API endpoint, avoiding duplicate version prefixes.
+
+        If api_url already ends with a version (e.g., /v1, /v2), and endpoint
+        starts with the same version, don't duplicate it.
+
+        Args:
+            endpoint: The endpoint path (e.g., "/v1/chat/completions")
+
+        Returns:
+            Full URL with api_url and endpoint properly joined
+        """
+        import re
+        base = self.provider.api_url.rstrip('/')
+        # Check if base ends with version like /v1, /v2, etc.
+        version_match = re.search(r'/v\d+$', base)
+        if version_match:
+            base_version = version_match.group()  # e.g., "/v1"
+            if endpoint.startswith(base_version):
+                # Remove version from endpoint to avoid duplication
+                endpoint = endpoint[len(base_version):]
+        return f"{base}{endpoint}"
 
     def chat(
         self,
@@ -103,7 +149,7 @@ class OpenAIChatClient:
             }
             if getattr(convo, "reasoning_level", None):
                 payload["reasoning"] = {"effort": convo.reasoning_level}
-            url = f"{self.provider.api_url.rstrip('/')}/v1/responses"
+            url = self._build_url("/v1/responses")
         else:
             payload = {
                 "model": convo.model_name,
@@ -113,7 +159,7 @@ class OpenAIChatClient:
             }
             if getattr(convo, "reasoning_level", None):
                 payload["reasoning"] = {"effort": convo.reasoning_level}
-            url = f"{self.provider.api_url.rstrip('/')}/v1/chat/completions"
+            url = self._build_url("/v1/chat/completions")
 
         # Disable prompt caching if configured (for privacy)
         if not self.provider.prompt_cache:
@@ -220,6 +266,9 @@ class OpenAIChatClient:
 
         self._log_response_metadata(resp, data, usage)
 
+        # Strip any leaked stop tokens
+        content = self._strip_stop_tokens(content)
+
         # Update conversation
         convo.messages.append(Message(role='assistant', content=content))
         # Chat Completions API uses prompt_tokens/completion_tokens
@@ -305,6 +354,9 @@ class OpenAIChatClient:
         # Log response metadata from streaming (use last_data for model/id info)
         final_usage = {"prompt_tokens": total_prompt, "completion_tokens": total_completion}
         self._log_response_metadata(resp, last_data or {}, final_usage)
+
+        # Strip any leaked stop tokens from final content
+        assistant_msg.content = self._strip_stop_tokens(assistant_msg.content)
 
         return assistant_msg.content
 

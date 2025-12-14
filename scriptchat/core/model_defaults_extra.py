@@ -14,7 +14,13 @@ MODEL_CONTEXT_LIMITS_EXTRA: dict[str, int] = {
     "gpt-5-mini": 400000,
     "gpt-5-nano": 400000,
     "gpt-5.1": 400000,
+    # Fireworks AI
     "accounts/fireworks/models/gpt-oss-120b": 128000,
     "accounts/fireworks/models/kimi-k2-thinking": 256000,
-    "accounts/fireworks/models/deepseek-v3p2": 160000
+    "accounts/fireworks/models/deepseek-v3p2": 160000,
+    # Baseten (use model name only, not provider/model)
+    "qwen/qwen3-coder-480b-a35b-instruct": 262144,
+    "moonshotai/kimi-k2-thinking": 256000,
+    "openai/gpt-oss-120b": 128000,
+    "deepseek-ai/deepseek-v3.2": 128000
 }

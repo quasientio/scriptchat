@@ -99,6 +99,17 @@ models = [
   { name = "accounts/fireworks/models/deepseek-r1" }
 ]
 
+# Baseten - serverless inference
+[[providers]]
+id = "baseten"
+type = "openai-compatible"
+api_url = "https://inference.baseten.co/v1"
+auth_format = "api-key"  # Baseten uses "Api-Key" auth header instead of "Bearer"
+# api_key = "..."  # Or set BASETEN_API_KEY env var
+models = [
+  { name = "Qwen/Qwen3-Coder-480B-A35B-Instruct" }
+]
+
 # Anthropic Claude provider
 [[providers]]
 id = "anthropic"

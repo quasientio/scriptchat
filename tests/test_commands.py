@@ -292,7 +292,9 @@ class CommandTests(unittest.TestCase):
     def test_profile_shows_context_not_configured_when_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
-            # Remove context from model
+            # Use a model name that has no defaults in model_defaults.py
+            state.current_conversation.model_name = "unknown-test-model-xyz"
+            state.config.providers[0].models[0].name = "unknown-test-model-xyz"
             state.config.providers[0].models[0].context = None
             result = handle_command("/profile", state)
             msg = result.message or ""

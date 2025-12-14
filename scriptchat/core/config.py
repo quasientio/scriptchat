@@ -44,6 +44,7 @@ class ProviderConfig:
     headers: dict = None
     default_model: Optional[str] = None
     api_format: Optional[str] = None  # "responses" or "chat" (default: "responses" for openai, "chat" otherwise)
+    auth_format: str = "bearer"  # "bearer" (default) or "api-key" (for Baseten)
     prompt_cache: bool = True  # Set to false to disable prompt caching (adds prompt_cache_max_len=0)
 
 
@@ -311,7 +312,10 @@ def load_config() -> Config:
                 models=models,
                 streaming=entry.get('streaming', True),
                 headers=entry.get('headers', {}),
-                default_model=entry.get('default_model')
+                default_model=entry.get('default_model'),
+                api_format=entry.get('api_format'),
+                auth_format=entry.get('auth_format', 'bearer'),
+                prompt_cache=entry.get('prompt_cache', True),
             ))
     else:
         # Legacy config: build a single ollama provider from [ollama] and [[models]]

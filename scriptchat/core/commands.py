@@ -1059,15 +1059,18 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         else:
             reasoning_display = "(unavailable)"
 
-        # Get context length from model config
+        # Get context length from model config or defaults
+        from .model_defaults import get_default_context_limit
         try:
             model_cfg = cfg.get_model(convo.provider_id, convo.model_name)
-            if model_cfg.context:
-                context_display = str(model_cfg.context)
+            context_length = model_cfg.context or get_default_context_limit(convo.model_name)
+            if context_length:
+                context_display = str(context_length)
             else:
                 context_display = "(not configured)"
         except ValueError:
-            context_display = "(not configured)"
+            context_length = get_default_context_limit(convo.model_name)
+            context_display = str(context_length) if context_length else "(not configured)"
 
         lines = [
             "",  # Start on new line after [system] prefix
