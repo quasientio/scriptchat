@@ -24,6 +24,13 @@ Types of changes:
 - `auth_format` provider config option for non-Bearer auth (e.g., Baseten uses `api-key`)
 - Baseten provider example in config.toml.example
 
+### Changed
+- Input area now supports multiline editing with UP/DOWN/LEFT/RIGHT navigation
+- LEFT/RIGHT arrows cross line boundaries for seamless multiline editing
+- Alt+Enter or Ctrl+J inserts a newline without sending the message
+- Input area height capped at 60% of terminal height with scrolling support
+- Multiline mode (`"""`) now keeps text visible and editable in input area
+
 ### Fixed
 - Ignore hidden directories inside conversations (e.g. .git if convos are versioned)
 - Strip leaked stop tokens (`<|im_end|>`, `<|endoftext|>`, etc.) from model responses

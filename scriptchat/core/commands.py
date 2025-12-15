@@ -383,10 +383,21 @@ Keyboard Shortcuts:
   In conversation pane:
     Up/Down          Scroll line by line
 
-  In input pane:
+  In input pane (single line):
     Up/Down          Navigate command history
+    Left/Right       Move cursor normally
     Tab              Command completion
     Shift+Tab        Reverse completion cycling
+
+  In input pane (multiline):
+    Up/Down          Navigate within text (no history)
+    Left/Right       Move cursor, crossing line boundaries
+    Alt+Enter        Insert newline without sending
+    Ctrl+J           Insert newline without sending (alternative)
+
+  Multiline input mode:
+    \"\"\"              Start multiline input (text stays visible/editable)
+    \"\"\" + Enter      End multiline mode and send message
 
   In selection menu (/model, /load, /reason, /log-level):
     j/k or Up/Down   Navigate items
@@ -394,6 +405,7 @@ Keyboard Shortcuts:
     Escape           Cancel selection
 
   General:
+    Enter            Send message
     Ctrl+C, Ctrl+D   Exit ScriptChat
     Escape (2x)      Cancel ongoing inference (within 2 seconds)
 """

@@ -24,7 +24,7 @@ from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
-from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl, FloatContainer, Float
+from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl, FloatContainer, Float, ScrollOffsets
 from prompt_toolkit.layout.containers import WindowAlign
 from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.layout.menus import CompletionsMenu
@@ -115,7 +115,6 @@ class ScriptChatUI:
         """
         self.state = state
         self.multiline_mode = False
-        self.multiline_buffer = []
         self.prompt_message = ""  # Current prompt message for user input
         self.pending_callback = None  # Callback waiting for user input
         self.expecting_single_key = False
@@ -145,7 +144,7 @@ class ScriptChatUI:
 
         # Create buffers
         self.input_buffer = Buffer(
-            multiline=False,
+            multiline=True,
             history=InMemoryHistory(),
             completer=command_completer,
             complete_while_typing=True
@@ -209,16 +208,27 @@ class ScriptChatUI:
 
         def get_input_height():
             text = self.input_buffer.text
+            term_size = shutil.get_terminal_size()
+            max_height = max(1, term_size.lines * 60 // 100)  # 60% of terminal height
+
             if not text:
                 return 1
-            term_width = shutil.get_terminal_size().columns
+
+            # Calculate wrapped line count for each actual line
             prompt_len = len(self._get_prompt_prefix())
-            available_width = max(1, term_width - prompt_len)
-            return max(1, (len(text) + available_width - 1) // available_width)
+            available_width = max(1, term_size.columns - prompt_len)
+
+            total_lines = 0
+            for line in text.split('\n'):
+                # Each line takes at least 1 row, plus extra for wrapping
+                total_lines += max(1, (len(line) + available_width - 1) // available_width)
+
+            return min(max_height, max(1, total_lines))
 
         self.input_window = Window(
             content=BufferControl(buffer=self.input_buffer),
-            wrap_lines=True
+            wrap_lines=True,
+            scroll_offsets=ScrollOffsets(top=1, bottom=1)  # Allow scrolling within input
         )
 
         input_container = VSplit([
@@ -265,6 +275,13 @@ class ScriptChatUI:
         """
         kb = KeyBindings()
 
+        @kb.add('escape', 'enter')  # Alt+Enter (escape sequence)
+        @kb.add('c-j')  # Ctrl+J as alternative
+        def handle_newline_insert(event):
+            """Insert a newline without sending the message."""
+            if event.current_buffer == self.input_buffer:
+                self.input_buffer.insert_text('\n')
+
         @kb.add('enter')
         def handle_enter(event):
             """Handle Enter key press."""
@@ -281,22 +298,30 @@ class ScriptChatUI:
                 return
 
             if self.multiline_mode:
-                # Check if this is the closing delimiter
-                if text == '"""':
+                # Check if current line is the closing delimiter
+                # Get the text after the last newline (current line being entered)
+                full_text = self.input_buffer.text
+                last_newline = full_text.rfind('\n')
+                current_line = full_text[last_newline + 1:].strip() if last_newline >= 0 else full_text.strip()
+
+                if current_line == '"""':
                     # Send the collected multiline message
-                    full_message = '\n'.join(self.multiline_buffer)
+                    # Extract content: everything between opening """ and closing """
+                    content = full_text[:last_newline] if last_newline >= 0 else ''
+                    # Remove the opening """ line
+                    lines = content.split('\n')
+                    if lines and lines[0].strip() == '"""':
+                        lines = lines[1:]
+                    full_message = '\n'.join(lines)
+
                     self.multiline_mode = False
-                    self.multiline_buffer = []
                     self.input_buffer.text = ''
                     if full_message.strip():
                         self._append_history(full_message)
-
-                    if full_message.strip():
                         self.handle_user_message(full_message)
                 else:
-                    # Add line to buffer and continue
-                    self.multiline_buffer.append(text)
-                    self.input_buffer.text = ''
+                    # Just insert newline and continue - text stays visible
+                    self.input_buffer.insert_text('\n')
             else:
                 # Check if starting multiline mode
                 if text.startswith('"""'):
@@ -314,10 +339,9 @@ class ScriptChatUI:
                             self._append_history(full_message)
                             self.handle_user_message(full_message)
                     else:
-                        # Incomplete - enter multiline mode
+                        # Incomplete - enter multiline mode, keep """ in buffer
                         self.multiline_mode = True
-                        self.multiline_buffer = []
-                        self.input_buffer.text = ''
+                        self.input_buffer.insert_text('\n')  # Move to next line
                         self.add_system_message("[Multi-line mode active. Type '\"\"\"' on a new line to send]")
                 elif text.startswith('/'):
                     # Command
@@ -407,23 +431,45 @@ class ScriptChatUI:
 
         @kb.add('up')
         def handle_up(event):
-            """Recall previous history entry when in input."""
+            """Navigate within multiline text or recall history."""
             buff = event.current_buffer
-            if buff == self.input_buffer and not self.multiline_mode and not self.pending_callback:
+            if buff == self.input_buffer and not self.pending_callback:
                 if buff.complete_state:
                     buff.complete_previous()
-                else:
+                elif '\n' in buff.text:
+                    # Multiline text - only navigate within text, no history
+                    buff.cursor_up()
+                elif not self.multiline_mode:
+                    # Single line - history navigation
                     self._history_previous()
 
         @kb.add('down')
         def handle_down(event):
-            """Recall next history entry when in input."""
+            """Navigate within multiline text or recall history."""
             buff = event.current_buffer
-            if buff == self.input_buffer and not self.multiline_mode and not self.pending_callback:
+            if buff == self.input_buffer and not self.pending_callback:
                 if buff.complete_state:
                     buff.complete_next()
-                else:
+                elif '\n' in buff.text:
+                    # Multiline text - only navigate within text, no history
+                    buff.cursor_down()
+                elif not self.multiline_mode:
+                    # Single line - history navigation
                     self._history_next()
+
+        @kb.add('left')
+        def handle_left(event):
+            """Move cursor left, crossing line boundaries."""
+            buff = event.current_buffer
+            if buff == self.input_buffer and buff.cursor_position > 0:
+                buff.cursor_position -= 1
+
+        @kb.add('right')
+        def handle_right(event):
+            """Move cursor right, crossing line boundaries."""
+            buff = event.current_buffer
+            if buff == self.input_buffer and buff.cursor_position < len(buff.text):
+                buff.cursor_position += 1
 
         @kb.add('c-up')
         def handle_ctrl_up(event):
