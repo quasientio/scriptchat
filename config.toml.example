@@ -93,10 +93,12 @@ api_url = "https://api.fireworks.ai/inference"
 # api_format = "responses"  # Optional: use Responses API with store=false (only some models)
 prompt_cache = false  # Disable prompt caching for full privacy (no data in volatile memory)
 # api_key = "..."  # Or set FIREWORKS_API_KEY env var
+# Models can have optional aliases for shorter /model commands (e.g., /model dsv3)
+# Aliases must be unique across all providers and contain only alphanumeric, underscore, dash, or dot.
 models = [
-  { name = "accounts/fireworks/models/gpt-oss-120b" },
-  { name = "accounts/fireworks/models/deepseek-v3" },
-  { name = "accounts/fireworks/models/deepseek-r1" }
+  { name = "accounts/fireworks/models/gpt-oss-120b", alias = "gpt-oss" },
+  { name = "accounts/fireworks/models/deepseek-v3", alias = "dsv3" },
+  { name = "accounts/fireworks/models/deepseek-r1", alias = "dsr1" }
 ]
 
 # Baseten - serverless inference

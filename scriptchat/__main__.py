@@ -146,7 +146,11 @@ def handle_batch_command(
             if provider_id:
                 state.current_conversation.provider_id = provider_id
             result = set_model(state, model_name)
-            print(f"[{line_num}] {result.message} (provider: {provider_id})")
+            msg = result.message or ""
+            # Only append provider if set_model didn't already include it
+            if provider_id and "provider:" not in msg:
+                msg = f"{msg} (provider: {provider_id})"
+            print(f"[{line_num}] {msg}")
         else:
             result = set_model(state, args)
             print(f"[{line_num}] {result.message}")

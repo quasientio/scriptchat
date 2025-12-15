@@ -191,6 +191,36 @@ class CommandTests(unittest.TestCase):
             result = handle_command("/unfile nonexistent.txt", state)
             self.assertIn("not registered", result.message)
 
+    def test_models_command_lists_providers_and_models(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Add another provider with alias and reasoning
+            other = ProviderConfig(
+                id="openai",
+                type="openai-compatible",
+                api_url="http://example",
+                api_key="",
+                models=[
+                    ModelConfig(name="gpt-5", context=400000, alias="g5", reasoning_levels=["low", "high"], reasoning_default="low"),
+                ],
+                streaming=True,
+                headers={},
+                default_model=None,
+            )
+            state.config.providers.append(other)
+
+            result = handle_command("/models", state)
+            self.assertIn("Models by provider:", result.message)
+            # Check ollama provider
+            self.assertIn("[ollama]", result.message)
+            self.assertIn("llama3", result.message)
+            # Check openai provider
+            self.assertIn("[openai]", result.message)
+            self.assertIn("gpt-5", result.message)
+            self.assertIn("alias: **g5**", result.message)
+            self.assertIn("ctx: 400,000", result.message)
+            self.assertIn("reasoning: low/high", result.message)
+
     @patch('scriptchat.core.commands.check_ollama_running', return_value=True)
     def test_set_model_resets_token_counters_and_validates(self, mock_check):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -247,6 +277,38 @@ class CommandTests(unittest.TestCase):
             # Should stay on original provider/model
             self.assertEqual(state.current_conversation.provider_id, "ollama")
             self.assertEqual(state.current_conversation.model_name, "llama3")
+
+    def test_set_model_resolves_alias(self):
+        """Test that set_model resolves model aliases to provider/model."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Add a provider with aliased models
+            other = ProviderConfig(
+                id="fireworks",
+                type="openai-compatible",
+                api_url="http://example",
+                api_key="",
+                models=[
+                    ModelConfig(name="accounts/fireworks/models/deepseek-v3", context=1024, alias="dsv3"),
+                    ModelConfig(name="accounts/fireworks/models/deepseek-r1", context=1024, alias="dsr1"),
+                ],
+                streaming=True,
+                headers={},
+                default_model=None,
+            )
+            state.config.providers.append(other)
+
+            # Switch using alias
+            result = set_model(state, "dsv3")
+            self.assertIn("Switched to model", result.message)
+            self.assertIn("alias: dsv3", result.message)
+            self.assertEqual(state.current_conversation.provider_id, "fireworks")
+            self.assertEqual(state.current_conversation.model_name, "accounts/fireworks/models/deepseek-v3")
+
+            # Switch to another alias
+            result = set_model(state, "dsr1")
+            self.assertIn("alias: dsr1", result.message)
+            self.assertEqual(state.current_conversation.model_name, "accounts/fireworks/models/deepseek-r1")
 
     def test_set_temperature_clamps_range(self):
         with tempfile.TemporaryDirectory() as tmpdir:

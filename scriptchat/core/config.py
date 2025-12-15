@@ -16,11 +16,16 @@
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import toml
+
+
+# Alias must be alphanumeric with underscore, dash, or dot. No slashes allowed.
+ALIAS_PATTERN = re.compile(r'^[a-zA-Z0-9_.\-]+$')
 
 
 @dataclass
@@ -30,6 +35,7 @@ class ModelConfig:
     context: int | None = None  # Optional; context window size in tokens
     reasoning_levels: list[str] | None = None  # Optional; available reasoning levels for this model
     reasoning_default: str | None = None  # Optional; default reasoning level for this model
+    alias: str | None = None  # Optional; short alias for /model command (alphanumeric, underscore, dash, dot only)
 
 
 @dataclass
@@ -99,6 +105,21 @@ class Config:
     def list_models(self, provider_id: str) -> list[ModelConfig]:
         provider = self.get_provider(provider_id)
         return provider.models or []
+
+    def resolve_alias(self, alias: str) -> tuple[str, str] | None:
+        """Resolve a model alias to (provider_id, model_name).
+
+        Args:
+            alias: The alias to resolve
+
+        Returns:
+            Tuple of (provider_id, model_name) if found, None otherwise
+        """
+        for provider in self.providers:
+            for model in provider.models or []:
+                if model.alias == alias:
+                    return (provider.id, model.name)
+        return None
 
 
 def _setup_logging(config: Config) -> None:
@@ -285,11 +306,15 @@ def load_config() -> Config:
                     reasoning_default = None
                     if entry.get('reasoning_default'):
                         reasoning_default = str(entry.get('reasoning_default')).strip().lower()
+                    alias = None
+                    if entry.get('alias'):
+                        alias = str(entry.get('alias')).strip()
                     result.append(ModelConfig(
                         name=name,
                         context=context,
                         reasoning_levels=reasoning_levels,
                         reasoning_default=reasoning_default,
+                        alias=alias,
                     ))
                 elif isinstance(entry, str):
                     result.append(ModelConfig(name=entry.strip(), context=None, reasoning_levels=None, reasoning_default=None))
@@ -392,6 +417,25 @@ def load_config() -> Config:
                 )
         except StopIteration:
             pass
+
+    # Validate model aliases: format and uniqueness
+    seen_aliases: dict[str, str] = {}  # alias -> "provider/model" for error messages
+    for provider in providers:
+        for model in provider.models or []:
+            if model.alias:
+                # Validate format: alphanumeric, underscore, dash, dot only (no slashes)
+                if not ALIAS_PATTERN.match(model.alias):
+                    raise ValueError(
+                        f"Invalid alias '{model.alias}' for model '{provider.id}/{model.name}'. "
+                        "Aliases must contain only alphanumeric characters, underscores, dashes, or dots."
+                    )
+                # Validate uniqueness
+                qualified_name = f"{provider.id}/{model.name}"
+                if model.alias in seen_aliases:
+                    raise ValueError(
+                        f"Duplicate alias '{model.alias}': used by both '{seen_aliases[model.alias]}' and '{qualified_name}'"
+                    )
+                seen_aliases[model.alias] = qualified_name
 
     config = Config(
         api_url=api_url,

@@ -110,9 +110,15 @@ COMMAND_REGISTRY = {
     # Model & Settings
     "model": {
         "category": "Model & Settings",
-        "usage": "/model [provider/name]",
+        "usage": "/model [provider/name|alias]",
         "description": "Switch model. Without args, shows interactive selection menu.",
-        "examples": ["/model", "/model ollama/llama3", "/model llama3"],
+        "examples": ["/model", "/model ollama/llama3", "/model dsv3"],
+    },
+    "models": {
+        "category": "Model & Settings",
+        "usage": "/models",
+        "description": "List all configured models by provider.",
+        "examples": ["/models"],
     },
     "temp": {
         "category": "Model & Settings",
@@ -1085,6 +1091,36 @@ def handle_command(line: str, state: AppState) -> CommandResult:
                 lines.append(f"@{key} -> {full_path}")
         return CommandResult(message="\n".join(lines))
 
+    elif command == 'models':
+        from .model_defaults import get_default_context_limit
+        if not state.config.providers:
+            return CommandResult(message="No providers configured.")
+        lines = ["Models by provider:"]
+        for provider in state.config.providers:
+            lines.append(f"\n**[{provider.id}]** ({provider.type})")
+            models = provider.models or []
+            if not models and provider.default_model:
+                ctx = get_default_context_limit(provider.default_model)
+                ctx_info = f", ctx: {ctx:,}" if ctx else ""
+                lines.append(f"  {provider.default_model} (default, no explicit config{ctx_info})")
+            for model in models:
+                parts_list = []
+                if model.alias:
+                    parts_list.append(f"alias: **{model.alias}**")
+                # Show context from config, or fall back to built-in defaults
+                ctx = model.context or get_default_context_limit(model.name)
+                if ctx:
+                    parts_list.append(f"ctx: {ctx:,}")
+                if model.reasoning_levels:
+                    levels = "/".join(model.reasoning_levels)
+                    if model.reasoning_default:
+                        parts_list.append(f"reasoning: {levels}, default: {model.reasoning_default}")
+                    else:
+                        parts_list.append(f"reasoning: {levels}")
+                detail = f" ({', '.join(parts_list)})" if parts_list else ""
+                lines.append(f"  {model.name}{detail}")
+        return CommandResult(message="\n".join(lines))
+
     elif command == 'profile':
         full = False
         if len(parts) > 1 and parts[1].strip():
@@ -1214,20 +1250,12 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
 
     Args:
         state: Application state
-        model_name: Name of model to switch to
+        model_name: Name of model to switch to (can be alias, model name, or provider/model)
 
     Returns:
         CommandResult with execution result
     """
-    try:
-        provider = state.config.get_provider(state.current_conversation.provider_id)
-    except ValueError as e:
-        return CommandResult(message=str(e))
-
     model_name = model_name.strip()
-    available_models = [m.name for m in (provider.models or [])]
-    if provider.default_model and provider.default_model not in available_models:
-        available_models.append(provider.default_model)
 
     def _apply_reasoning_default():
         default_reason = reasoning_default_for_model(state.config, state.current_conversation.provider_id, state.current_conversation.model_name)
@@ -1242,6 +1270,28 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
         except ValueError:
             pass
         return ""
+
+    # If input doesn't contain '/', it could be an alias - try to resolve it first
+    if '/' not in model_name:
+        resolved = state.config.resolve_alias(model_name)
+        if resolved:
+            provider_id, actual_model = resolved
+            state.current_conversation.provider_id = provider_id
+            state.current_conversation.model_name = actual_model
+            state.current_conversation.tokens_in = 0
+            state.current_conversation.tokens_out = 0
+            _apply_reasoning_default()
+            warning = _check_ollama_warning(provider_id)
+            return CommandResult(message=f"Switched to model: {actual_model} (provider: {provider_id}, alias: {model_name}){warning}")
+
+    try:
+        provider = state.config.get_provider(state.current_conversation.provider_id)
+    except ValueError as e:
+        return CommandResult(message=str(e))
+
+    available_models = [m.name for m in (provider.models or [])]
+    if provider.default_model and provider.default_model not in available_models:
+        available_models.append(provider.default_model)
 
     if available_models and model_name not in available_models:
         # Try to find the model in other providers
@@ -1261,9 +1311,14 @@ def set_model(state: AppState, model_name: str) -> CommandResult:
             _apply_reasoning_default()
             warning = _check_ollama_warning(matches[0])
             return CommandResult(message=f"Switched to model: {model_name} (provider: {matches[0]}){warning}")
-        options = available_models if available_models else []
+        elif len(matches) > 1:
+            # Model exists in multiple providers - need qualification
+            return CommandResult(
+                message=f"Model '{model_name}' found in multiple providers: {matches}. Use provider/model format (e.g., {matches[0]}/{model_name})."
+            )
+        # Model not found anywhere
         return CommandResult(
-            message=f"Model '{model_name}' not found for provider '{provider.id}'. Options: {options}"
+            message=f"Model '{model_name}' not found. Use /model without args to see available models, or provider/model format."
         )
 
     state.current_conversation.model_name = model_name

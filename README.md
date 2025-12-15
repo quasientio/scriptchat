@@ -83,6 +83,14 @@ Key options:
 - `system_prompt` - Default system prompt (override with `/prompt`)
 - `[[providers]]` - Provider configs with `id`, `type`, `api_url`, `models`
 
+**Model aliases:** Models can have an optional `alias` for shorter `/model` commands. Useful for providers with long model names:
+```toml
+models = [
+  { name = "accounts/fireworks/models/deepseek-v3", alias = "dsv3" }
+]
+```
+Then use `/model dsv3` instead of the full path. Aliases must be unique and contain only alphanumeric, underscore, dash, or dot characters.
+
 **API Keys:** Set `api_key` in config or use environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
 
 Minimal example:
@@ -151,7 +159,8 @@ All commands start with `/`:
 - `/import-chatgpt <path> [--dry-run]` - Import conversations from a ChatGPT export ZIP file. Use `--dry-run` to preview without saving.
 
 **Model & Settings**
-- `/model [provider/name]` - Switch model. Without args, shows interactive selection menu. With args, switches directly (e.g., `/model ollama/llama3`).
+- `/model [provider/name|alias]` - Switch model. Without args, shows interactive selection menu. With args, switches directly (e.g., `/model ollama/llama3` or `/model dsv3` if alias configured).
+- `/models` - List all configured models by provider (shows aliases, context, reasoning levels)
 - `/temp` - Change the temperature setting
 - `/reason [level]` - Set reasoning level (`low`, `medium`, `high`, `max`). Without args, shows interactive selection menu. For Anthropic Claude, these map to thinking budgets (4K, 16K, 32K, 55K tokens).
 - `/thinking [tokens]` - Set exact thinking budget in tokens for Anthropic Claude (1024-128000). Use `/thinking off` to disable. Overrides `/reason` presets.

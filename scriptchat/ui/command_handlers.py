@@ -197,7 +197,9 @@ class CommandHandlers:
             self.app.state.current_conversation.provider_id = provider_id
             result = set_model(self.app.state, model_name)
             msg = result.message or ""
-            if provider_id:
+            # Only append provider if set_model didn't already include it
+            # (set_model includes provider info for aliases and cross-provider switches)
+            if provider_id and "provider:" not in msg:
                 msg = f"{msg} (provider: {provider_id})"
             self.app.add_system_message(msg.strip())
         except Exception as e:

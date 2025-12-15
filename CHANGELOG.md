@@ -17,6 +17,9 @@ Types of changes:
 ## [Unreleased]
 
 ### Added
+- `/models` command to list all configured models by provider with aliases, context, and reasoning info
+- Model aliases: optional `alias` field in model config for shorter `/model` references
+  (e.g., `alias = "dsv3"` lets you use `/model dsv3` instead of `/model fireworks/accounts/fireworks/models/deepseek-v3`)
 - `/unfile <key>` command to unregister files added with `/file`
 - Context usage warning colors in status bar: yellow at 75%, red at 90%
 - Token estimation for `/file` command shows chars, tokens, and context percentage
@@ -33,6 +36,8 @@ Types of changes:
 - Multiline mode (`"""`) now keeps text visible and editable in input area
 
 ### Fixed
+- `/model` no longer shows duplicate provider info when switching via alias or cross-provider
+- `/model` error message now suggests using `/model` without args or `provider/model` format instead of listing current provider's models
 - Ignore hidden directories inside conversations (e.g. .git if convos are versioned)
 - Strip leaked stop tokens (`<|im_end|>`, `<|endoftext|>`, etc.) from model responses
 - Avoid duplicate `/v1` in API URLs when api_url already includes version

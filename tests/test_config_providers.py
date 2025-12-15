@@ -107,6 +107,154 @@ name = "llama3"
             with self.assertRaises(ValueError):
                 load_config()
 
+    def test_model_alias_parsing(self):
+        """Test that model aliases are parsed correctly."""
+        toml_text = """
+[general]
+default_model = "fireworks/deepseek-v3"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "fireworks"
+type = "openai-compatible"
+api_url = "https://api.fireworks.ai/inference"
+models = [
+  {{ name = "deepseek-v3", alias = "dsv3" }},
+  {{ name = "deepseek-r1", alias = "dsr1" }}
+]
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            text = toml_text.format(conv=conv_dir.as_posix())
+            write_config(text, Path(tmpdir))
+            cfg = load_config()
+            models = cfg.list_models("fireworks")
+            self.assertEqual(models[0].alias, "dsv3")
+            self.assertEqual(models[1].alias, "dsr1")
+
+    def test_model_alias_resolve(self):
+        """Test that resolve_alias returns the correct provider/model."""
+        toml_text = """
+[general]
+default_model = "fireworks/deepseek-v3"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "fireworks"
+type = "openai-compatible"
+api_url = "https://api.fireworks.ai/inference"
+models = [
+  {{ name = "deepseek-v3", alias = "dsv3" }}
+]
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = [
+  {{ name = "llama3", alias = "ll3" }}
+]
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            text = toml_text.format(conv=conv_dir.as_posix())
+            write_config(text, Path(tmpdir))
+            cfg = load_config()
+            # Resolve alias to provider/model
+            result = cfg.resolve_alias("dsv3")
+            self.assertEqual(result, ("fireworks", "deepseek-v3"))
+            result = cfg.resolve_alias("ll3")
+            self.assertEqual(result, ("ollama", "llama3"))
+            # Unknown alias returns None
+            result = cfg.resolve_alias("unknown")
+            self.assertIsNone(result)
+
+    def test_model_alias_invalid_format_raises(self):
+        """Test that aliases with invalid characters raise ValueError."""
+        toml_text = """
+[general]
+default_model = "fireworks/deepseek-v3"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "fireworks"
+type = "openai-compatible"
+api_url = "https://api.fireworks.ai/inference"
+models = [
+  {{ name = "deepseek-v3", alias = "ds/v3" }}
+]
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            text = toml_text.format(conv=conv_dir.as_posix())
+            write_config(text, Path(tmpdir))
+            with self.assertRaises(ValueError) as ctx:
+                load_config()
+            self.assertIn("Invalid alias", str(ctx.exception))
+            self.assertIn("ds/v3", str(ctx.exception))
+
+    def test_model_alias_duplicate_raises(self):
+        """Test that duplicate aliases raise ValueError."""
+        toml_text = """
+[general]
+default_model = "fireworks/deepseek-v3"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "fireworks"
+type = "openai-compatible"
+api_url = "https://api.fireworks.ai/inference"
+models = [
+  {{ name = "deepseek-v3", alias = "ds" }},
+  {{ name = "deepseek-r1", alias = "ds" }}
+]
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            text = toml_text.format(conv=conv_dir.as_posix())
+            write_config(text, Path(tmpdir))
+            with self.assertRaises(ValueError) as ctx:
+                load_config()
+            self.assertIn("Duplicate alias", str(ctx.exception))
+            self.assertIn("ds", str(ctx.exception))
+
+    def test_model_alias_duplicate_across_providers_raises(self):
+        """Test that duplicate aliases across providers raise ValueError."""
+        toml_text = """
+[general]
+default_model = "fireworks/deepseek-v3"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "fireworks"
+type = "openai-compatible"
+api_url = "https://api.fireworks.ai/inference"
+models = [
+  {{ name = "deepseek-v3", alias = "mymodel" }}
+]
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = [
+  {{ name = "llama3", alias = "mymodel" }}
+]
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["HOME"] = tmpdir
+            conv_dir = Path(tmpdir) / "conversations"
+            text = toml_text.format(conv=conv_dir.as_posix())
+            write_config(text, Path(tmpdir))
+            with self.assertRaises(ValueError) as ctx:
+                load_config()
+            self.assertIn("Duplicate alias", str(ctx.exception))
+            self.assertIn("mymodel", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
