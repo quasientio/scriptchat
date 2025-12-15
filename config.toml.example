@@ -95,10 +95,13 @@ prompt_cache = false  # Disable prompt caching for full privacy (no data in vola
 # api_key = "..."  # Or set FIREWORKS_API_KEY env var
 # Models can have optional aliases for shorter /model commands (e.g., /model dsv3)
 # Aliases must be unique across all providers and contain only alphanumeric, underscore, dash, or dot.
+# Thinking models need high max_tokens to allow room for reasoning + output.
+# Streaming is auto-enabled when max_tokens > 4096 (required by some providers).
 models = [
   { name = "accounts/fireworks/models/gpt-oss-120b", alias = "gpt-oss" },
   { name = "accounts/fireworks/models/deepseek-v3", alias = "dsv3" },
-  { name = "accounts/fireworks/models/deepseek-r1", alias = "dsr1" }
+  { name = "accounts/fireworks/models/deepseek-r1", alias = "dsr1" },
+  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384 }
 ]
 
 # Baseten - serverless inference

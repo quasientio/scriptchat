@@ -91,6 +91,14 @@ models = [
 ```
 Then use `/model dsv3` instead of the full path. Aliases must be unique and contain only alphanumeric, underscore, dash, or dot characters.
 
+**Thinking models:** Models like Kimi K2 Thinking or DeepSeek R1 use internal reasoning tokens. Set `max_tokens` high enough to allow room for both thinking and output:
+```toml
+models = [
+  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384 }
+]
+```
+Streaming is auto-enabled when `max_tokens > 4096` (required by some providers).
+
 **API Keys:** Set `api_key` in config or use environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
 
 Minimal example:
@@ -418,6 +426,8 @@ Example: `ollama/llama3.2 (high) | 1234 in / 567 out | 1801/8192 (22.0%) | 20251
 **Connection errors**: Check that Ollama is running (`ollama serve`) and accessible at the configured URL.
 
 **Model not found**: Make sure the model is pulled in Ollama (`ollama pull modelname`) and configured in `config.toml`.
+
+**Empty or truncated responses from thinking models**: Thinking models (Kimi K2, DeepSeek R1, etc.) use tokens for internal reasoning. If the default `max_tokens` limit is too low, the model may exhaust tokens during thinking before producing output. Set `max_tokens` in your model config (e.g., `max_tokens = 16384`).
 
 ## License
 

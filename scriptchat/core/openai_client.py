@@ -161,6 +161,16 @@ class OpenAIChatClient:
                 payload["reasoning"] = {"effort": convo.reasoning_level}
             url = self._build_url("/v1/chat/completions")
 
+        # Set max_tokens from model config (important for thinking models)
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        if model_cfg.max_tokens:
+            payload["max_tokens"] = model_cfg.max_tokens
+            # Some providers (e.g. Fireworks) require streaming for high max_tokens
+            if model_cfg.max_tokens > 4096 and not streaming:
+                streaming = True
+                payload["stream"] = True
+                logger.debug("Forcing streaming due to max_tokens > 4096")
+
         # Disable prompt caching if configured (for privacy)
         if not self.provider.prompt_cache:
             payload["prompt_cache_max_len"] = 0
@@ -257,7 +267,19 @@ class OpenAIChatClient:
         resp = self._post_with_temperature_retry(url, payload, stream=False, convo=convo)
         data = resp.json()
         if "choices" in data:
-            content = data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
+            content = message.get("content") or ""
+            # Handle thinking models that return content in reasoning_content
+            reasoning_content = message.get("reasoning_content")
+            if reasoning_content and not content:
+                logger.debug("Using reasoning_content as content (thinking model)")
+                content = reasoning_content
+            elif reasoning_content:
+                logger.debug("Model returned both content and reasoning_content")
+            # Log message keys when content is empty (helps debug thinking models)
+            if not content:
+                logger.warning("Empty content in response. Message keys: %s", list(message.keys()))
+                logger.debug("Full message structure: %s", message)
             usage = data.get("usage", {})
         else:
             # Responses API
@@ -314,6 +336,10 @@ class OpenAIChatClient:
             if "choices" in data:
                 delta = data.get("choices", [{}])[0].get("delta", {})
                 content_piece = delta.get("content", "")
+                # Handle thinking models that stream reasoning_content
+                reasoning_piece = delta.get("reasoning_content", "")
+                if reasoning_piece and not content_piece:
+                    content_piece = reasoning_piece
                 usage = data.get("usage") or {}
                 # Chat Completions API uses prompt_tokens/completion_tokens
                 total_prompt += usage.get("prompt_tokens", 0)

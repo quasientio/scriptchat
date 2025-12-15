@@ -28,10 +28,13 @@ Types of changes:
 - Optional `deepseek` extra for DeepSeek tokenizer (`pip install scriptchat[deepseek]`)
 - `auth_format` provider config option for non-Bearer auth (e.g., Baseten uses `api-key`)
 - Baseten provider example in config.toml.example
+- `max_tokens` model config option for controlling output token limit (important for thinking models)
+- Support for thinking models that return content in `reasoning_content` field (e.g., Kimi K2 Thinking)
 
 ### Changed
 - Input area now supports multiline editing with UP/DOWN/LEFT/RIGHT navigation
 - LEFT/RIGHT arrows cross line boundaries for seamless multiline editing
+- Auto-enable streaming when `max_tokens > 4096` (required by some providers like Fireworks)
 - Alt+Enter or Ctrl+J inserts a newline without sending the message
 - Input area height capped at 60% of terminal height with scrolling support
 - Multiline mode (`"""`) now keeps text visible and editable in input area

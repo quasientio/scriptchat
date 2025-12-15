@@ -33,6 +33,7 @@ class ModelConfig:
     """Configuration for a single model."""
     name: str
     context: int | None = None  # Optional; context window size in tokens
+    max_tokens: int | None = None  # Optional; max output tokens (important for thinking models)
     reasoning_levels: list[str] | None = None  # Optional; available reasoning levels for this model
     reasoning_default: str | None = None  # Optional; default reasoning level for this model
     alias: str | None = None  # Optional; short alias for /model command (alphanumeric, underscore, dash, dot only)
@@ -100,7 +101,7 @@ class Config:
                 if model.name == name:
                     return model
         # If models not specified, allow dynamic model names
-        return ModelConfig(name=name, context=None, reasoning_levels=None)
+        return ModelConfig(name=name, context=None, max_tokens=None, reasoning_levels=None)
 
     def list_models(self, provider_id: str) -> list[ModelConfig]:
         provider = self.get_provider(provider_id)
@@ -281,7 +282,7 @@ def load_config() -> Config:
             return []
         if isinstance(value, str):
             names = [n.strip() for n in value.split(',') if n.strip()]
-            return [ModelConfig(name=n, context=None, reasoning_levels=None, reasoning_default=None) for n in names]
+            return [ModelConfig(name=n, context=None, max_tokens=None, reasoning_levels=None, reasoning_default=None) for n in names]
         if isinstance(value, list):
             result = []
             for entry in value:
@@ -309,15 +310,23 @@ def load_config() -> Config:
                     alias = None
                     if entry.get('alias'):
                         alias = str(entry.get('alias')).strip()
+                    max_tokens = None
+                    max_tokens_val = entry.get('max_tokens')
+                    if max_tokens_val:
+                        try:
+                            max_tokens = int(max_tokens_val)
+                        except (ValueError, TypeError):
+                            max_tokens = None
                     result.append(ModelConfig(
                         name=name,
                         context=context,
+                        max_tokens=max_tokens,
                         reasoning_levels=reasoning_levels,
                         reasoning_default=reasoning_default,
                         alias=alias,
                     ))
                 elif isinstance(entry, str):
-                    result.append(ModelConfig(name=entry.strip(), context=None, reasoning_levels=None, reasoning_default=None))
+                    result.append(ModelConfig(name=entry.strip(), context=None, max_tokens=None, reasoning_levels=None, reasoning_default=None))
             return result
         return []
 
@@ -359,7 +368,7 @@ def load_config() -> Config:
             except (ValueError, TypeError):
                 raise ValueError(f"Invalid context format for model '{name}': {context_val}")
 
-            legacy_models.append(ModelConfig(name=name, context=context))
+            legacy_models.append(ModelConfig(name=name, context=context, max_tokens=None))
 
         providers.append(ProviderConfig(
             id='ollama',
