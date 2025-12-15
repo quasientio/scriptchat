@@ -17,6 +17,7 @@ Types of changes:
 ## [Unreleased]
 
 ### Added
+- `/unfile <key>` command to unregister files added with `/file`
 - Context usage warning colors in status bar: yellow at 75%, red at 90%
 - Token estimation for `/file` command shows chars, tokens, and context percentage
 - `tiktoken` dependency for accurate OpenAI token counting

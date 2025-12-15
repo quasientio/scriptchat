@@ -161,6 +161,7 @@ All commands start with `/`:
 
 **Files**
 - `/file [--force] <path>` - Register a file for use as `@path` in messages (content is expanded when sending, message stores `@path`). Use `--force` for large files above `file_confirm_threshold_bytes`.
+- `/unfile <key>` - Unregister a file (removes both the path and basename aliases)
 - `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
 
 **Tags**

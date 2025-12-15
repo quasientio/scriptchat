@@ -163,6 +163,12 @@ COMMAND_REGISTRY = {
         "description": "List registered files. Use --long for details.",
         "examples": ["/files", "/files --long"],
     },
+    "unfile": {
+        "category": "Files",
+        "usage": "/unfile <key>",
+        "description": "Unregister a file. Use the key shown in /files (path or basename).",
+        "examples": ["/unfile src/main.py", "/unfile main.py"],
+    },
     # Tags
     "tag": {
         "category": "Tags",
@@ -900,6 +906,49 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             token_info = f", {token_prefix}{token_count} tokens"
 
         return CommandResult(message=f"Registered @{file_path}{alt} ({len(content)} chars{token_info})")
+
+    elif command == 'unfile':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /unfile <key>")
+        key = parts[1].strip()
+        if key not in state.file_registry:
+            return CommandResult(message=f"File not registered: {key}")
+
+        # Get the full_path of the file being removed so we can clean up aliases
+        entry = state.file_registry[key]
+        full_path = entry["full_path"] if isinstance(entry, dict) else str(key)
+
+        # Find all keys that point to the same file and remove them
+        keys_to_remove = [k for k, e in state.file_registry.items()
+                         if isinstance(e, dict) and e.get("full_path") == full_path]
+        for k in keys_to_remove:
+            del state.file_registry[k]
+
+        # Also remove from file_references on the conversation
+        if hasattr(state.current_conversation, "file_references") and state.current_conversation.file_references:
+            refs_to_remove = []
+            for ref_key, ref_val in state.current_conversation.file_references.items():
+                ref_path = ref_val.get("path") if isinstance(ref_val, dict) else ref_val
+                if ref_path == full_path:
+                    refs_to_remove.append(ref_key)
+            for ref_key in refs_to_remove:
+                del state.current_conversation.file_references[ref_key]
+
+        # Auto-save if conversation has an ID
+        saved_note = ""
+        try:
+            if state.current_conversation.id:
+                save_conversation(
+                    state.conversations_root,
+                    state.current_conversation,
+                    system_prompt=state.current_conversation.system_prompt
+                )
+                saved_note = " (saved)"
+        except Exception:
+            pass
+
+        removed_keys = ", ".join(f"@{k}" for k in keys_to_remove)
+        return CommandResult(message=f"Unregistered {removed_keys}{saved_note}")
 
     elif command == 'echo':
         # Echo command - print message without sending to LLM

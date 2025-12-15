@@ -153,6 +153,44 @@ class CommandTests(unittest.TestCase):
             self.assertIn(f"@{file_path} -> {expected_full} (2 bytes) sha256:{digest}", lines[1:])
             self.assertIn(f"@{file_path.name} -> {expected_full} (2 bytes) sha256:{digest}", lines[1:])
 
+    def test_unfile_command_removes_file_and_aliases(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            file_path = Path(tmpdir) / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            # Register the file
+            handle_command(f"/file {file_path}", state)
+            self.assertIn(str(file_path), state.file_registry)
+            self.assertIn("note.txt", state.file_registry)
+
+            # Unregister by full path
+            result = handle_command(f"/unfile {file_path}", state)
+            self.assertIn("Unregistered", result.message)
+            self.assertNotIn(str(file_path), state.file_registry)
+            self.assertNotIn("note.txt", state.file_registry)
+
+    def test_unfile_command_removes_by_basename(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            file_path = Path(tmpdir) / "note.txt"
+            file_path.write_text("hello", encoding="utf-8")
+
+            # Register the file
+            handle_command(f"/file {file_path}", state)
+
+            # Unregister by basename
+            result = handle_command("/unfile note.txt", state)
+            self.assertIn("Unregistered", result.message)
+            self.assertNotIn(str(file_path), state.file_registry)
+            self.assertNotIn("note.txt", state.file_registry)
+
+    def test_unfile_command_not_found(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/unfile nonexistent.txt", state)
+            self.assertIn("not registered", result.message)
+
     @patch('scriptchat.core.commands.check_ollama_running', return_value=True)
     def test_set_model_resets_token_counters_and_validates(self, mock_check):
         with tempfile.TemporaryDirectory() as tmpdir:
