@@ -172,6 +172,43 @@ class AppHelperTests(unittest.TestCase):
             ui2 = ScriptChatUI(state)
             self.assertEqual(ui2.input_history, ["first", "second"])
 
+    def test_markdown_to_ansi_conversion(self):
+        state = make_state()
+        ui = object.__new__(ScriptChatUI)
+        ui.state = state
+
+        # Test bold conversion
+        result = ui._markdown_to_ansi("This is **bold** text")
+        self.assertIn("\033[1m", result)  # ANSI bold
+        self.assertIn("bold", result)
+        self.assertNotIn("**", result)
+
+        # Test code conversion
+        result = ui._markdown_to_ansi("Use `code` here")
+        self.assertIn("\033[96m", result)  # ANSI cyan
+        self.assertIn("code", result)
+        self.assertNotIn("`", result)
+
+        # Test header conversion
+        result = ui._markdown_to_ansi("## My Header")
+        self.assertIn("\033[1m", result)  # ANSI bold
+        self.assertIn("My Header", result)
+        self.assertNotIn("##", result)
+
+        # Test multiple header levels
+        result = ui._markdown_to_ansi("# H1\n## H2\n### H3")
+        self.assertEqual(result.count("\033[1m"), 3)
+        self.assertNotIn("#", result)
+
+        # Test mixed formatting
+        result = ui._markdown_to_ansi("**bold** and `code`")
+        self.assertIn("\033[1m", result)
+        self.assertIn("\033[96m", result)
+
+        # Test no conversion for plain text
+        result = ui._markdown_to_ansi("plain text")
+        self.assertEqual(result, "plain text")
+
 
 if __name__ == "__main__":
     unittest.main()

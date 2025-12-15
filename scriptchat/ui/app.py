@@ -567,6 +567,27 @@ class ScriptChatUI:
         """Get prompt prefix text."""
         return (self.prompt_message + " ") if self.prompt_message else "> "
 
+    def _markdown_to_ansi(self, text: str) -> str:
+        """Convert basic markdown formatting to ANSI codes.
+
+        Supports:
+        - # Header -> ANSI bold (up to 6 levels)
+        - **bold** -> ANSI bold
+        - `code` -> ANSI cyan
+        """
+        import re
+        BOLD = '\033[1m'
+        CYAN = '\033[96m'
+        RESET = '\033[0m'
+
+        # Convert markdown headers (# to ######) at start of line to bold
+        text = re.sub(r'^(#{1,6})\s+(.+)$', rf'{BOLD}\2{RESET}', text, flags=re.MULTILINE)
+        # Convert **bold** to ANSI bold (non-greedy, doesn't span newlines)
+        text = re.sub(r'\*\*([^*\n]+)\*\*', rf'{BOLD}\1{RESET}', text)
+        # Convert `code` to cyan (non-greedy, doesn't span newlines)
+        text = re.sub(r'`([^`\n]+)`', rf'{CYAN}\1{RESET}', text)
+        return text
+
     def _build_conversation_text(self) -> str:
         """Build conversation text with ANSI color codes.
 
@@ -586,7 +607,7 @@ class ScriptChatUI:
 
         for msg in self.state.current_conversation.messages:
             if msg.role == 'system':
-                content = msg.content or ""
+                content = self._markdown_to_ansi(msg.content or "")
                 is_error = content.strip().lower().startswith("error")
                 color = RED if is_error else GRAY
                 lines.append(f"{color}[system] {content}{RESET}")
@@ -594,17 +615,19 @@ class ScriptChatUI:
                 # User messages in cyan
                 lines.append(f"{CYAN}[user]{RESET} {msg.content}")
             elif msg.role == 'assistant':
-                # Assistant messages in green
-                lines.append(f"{GREEN}[assistant]{RESET} {msg.content}")
+                # Assistant messages in green, with markdown rendering
+                content = self._markdown_to_ansi(msg.content or "")
+                lines.append(f"{GREEN}[assistant]{RESET} {content}")
             elif msg.role == 'echo':
                 # Echo messages in yellow, no prefix
-                lines.append(f"{YELLOW}{msg.content}{RESET}")
+                content = self._markdown_to_ansi(msg.content or "")
+                lines.append(f"{YELLOW}{content}{RESET}")
             elif msg.role == 'note':
                 # Note messages in magenta with [note] prefix
                 lines.append(f"{MAGENTA}[note]{RESET} {msg.content}")
             elif msg.role == 'status':
-                # UI status messages in gray (not sent to LLM, not saved)
-                content = msg.content
+                # UI status messages in gray (not sent to LLM, not saved), with markdown rendering
+                content = self._markdown_to_ansi(msg.content or "")
                 is_error = content.strip().lower().startswith("error")
                 color = RED if is_error else GRAY
                 lines.append(f"{color}[system] {content}{RESET}")
