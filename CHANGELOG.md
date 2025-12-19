@@ -16,6 +16,8 @@ Types of changes:
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-12-19
+
 ### Added
 - Basic markdown rendering in UI: headers (`#`-`######`), `**bold**`, and `` `code` `` are now styled in assistant and system messages
 - `/models` command to list all configured models by provider with aliases, context, and reasoning info
