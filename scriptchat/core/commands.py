@@ -1620,11 +1620,16 @@ def expand_variables(
     return re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', replace_var, text)
 
 
-def resolve_placeholders(text: str, registry: dict) -> tuple[Optional[str], Optional[str]]:
+def resolve_placeholders(text: str, registry: dict, max_depth: int = 2) -> tuple[Optional[str], Optional[str]]:
     """Expand @path placeholders using the file registry.
 
     Supports @path or @{path}. Only expands references that exist in the registry;
     other @-prefixed tokens (e.g., Java annotations like @Override) are left untouched.
+
+    Args:
+        text: The text containing @path placeholders
+        registry: Dict mapping keys to file content
+        max_depth: Maximum expansion depth (default 2 allows one level of nesting)
     """
     import re
     # Match @{path} or @path where path contains valid file path characters
@@ -1639,5 +1644,12 @@ def resolve_placeholders(text: str, registry: dict) -> tuple[Optional[str], Opti
         entry = registry[key]
         return entry["content"] if isinstance(entry, dict) else entry
 
-    expanded = pattern.sub(repl, text)
+    expanded = text
+    for _ in range(max_depth):
+        new_expanded = pattern.sub(repl, expanded)
+        if new_expanded == expanded:
+            # No more substitutions possible
+            break
+        expanded = new_expanded
+
     return expanded, None

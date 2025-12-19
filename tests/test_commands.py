@@ -984,6 +984,34 @@ class ResolvePlaceholdersTests(unittest.TestCase):
         self.assertIsNone(err)
         self.assertEqual(result, "Look at `code here` please")
 
+    def test_expands_nested_file_references(self):
+        """Test that file references inside expanded files are also expanded (one level)."""
+        registry = {
+            "main.txt": {"content": "Main file includes @helper.txt here", "full_path": "/main.txt"},
+            "helper.txt": {"content": "HELPER CONTENT", "full_path": "/helper.txt"},
+        }
+        text = "Check @main.txt for details"
+        result, err = resolve_placeholders(text, registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Check Main file includes HELPER CONTENT here for details")
+
+    def test_nested_expansion_stops_at_max_depth(self):
+        """Test that expansion stops at max_depth to prevent infinite loops."""
+        registry = {
+            "a.txt": {"content": "A contains @b.txt", "full_path": "/a.txt"},
+            "b.txt": {"content": "B contains @c.txt", "full_path": "/b.txt"},
+            "c.txt": {"content": "C FINAL", "full_path": "/c.txt"},
+        }
+        # Default max_depth=2 expands a->b but not b->c
+        result, err = resolve_placeholders("Start @a.txt end", registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Start A contains B contains @c.txt end")
+
+        # With max_depth=3, all three levels expand
+        result, err = resolve_placeholders("Start @a.txt end", registry, max_depth=3)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Start A contains B contains C FINAL end")
+
 
 class ScriptVariablesTests(unittest.TestCase):
     """Tests for /set, /vars commands and variable expansion."""
