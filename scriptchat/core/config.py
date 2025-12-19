@@ -37,6 +37,7 @@ class ModelConfig:
     reasoning_levels: list[str] | None = None  # Optional; available reasoning levels for this model
     reasoning_default: str | None = None  # Optional; default reasoning level for this model
     alias: str | None = None  # Optional; short alias for /model command (alphanumeric, underscore, dash, dot only)
+    skip_prompt_cache_param: bool = False  # Set true if model doesn't support prompt_cache_max_len parameter
 
 
 @dataclass
@@ -74,6 +75,7 @@ class Config:
     file_confirm_threshold_bytes: int = 40_000  # Require explicit confirmation above this size
     env_expand_from_environment: bool = True  # Allow ${VAR} to fall back to env vars
     env_var_blocklist: list[str] = field(default_factory=list)  # Additional patterns to block
+    include_thinking_in_history: bool = False  # Include thinking content in messages sent to API
 
     def get_provider(self, provider_id: str) -> ProviderConfig:
         """Get provider configuration by id."""
@@ -275,6 +277,9 @@ def load_config() -> Config:
     else:
         env_var_blocklist = []
 
+    # Thinking content settings
+    include_thinking_in_history = bool(general_section.get('include_thinking_in_history', False))
+
     providers: list[ProviderConfig] = []
 
     def parse_models_field(value) -> list[ModelConfig]:
@@ -317,6 +322,8 @@ def load_config() -> Config:
                             max_tokens = int(max_tokens_val)
                         except (ValueError, TypeError):
                             max_tokens = None
+                    # Model-level flag to skip prompt_cache_max_len param (for models that don't support it)
+                    skip_prompt_cache_param = bool(entry.get('skip_prompt_cache_param', False))
                     result.append(ModelConfig(
                         name=name,
                         context=context,
@@ -324,6 +331,7 @@ def load_config() -> Config:
                         reasoning_levels=reasoning_levels,
                         reasoning_default=reasoning_default,
                         alias=alias,
+                        skip_prompt_cache_param=skip_prompt_cache_param,
                     ))
                 elif isinstance(entry, str):
                     result.append(ModelConfig(name=entry.strip(), context=None, max_tokens=None, reasoning_levels=None, reasoning_default=None))
@@ -463,6 +471,7 @@ def load_config() -> Config:
         providers=providers,
         env_expand_from_environment=env_expand_from_environment,
         env_var_blocklist=env_var_blocklist,
+        include_thinking_in_history=include_thinking_in_history,
     )
 
     # Configure logging based on settings

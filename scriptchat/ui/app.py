@@ -616,6 +616,16 @@ class ScriptChatUI:
                 lines.append(f"{CYAN}[user]{RESET} {msg.content}")
             elif msg.role == 'assistant':
                 # Assistant messages in green, with markdown rendering
+                # Include thinking content if present
+                thinking = getattr(msg, 'thinking', None)
+                logger.debug("Assistant msg id=%s, thinking=%s", id(msg),
+                            len(thinking) if thinking else "None")
+                if thinking:
+                    logger.debug("Displaying thinking content: %d chars", len(thinking))
+                    thinking_formatted = self._markdown_to_ansi(thinking)
+                    lines.append(f"{GRAY}<thinking>{RESET}")
+                    lines.append(f"{GRAY}{thinking_formatted}{RESET}")
+                    lines.append(f"{GRAY}</thinking>{RESET}")
                 content = self._markdown_to_ansi(msg.content or "")
                 lines.append(f"{GREEN}[assistant]{RESET} {content}")
             elif msg.role == 'echo':
@@ -676,9 +686,17 @@ class ScriptChatUI:
     def _send_message_now(self, message: str):  # pragma: no cover - threaded UI flow
         """Send a user message immediately (assumes LLM is free)."""
         from ..core.conversations import Message
-        from ..core.commands import resolve_placeholders
+        from ..core.commands import resolve_placeholders, expand_variables
 
-        # Add user message to conversation and show it (store original)
+        # Expand variables (${name}) in the message
+        message = expand_variables(
+            message,
+            self.state.variables,
+            env_expand=self.state.config.env_expand_from_environment,
+            env_blocklist=self.state.config.env_var_blocklist,
+        )
+
+        # Add user message to conversation and show it (store expanded)
         self.state.current_conversation.messages.append(
             Message(role='user', content=message)
         )

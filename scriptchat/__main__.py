@@ -436,6 +436,10 @@ def run_batch_lines(
                     streaming=False
                 )
 
+                # Display thinking content if present
+                last_msg = state.current_conversation.messages[-1]
+                if hasattr(last_msg, 'thinking') and last_msg.thinking:
+                    print(f"<thinking>\n{last_msg.thinking}\n</thinking>\n")
                 print(f"[Assistant]: {response}\n")
 
             except Exception as e:

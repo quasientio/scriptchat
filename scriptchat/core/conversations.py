@@ -31,6 +31,7 @@ class Message:
     """A single message in a conversation."""
     role: str  # "system", "user", or "assistant"
     content: str
+    thinking: Optional[str] = None  # Reasoning/thinking content (not sent to API by default)
 
 
 @dataclass
@@ -283,7 +284,7 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
     messages = []
     message_files = []
 
-    # Find all message files matching pattern NNNN_(user|llm|note).txt
+    # Find all message files matching pattern NNNN_(user|llm|note).txt (not thinking files)
     for file_path in conv_dir.iterdir():
         if file_path.is_file() and re.match(r'^\d+_(user|llm|note)\.txt$', file_path.name):
             message_files.append(file_path)
@@ -307,7 +308,16 @@ def load_conversation(root: Path, dir_name: str) -> Conversation:
         with open(file_path, 'r') as f:
             content = f.read()
 
-        messages.append(Message(role=role, content=content))
+        # Check for corresponding thinking file (assistant messages only)
+        thinking = None
+        if role == 'assistant':
+            msg_num = filename.split('_')[0]
+            thinking_path = conv_dir / f"{msg_num}_llm_thinking.txt"
+            if thinking_path.exists():
+                with open(thinking_path, 'r') as f:
+                    thinking = f.read()
+
+        messages.append(Message(role=role, content=content, thinking=thinking))
 
     # Prepend system prompt if present in metadata
     if system_prompt:
@@ -443,7 +453,7 @@ def save_conversation(
         json.dump(meta, f, indent=2)
 
     # Remove existing message files before writing (handles undo/retry scenarios)
-    msg_pattern = re.compile(r'^\d{4}_(user|llm|note)\.txt$')
+    msg_pattern = re.compile(r'^\d{4}_(user|llm|llm_thinking|note)\.txt$')
     for existing_file in conv_dir.iterdir():
         if msg_pattern.match(existing_file.name):
             existing_file.unlink()
@@ -472,6 +482,13 @@ def save_conversation(
 
         with open(file_path, 'w') as f:
             f.write(message.content)
+
+        # Save thinking content to separate file if present (assistant messages only)
+        if message.role == 'assistant' and message.thinking:
+            thinking_filename = f"{msg_num:04d}_llm_thinking.txt"
+            thinking_path = conv_dir / thinking_filename
+            with open(thinking_path, 'w') as f:
+                f.write(message.thinking)
 
         msg_num += 1
 

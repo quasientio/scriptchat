@@ -91,15 +91,20 @@ class AnthropicChatClient:
         messages_payload = []
         system_text = None
         history = expanded_history if expanded_history is not None else convo.messages
+        include_thinking = getattr(self.config, 'include_thinking_in_history', False)
 
         for msg in history:
             if msg.role == 'system':
                 # Capture system prompt, don't add to messages
                 system_text = msg.content
             elif msg.role in ('user', 'assistant'):
+                content = msg.content
+                # Optionally include thinking content in history (disabled by default)
+                if include_thinking and msg.thinking:
+                    content = f"<thinking>\n{msg.thinking}\n</thinking>\n\n{content}"
                 messages_payload.append({
                     "role": msg.role,
-                    "content": msg.content
+                    "content": content
                 })
             # Skip 'echo', 'note', 'status', and other non-chat roles
 
@@ -236,7 +241,9 @@ class AnthropicChatClient:
         data = resp.json()
 
         # Extract content from Anthropic response format
-        content = self._extract_content(data)
+        content, thinking_content = self._extract_content(data)
+        if thinking_content:
+            logger.debug("Captured %d chars of thinking content", len(thinking_content))
 
         # Track tokens
         usage = data.get("usage", {})
@@ -244,7 +251,7 @@ class AnthropicChatClient:
         self._log_response_metadata(resp, data, usage)
 
         # Update conversation
-        convo.messages.append(Message(role='assistant', content=content))
+        convo.messages.append(Message(role='assistant', content=content, thinking=thinking_content))
         convo.tokens_in += usage.get("input_tokens", 0)
         convo.tokens_out += usage.get("output_tokens", 0)
 
@@ -292,6 +299,7 @@ class AnthropicChatClient:
         total_input_tokens = 0
         total_output_tokens = 0
         current_event = None
+        thinking_content = ""  # Accumulate thinking blocks
 
         for line in resp.iter_lines(decode_unicode=True):
             if not line:
@@ -319,10 +327,19 @@ class AnthropicChatClient:
                 usage = message.get('usage', {})
                 total_input_tokens = usage.get('input_tokens', 0)
 
+            elif event_type == 'content_block_start':
+                # Log content block starts to identify thinking blocks
+                block = data.get('content_block', {})
+                logger.debug("content_block_start type=%s", block.get('type'))
+
             elif event_type == 'content_block_delta':
                 # Text content delta
                 delta = data.get('delta', {})
-                if delta.get('type') == 'text_delta':
+                delta_type = delta.get('type')
+                # Log all delta types to help debug thinking capture
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("content_block_delta type=%s keys=%s", delta_type, list(delta.keys()))
+                if delta_type == 'text_delta':
                     text = delta.get('text', '')
                     if text:
                         assistant_msg.content += text
@@ -332,9 +349,17 @@ class AnthropicChatClient:
                             except Exception:
                                 pass
                 # Handle thinking blocks (extended thinking)
-                elif delta.get('type') == 'thinking_delta':
-                    # We skip thinking content in the output, but could log it
-                    pass
+                elif delta_type == 'thinking_delta':
+                    thinking_text = delta.get('thinking', '')
+                    if thinking_text:
+                        thinking_content += thinking_text
+                        # Update message thinking in real-time for streaming display
+                        assistant_msg.thinking = thinking_content
+                        if on_chunk:
+                            try:
+                                on_chunk(assistant_msg.content)
+                            except Exception:
+                                pass
 
             elif event_type == 'message_delta':
                 # Final usage stats
@@ -352,6 +377,11 @@ class AnthropicChatClient:
         convo.tokens_in += total_input_tokens
         convo.tokens_out += total_output_tokens
 
+        # Set thinking content if captured
+        if thinking_content:
+            assistant_msg.thinking = thinking_content
+            logger.debug("Captured %d chars of thinking content", len(thinking_content))
+
         # Update context tracking (config override > built-in defaults)
         model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
         context_length = model_cfg.context or get_default_context_limit(convo.model_name)
@@ -365,14 +395,21 @@ class AnthropicChatClient:
 
         return assistant_msg.content
 
-    def _extract_content(self, data: dict) -> str:
-        """Extract text content from Anthropic response."""
+    def _extract_content(self, data: dict) -> tuple[str, str | None]:
+        """Extract text and thinking content from Anthropic response.
+
+        Returns:
+            Tuple of (text_content, thinking_content or None)
+        """
         content_blocks = data.get('content', [])
         text_parts = []
+        thinking_parts = []
 
         for block in content_blocks:
             if block.get('type') == 'text':
                 text_parts.append(block.get('text', ''))
-            # Skip thinking blocks in the output
+            elif block.get('type') == 'thinking':
+                thinking_parts.append(block.get('thinking', ''))
 
-        return ''.join(text_parts)
+        thinking = ''.join(thinking_parts) if thinking_parts else None
+        return ''.join(text_parts), thinking

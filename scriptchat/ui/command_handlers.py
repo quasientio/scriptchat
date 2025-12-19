@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from ..core.commands import handle_command, set_model, set_temperature
+from ..core.commands import handle_command, set_model, set_temperature, expand_variables
 from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
     branch_conversation, delete_conversation, rename_conversation, ConversationSummary,
@@ -70,6 +70,13 @@ class CommandHandlers:
         # Handle /echo specially - display without adding to conversation
         if cmd == 'echo':
             message = args if args else ""
+            # Expand variables in the message
+            message = expand_variables(
+                message,
+                self.app.state.variables,
+                env_expand=self.app.state.config.env_expand_from_environment,
+                env_blocklist=self.app.state.config.env_var_blocklist,
+            )
             # Display echo message directly in conversation pane
             if message:
                 from ..core.conversations import Message

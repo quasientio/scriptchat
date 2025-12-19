@@ -29,7 +29,11 @@ class ProviderDispatcher:
         client = self.clients.get(convo.provider_id)
         if client is None:
             raise ValueError(f"No client configured for provider '{convo.provider_id}'")
-        return client.chat(convo, new_user_message, streaming=streaming, on_chunk=on_chunk, expanded_history=expanded_history)
+        try:
+            return client.chat(convo, new_user_message, streaming=streaming, on_chunk=on_chunk, expanded_history=expanded_history)
+        except Exception as e:
+            # Add context to errors for debugging
+            raise type(e)(f"{e} (provider {convo.provider_id}, model {convo.model_name})") from e
 
     def cleanup(self):
         """Call cleanup on all clients if available."""

@@ -91,13 +91,24 @@ models = [
 ```
 Then use `/model dsv3` instead of the full path. Aliases must be unique and contain only alphanumeric, underscore, dash, or dot characters.
 
-**Thinking models:** Models like Kimi K2 Thinking or DeepSeek R1 use internal reasoning tokens. Set `max_tokens` high enough to allow room for both thinking and output:
+**Thinking models:** Models like Kimi K2 Thinking or DeepSeek R1 use internal reasoning tokens. Set `max_tokens` high enough to allow room for both thinking and output. For models that support reasoning control (like Kimi on Fireworks), add `reasoning_levels` to enable the `/reason` command:
 ```toml
 models = [
-  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384 }
+  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384, reasoning_levels = ["low", "medium", "high"] }
 ]
 ```
 Streaming is auto-enabled when `max_tokens > 4096` (required by some providers).
+
+**Prompt caching (Fireworks):** Set `prompt_cache = false` at provider level to disable prompt caching for privacy. Some models (like Kimi) don't support the `prompt_cache_max_len` parameter - use `skip_prompt_cache_param = true` for those:
+```toml
+[[providers]]
+id = "fireworks"
+prompt_cache = false  # Disable caching for privacy
+models = [
+  { name = "accounts/fireworks/models/deepseek-v3", alias = "dsv3" },
+  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", skip_prompt_cache_param = true }
+]
+```
 
 **API Keys:** Set `api_key` in config or use environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
 
@@ -265,6 +276,21 @@ env_var_blocklist = ["MY_PRIVATE_*", "INTERNAL_*"]
 env_var_blocklist = []
 ```
 
+### Thinking/Reasoning Models
+
+ScriptChat supports thinking/reasoning models like Kimi, DeepSeek R1, and Claude with extended thinking. The thinking content is:
+
+- **Displayed** in the UI with `<thinking>` tags (in gray)
+- **Saved** to conversation files (`NNNN_llm_thinking.txt`)
+- **Not sent** back in conversation history by default (reduces context usage)
+
+To include thinking content in messages sent to the API:
+
+```toml
+[general]
+include_thinking_in_history = true
+```
+
 ### Keyboard Shortcuts
 
 | Key | Action |
@@ -288,6 +314,8 @@ Use `/keys` for the full list.
 - If an `@path` isn’t registered, the send will error and nothing is sent.
 
 You can register multiple files and mix references in one message. `/profile` lists full paths of registered files.
+
+**Nested references:** If a registered file contains `@path` references to other registered files, those are also expanded (one level deep).
 
 ### Token Estimation
 

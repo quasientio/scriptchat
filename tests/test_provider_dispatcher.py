@@ -19,15 +19,18 @@ from scriptchat.core.provider_dispatcher import ProviderDispatcher
 
 
 class DummyClient:
-    def __init__(self, response: str = "ok", raise_on_unload: bool = False):
+    def __init__(self, response: str = "ok", raise_on_unload: bool = False, raise_error: Exception = None):
         self.response = response
         self.calls = []
         self.unload_called = False
         self.raise_on_unload = raise_on_unload
+        self.raise_error = raise_error
         self.server_manager = self
         self.stop_called = False
 
     def chat(self, convo, message, streaming=False, on_chunk=None, expanded_history=None):
+        if self.raise_error:
+            raise self.raise_error
         self.calls.append((convo.id, message, streaming, expanded_history))
         return self.response
 
@@ -67,6 +70,29 @@ class ProviderDispatcherTests(unittest.TestCase):
         self.assertTrue(good.stop_called)
         self.assertTrue(flaky.unload_called)
         self.assertTrue(flaky.stop_called)
+
+    def test_exception_includes_provider_and_model_context(self):
+        """Exceptions from client.chat should include provider and model in error message."""
+        convo = Conversation(
+            id=None,
+            provider_id="fireworks",
+            model_name="gpt-oss",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        # Client that raises an IndexError
+        client = DummyClient(raise_error=IndexError("list index out of range"))
+        dispatcher = ProviderDispatcher(clients={"fireworks": client})
+
+        with self.assertRaises(IndexError) as ctx:
+            dispatcher.chat(convo, "hi")
+
+        error_msg = str(ctx.exception)
+        self.assertIn("provider fireworks", error_msg)
+        self.assertIn("model gpt-oss", error_msg)
+        self.assertIn("list index out of range", error_msg)
 
 
 if __name__ == "__main__":

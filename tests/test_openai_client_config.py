@@ -864,7 +864,7 @@ models = "gpt-4o"
         self.assertNotIn("store", client.session.calls[0]["json"])
 
     def test_prompt_cache_false_adds_prompt_cache_max_len_zero(self):
-        """When prompt_cache=false, should add prompt_cache_max_len=0 to payload."""
+        """When prompt_cache=false at provider level, should add prompt_cache_max_len=0 to payload."""
         provider = ProviderConfig(
             id="fireworks",
             type="openai-compatible",
@@ -1007,6 +1007,84 @@ models = "gpt-4o"
         client.chat(convo, "hello")
 
         self.assertNotIn("prompt_cache_max_len", client.session.calls[0]["json"])
+
+    def test_streaming_handles_empty_choices_gracefully(self):
+        """When streaming response has empty choices array, should not raise IndexError."""
+        provider = ProviderConfig(
+            id="fireworks",
+            type="openai-compatible",
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="test-model",
+        )
+        cfg = Config(
+            api_url="https://api.fireworks.ai/inference",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="fireworks",
+            default_model="test-model",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+
+        class StreamResponse:
+            status_code = 200
+            reason = "OK"
+            text = ""
+
+            def __init__(self, lines):
+                self._lines = lines
+
+            def raise_for_status(self):
+                return None
+
+            def iter_lines(self):
+                return iter(self._lines)
+
+            def json(self):
+                return {}
+
+        class StreamSession:
+            def __init__(self, lines):
+                self.lines = lines
+
+            def post(self, url, json=None, timeout=None, stream=False):
+                return StreamResponse(self.lines)
+
+        # Simulate a response with empty choices (which can happen with some providers)
+        lines = [
+            b'data: {"choices": [{"delta": {"content": "Hello"}}]}\n',
+            b'data: {"choices": []}\n',  # Empty choices - should be handled gracefully
+            b'data: {"choices": [{"delta": {"content": " world"}}]}\n',
+            b'data: {"usage": {"prompt_tokens": 10, "completion_tokens": 5}}\n',
+            b"[DONE]",
+        ]
+
+        convo = Conversation(
+            id=None,
+            provider_id="fireworks",
+            model_name="test-model",
+            temperature=0.7,
+            messages=[],
+            tokens_in=0,
+            tokens_out=0,
+        )
+        client = OpenAIChatClient(cfg, provider, timeout=1)
+        client.session = StreamSession(lines)
+
+        # This should not raise IndexError
+        content = client.chat(convo, "hello", streaming=True)
+        self.assertEqual(content, "Hello world")
 
 
 if __name__ == "__main__":

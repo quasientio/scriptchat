@@ -29,7 +29,16 @@ Types of changes:
 - `auth_format` provider config option for non-Bearer auth (e.g., Baseten uses `api-key`)
 - Baseten provider example in config.toml.example
 - `max_tokens` model config option for controlling output token limit (important for thinking models)
-- Support for thinking models that return content in `reasoning_content` field (e.g., Kimi K2 Thinking)
+- Thinking/reasoning model support for DeepSeek, Anthropic Claude, and Fireworks models:
+  - Thinking content displayed in UI with `<thinking>` tags (gray, streams in real-time)
+  - Thinking content saved to `NNNN_llm_thinking.txt` files alongside responses
+  - Anthropic extended thinking via `thinking_delta` events
+  - DeepSeek R1 `<think>` tag extraction
+  - `reasoning_content` field capture for compatible providers
+- `include_thinking_in_history` config option to include thinking in messages sent to API
+- Nested file reference expansion: `@path` references inside registered files are also expanded (one level deep)
+- `reasoning_effort` support for Fireworks models (e.g., Kimi K2 Thinking with `/reason low|medium|high`)
+- `skip_prompt_cache_param` model config option for models that don't support `prompt_cache_max_len` parameter
 
 ### Changed
 - Input area now supports multiline editing with UP/DOWN/LEFT/RIGHT navigation
@@ -46,6 +55,10 @@ Types of changes:
 - Strip leaked stop tokens (`<|im_end|>`, `<|endoftext|>`, etc.) from model responses
 - Avoid duplicate `/v1` in API URLs when api_url already includes version
 - `/profile` now shows context from built-in model defaults when not explicitly configured
+- Handle empty `choices` array in streaming responses (prevents IndexError with some providers)
+- Error messages now include provider and model context for easier debugging
+- Batch mode now displays thinking content with `<thinking>` tags
+- Variable expansion (`${name}`) now works in interactive UI mode, not just batch/script mode
 
 ## [0.3.0] - 2025-12-12
 

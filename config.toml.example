@@ -46,6 +46,12 @@ env_expand_from_environment = true
 # env_var_blocklist = ["MY_PRIVATE_*", "INTERNAL_*"]
 # Use empty list to allow all env vars: env_var_blocklist = []
 
+# Thinking/reasoning model settings
+# For models like Kimi, DeepSeek R1, Claude with extended thinking, etc.
+# Thinking content is displayed in the UI but NOT sent back in conversation history by default
+# Set to true to include thinking content when sending messages to the API
+# include_thinking_in_history = false
+
 # Provider definitions. Add as many as you need.
 #
 # API keys can be set in config or via environment variables.
@@ -97,11 +103,13 @@ prompt_cache = false  # Disable prompt caching for full privacy (no data in vola
 # Aliases must be unique across all providers and contain only alphanumeric, underscore, dash, or dot.
 # Thinking models need high max_tokens to allow room for reasoning + output.
 # Streaming is auto-enabled when max_tokens > 4096 (required by some providers).
+# Use skip_prompt_cache_param = true for models that don't support prompt_cache_max_len parameter.
+# Use reasoning_levels for models that support /reason command (Fireworks uses reasoning_effort param).
 models = [
   { name = "accounts/fireworks/models/gpt-oss-120b", alias = "gpt-oss" },
   { name = "accounts/fireworks/models/deepseek-v3", alias = "dsv3" },
   { name = "accounts/fireworks/models/deepseek-r1", alias = "dsr1" },
-  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384 }
+  { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384, skip_prompt_cache_param = true, reasoning_levels = ["low", "medium", "high"] }
 ]
 
 # Baseten - serverless inference

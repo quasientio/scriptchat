@@ -88,6 +88,26 @@ class OpenAIChatClient:
                 content = content[:-len(token)].rstrip()
         return content
 
+    def _extract_think_tags(self, content: str) -> tuple[str, str | None]:
+        """Extract and strip <think>...</think> tags from content (DeepSeek R1 format).
+
+        Args:
+            content: The response content that may contain think tags
+
+        Returns:
+            Tuple of (content_without_thinking, thinking_content or None)
+        """
+        import re
+        # Match <think>...</think> block (case insensitive, dotall for multiline)
+        pattern = re.compile(r'<think>(.*?)</think>\s*', re.IGNORECASE | re.DOTALL)
+        match = pattern.search(content)
+        if match:
+            thinking = match.group(1).strip()
+            # Remove the think block from content
+            content_clean = pattern.sub('', content).strip()
+            return content_clean, thinking
+        return content, None
+
     def _build_url(self, endpoint: str) -> str:
         """Build URL for API endpoint, avoiding duplicate version prefixes.
 
@@ -131,11 +151,16 @@ class OpenAIChatClient:
         # Build messages array, filtering out display-only messages
         messages_payload = []
         history = expanded_history if expanded_history is not None else convo.messages
+        include_thinking = getattr(self.config, 'include_thinking_in_history', False)
         for msg in history:
             if msg.role not in ('echo', 'note', 'status'):
+                content = msg.content
+                # Optionally include thinking content in history (disabled by default)
+                if include_thinking and msg.thinking:
+                    content = f"<thinking>\n{msg.thinking}\n</thinking>\n\n{content}"
                 messages_payload.append({
                     "role": msg.role,
-                    "content": msg.content
+                    "content": content
                 })
         messages_payload.append({"role": "user", "content": new_user_message})
 
@@ -158,7 +183,9 @@ class OpenAIChatClient:
                 "temperature": convo.temperature,
             }
             if getattr(convo, "reasoning_level", None):
-                payload["reasoning"] = {"effort": convo.reasoning_level}
+                # Fireworks and other providers use reasoning_effort as top-level param
+                # OpenAI Responses API uses reasoning.effort (handled above)
+                payload["reasoning_effort"] = convo.reasoning_level
             url = self._build_url("/v1/chat/completions")
 
         # Set max_tokens from model config (important for thinking models)
@@ -172,24 +199,49 @@ class OpenAIChatClient:
                 logger.debug("Forcing streaming due to max_tokens > 4096")
 
         # Disable prompt caching if configured (for privacy)
-        if not self.provider.prompt_cache:
+        # Skip if model doesn't support the parameter (e.g., Kimi)
+        model_cfg = self.config.get_model(convo.provider_id, convo.model_name)
+        if not self.provider.prompt_cache and not model_cfg.skip_prompt_cache_param:
             payload["prompt_cache_max_len"] = 0
 
         if streaming:
             return self._chat_stream(url, payload, convo, on_chunk)
         return self._chat_single(url, payload, convo)
 
-    def _extract_responses_text(self, data: dict) -> str:
-        """Extract text from Responses API payloads (non-stream or stream chunk)."""
+    def _extract_responses_text(self, data: dict) -> tuple[str, str | None]:
+        """Extract text and reasoning from Responses API payloads.
+
+        Returns:
+            Tuple of (text_content, reasoning_content or None)
+        """
         if not isinstance(data, dict):
-            return ""
+            return "", None
+
+        text_parts: list[str] = []
+        reasoning = None
+
+        # Log top-level keys to help debug reasoning extraction
+        if logger.isEnabledFor(logging.DEBUG):
+            interesting_keys = [k for k in data.keys() if k not in ('id', 'created', 'object')]
+            if interesting_keys:
+                logger.debug("Responses API payload keys: %s", interesting_keys)
+
+        # Extract reasoning.summary if present (OpenAI Responses API format)
+        reasoning_obj = data.get("reasoning")
+        if isinstance(reasoning_obj, dict):
+            summary_value = reasoning_obj.get("summary")
+            logger.debug("Found reasoning obj: keys=%s, summary=%r", list(reasoning_obj.keys()), summary_value[:100] if summary_value else summary_value)
+            if summary_value:
+                reasoning = summary_value
+                logger.debug("Extracted reasoning summary: %d chars", len(reasoning))
+
         # Prefer aggregated output_text when present
         if data.get("output_text"):
             try:
-                return "".join(data.get("output_text") or [])
+                return "".join(data.get("output_text") or []), reasoning
             except Exception:
                 pass
-        text_parts: list[str] = []
+
         # Some payloads embed content in output -> content list
         for item in data.get("output", []) or []:
             for content in item.get("content", []) or []:
@@ -197,8 +249,9 @@ class OpenAIChatClient:
                     text = content.get("text")
                     if text:
                         text_parts.append(str(text))
+
         # Streaming deltas may arrive under "delta" similarly
-        delta = data.get("delta") or {}
+        delta = data.get("delta")
         if isinstance(delta, dict):
             for content in delta.get("content", []) or []:
                 if isinstance(content, dict):
@@ -206,8 +259,10 @@ class OpenAIChatClient:
                     if text:
                         text_parts.append(str(text))
         elif isinstance(delta, str):
+            # Direct string delta (e.g., response.output_text.delta event)
             text_parts.append(delta)
-        return "".join(text_parts)
+
+        return "".join(text_parts), reasoning
 
     def _http_error_with_body(self, resp, exc: requests.HTTPError) -> RuntimeError:
         body = ""
@@ -266,24 +321,26 @@ class OpenAIChatClient:
     def _chat_single(self, url: str, payload: dict, convo: Conversation) -> str:
         resp = self._post_with_temperature_retry(url, payload, stream=False, convo=convo)
         data = resp.json()
-        if "choices" in data:
+        thinking_content = None
+        if "choices" in data and data["choices"]:
             message = data["choices"][0]["message"]
             content = message.get("content") or ""
-            # Handle thinking models that return content in reasoning_content
-            reasoning_content = message.get("reasoning_content")
-            if reasoning_content and not content:
-                logger.debug("Using reasoning_content as content (thinking model)")
-                content = reasoning_content
-            elif reasoning_content:
-                logger.debug("Model returned both content and reasoning_content")
-            # Log message keys when content is empty (helps debug thinking models)
+            # Capture reasoning content - some providers use 'reasoning_content', others use 'reasoning'
+            reasoning_content = message.get("reasoning_content") or message.get("reasoning")
+            if reasoning_content:
+                thinking_content = reasoning_content
+                logger.debug("Captured %d chars of thinking content", len(reasoning_content))
+            # Log message keys when content is empty (helps debug)
             if not content:
                 logger.warning("Empty content in response. Message keys: %s", list(message.keys()))
                 logger.debug("Full message structure: %s", message)
             usage = data.get("usage", {})
         else:
             # Responses API
-            content = self._extract_responses_text(data)
+            content, responses_reasoning = self._extract_responses_text(data)
+            if responses_reasoning and not thinking_content:
+                thinking_content = responses_reasoning
+                logger.debug("Captured %d chars of reasoning from Responses API", len(responses_reasoning))
             usage = data.get("usage", {})
 
         self._log_response_metadata(resp, data, usage)
@@ -291,8 +348,15 @@ class OpenAIChatClient:
         # Strip any leaked stop tokens
         content = self._strip_stop_tokens(content)
 
+        # Extract <think>...</think> tags (DeepSeek R1 format) if no reasoning_content
+        if not thinking_content:
+            content, think_tag_content = self._extract_think_tags(content)
+            if think_tag_content:
+                thinking_content = think_tag_content
+                logger.debug("Extracted %d chars of thinking from <think> tags", len(think_tag_content))
+
         # Update conversation
-        convo.messages.append(Message(role='assistant', content=content))
+        convo.messages.append(Message(role='assistant', content=content, thinking=thinking_content))
         # Chat Completions API uses prompt_tokens/completion_tokens
         # Responses API uses input_tokens/output_tokens
         convo.tokens_in += usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
@@ -321,6 +385,7 @@ class OpenAIChatClient:
         total_prompt = 0
         total_completion = 0
         usage_added = False
+        thinking_content = ""  # Accumulate reasoning_content separately
         for line in resp.iter_lines():
             if not line:
                 continue
@@ -333,13 +398,34 @@ class OpenAIChatClient:
                 last_data = data
             except json.JSONDecodeError:
                 continue
-            if "choices" in data:
-                delta = data.get("choices", [{}])[0].get("delta", {})
+            # Log streaming event type for debugging
+            event_type = data.get("type") or data.get("object")
+            if event_type and logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Stream event type: %s", event_type)
+
+            if "choices" in data and data["choices"]:
+                delta = data["choices"][0].get("delta", {})
                 content_piece = delta.get("content", "")
-                # Handle thinking models that stream reasoning_content
-                reasoning_piece = delta.get("reasoning_content", "")
-                if reasoning_piece and not content_piece:
-                    content_piece = reasoning_piece
+                # Capture reasoning content - some providers use 'reasoning_content', others use 'reasoning'
+                reasoning_piece = delta.get("reasoning_content") or delta.get("reasoning") or ""
+                if reasoning_piece:
+                    thinking_content += reasoning_piece
+                    # Update message thinking in real-time for streaming display
+                    assistant_msg.thinking = thinking_content
+                    if on_chunk:
+                        try:
+                            on_chunk(assistant_msg.content)
+                        except Exception:
+                            pass
+                # Debug log delta keys to help identify thinking model formats
+                if delta and logger.isEnabledFor(logging.DEBUG):
+                    delta_keys = list(delta.keys())
+                    # Log full delta if it has unexpected keys (helps identify new thinking formats)
+                    unexpected = set(delta_keys) - {'role', 'content', 'reasoning_content', 'reasoning'}
+                    if unexpected:
+                        logger.debug("Stream delta with unexpected keys %s: %s", unexpected, delta)
+                    elif delta_keys:
+                        logger.debug("Stream delta keys: %s", delta_keys)
                 usage = data.get("usage") or {}
                 # Chat Completions API uses prompt_tokens/completion_tokens
                 total_prompt += usage.get("prompt_tokens", 0)
@@ -348,7 +434,9 @@ class OpenAIChatClient:
                     usage_added = True
             else:
                 # Responses API streaming - uses input_tokens/output_tokens
-                content_piece = self._extract_responses_text(data)
+                content_piece, responses_reasoning = self._extract_responses_text(data)
+                if responses_reasoning:
+                    thinking_content += responses_reasoning
                 usage = data.get("usage") or {}
                 total_prompt += usage.get("input_tokens", 0)
                 total_completion += usage.get("output_tokens", 0)
@@ -384,6 +472,35 @@ class OpenAIChatClient:
         # Strip any leaked stop tokens from final content
         assistant_msg.content = self._strip_stop_tokens(assistant_msg.content)
 
+        # Extract <think>...</think> tags (DeepSeek R1 format) if no reasoning_content
+        if not thinking_content:
+            original_content = assistant_msg.content
+            assistant_msg.content, think_tag_content = self._extract_think_tags(assistant_msg.content)
+            if think_tag_content:
+                thinking_content = think_tag_content
+                logger.debug("Extracted %d chars of thinking from <think> tags", len(think_tag_content))
+                logger.debug("Content after think extraction: %d chars", len(assistant_msg.content))
+                if not assistant_msg.content:
+                    logger.warning("Content is empty after <think> extraction. Original had %d chars", len(original_content))
+
+        # Set thinking content if captured
+        if thinking_content:
+            assistant_msg.thinking = thinking_content
+            logger.debug("Captured %d chars of thinking content", len(thinking_content))
+            logger.debug("Message thinking attr after set: %s (msg id: %s)",
+                        len(assistant_msg.thinking) if assistant_msg.thinking else "None",
+                        id(assistant_msg))
+            logger.debug("convo.messages[-1] thinking: %s (msg id: %s)",
+                        len(convo.messages[-1].thinking) if convo.messages[-1].thinking else "None",
+                        id(convo.messages[-1]))
+
+        # Warn if both content and thinking are empty
+        if not assistant_msg.content and not thinking_content:
+            logger.warning("Both content and thinking are empty after processing")
+
+        # Log first 200 chars of content to help identify thinking markers
+        logger.debug("Final content starts with: %r", assistant_msg.content[:200] if len(assistant_msg.content) > 200 else assistant_msg.content)
+
         return assistant_msg.content
 
     def _post_with_temperature_retry(self, url: str, payload: dict, stream: bool, convo: Conversation | None) -> requests.Response:
@@ -392,12 +509,13 @@ class OpenAIChatClient:
         resp = None
         try:
             logger.debug(
-                "POST %s model=%s stream=%s messages=%s reasoning=%s temp=%s",
+                "POST %s model=%s stream=%s messages=%s reasoning=%s reasoning_effort=%s temp=%s",
                 url,
                 payload.get("model"),
                 payload.get("stream"),
                 len(payload.get("messages", []) or payload.get("input", [])),
                 payload.get("reasoning"),
+                payload.get("reasoning_effort"),
                 payload.get("temperature"),
             )
             send_payload = dict(payload)

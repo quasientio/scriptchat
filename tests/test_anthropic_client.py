@@ -149,8 +149,9 @@ class AnthropicClientTests(unittest.TestCase):
                     {"type": "text", "text": "world!"}
                 ]
             }
-            content = client._extract_content(data)
+            content, thinking = client._extract_content(data)
             self.assertEqual(content, "Hello, world!")
+            self.assertIsNone(thinking)
 
     def test_extract_content_with_thinking_blocks(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -164,8 +165,9 @@ class AnthropicClientTests(unittest.TestCase):
                     {"type": "text", "text": "The answer is 42."}
                 ]
             }
-            content = client._extract_content(data)
-            self.assertEqual(content, "The answer is 42.")  # Thinking excluded
+            content, thinking = client._extract_content(data)
+            self.assertEqual(content, "The answer is 42.")
+            self.assertEqual(thinking, "Let me think...")
 
     @patch('scriptchat.core.anthropic_client.requests.Session')
     def test_chat_single_builds_correct_payload(self, mock_session_class):
