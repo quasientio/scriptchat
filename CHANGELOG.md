@@ -16,6 +16,10 @@ Types of changes:
 
 ## [Unreleased]
 
+### Added
+- UI event system and test harness for automated UI testing (`scriptchat/ui/events.py`, `scriptchat/ui/test_harness.py`)
+- `--ui-events` CLI flag to enable UI event logging for debugging (auto-enabled on DEBUG log level)
+
 ## [0.4.0] - 2025-12-19
 
 ### Added

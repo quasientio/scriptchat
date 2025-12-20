@@ -7,6 +7,8 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import ConditionalContainer, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
+from .events import UIEventType
+
 if TYPE_CHECKING:
     from .app import ScriptChatUI
 
@@ -82,10 +84,22 @@ class SelectionMenu:
         self._visible = True
         self.app.app.invalidate()
 
+        # Emit event
+        if hasattr(self.app, 'events'):
+            self.app.events.emit(
+                UIEventType.SELECTION_MENU_SHOWN,
+                item_count=len(items),
+                items=[label for _, label in items[:5]]  # First 5 for logging
+            )
+
     def hide(self):
         """Hide the selection menu and restore input focus."""
         self._visible = False
         self.app.app.invalidate()
+
+        # Emit event
+        if hasattr(self.app, 'events'):
+            self.app.events.emit(UIEventType.SELECTION_MENU_HIDDEN)
 
     def move_up(self):
         """Move selection up one item."""
@@ -96,6 +110,14 @@ class SelectionMenu:
                 self.viewport_start = self.selected_index
             self.app.app.invalidate()
 
+            # Emit event
+            if hasattr(self.app, 'events'):
+                self.app.events.emit(
+                    UIEventType.SELECTION_MENU_NAVIGATED,
+                    direction='up',
+                    index=self.selected_index
+                )
+
     def move_down(self):
         """Move selection down one item."""
         if self.selected_index < len(self.items) - 1:
@@ -105,10 +127,27 @@ class SelectionMenu:
                 self.viewport_start = self.selected_index - self.max_visible + 1
             self.app.app.invalidate()
 
+            # Emit event
+            if hasattr(self.app, 'events'):
+                self.app.events.emit(
+                    UIEventType.SELECTION_MENU_NAVIGATED,
+                    direction='down',
+                    index=self.selected_index
+                )
+
     def select_current(self):
         """Confirm current selection and invoke callback."""
         if self.items and self._on_select:
-            value, _ = self.items[self.selected_index]
+            value, label = self.items[self.selected_index]
+
+            # Emit event before callback
+            if hasattr(self.app, 'events'):
+                self.app.events.emit(
+                    UIEventType.SELECTION_MENU_SELECTED,
+                    index=self.selected_index,
+                    label=label
+                )
+
             callback = self._on_select
             self.hide()
             callback(value)

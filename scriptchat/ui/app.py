@@ -41,6 +41,7 @@ from ..core.conversations import (
     branch_conversation, delete_conversation, Conversation, Message
 )
 from .command_handlers import CommandHandlers
+from .events import UIEventEmitter, UIEventType, UIState
 from .selection_menu import SelectionMenu
 
 logger = logging.getLogger(__name__)
@@ -107,13 +108,15 @@ class AnsiLexer(Lexer):
 class ScriptChatUI:
     """Terminal user interface for ScriptChat."""
 
-    def __init__(self, state: AppState):
+    def __init__(self, state: AppState, log_ui_events: bool = False):
         """Initialize the UI.
 
         Args:
             state: Application state
+            log_ui_events: Whether to log UI events to the logger
         """
         self.state = state
+        self.events = UIEventEmitter(log_events=log_ui_events)
         self.multiline_mode = False
         self.prompt_message = ""  # Current prompt message for user input
         self.pending_callback = None  # Callback waiting for user input
@@ -170,6 +173,13 @@ class ScriptChatUI:
         # Initialize conversation display (scroll to bottom initially)
         self.update_conversation_display()
         self._load_history()
+
+        # Emit initialization event
+        self.events.emit(
+            UIEventType.APP_STARTED,
+            provider=state.current_conversation.provider_id,
+            model=state.current_conversation.model_name
+        )
 
     def _create_layout(self) -> Layout:  # pragma: no cover - UI layout wiring
         """Create the application layout.
@@ -567,6 +577,37 @@ class ScriptChatUI:
         """Get prompt prefix text."""
         return (self.prompt_message + " ") if self.prompt_message else "> "
 
+    def get_ui_state(self) -> UIState:
+        """Get complete UI state snapshot for testing."""
+        convo = self.state.current_conversation
+
+        return UIState(
+            conversation_text=self.conversation_buffer.text,
+            conversation_message_count=len(convo.messages),
+            status_bar_text=''.join(t for _, t in self._get_status_bar()),
+            provider_id=convo.provider_id,
+            model_name=convo.model_name,
+            tokens_in=convo.tokens_in,
+            tokens_out=convo.tokens_out,
+            conversation_id=convo.id,
+            input_text=self.input_buffer.text,
+            input_cursor_position=self.input_buffer.cursor_position,
+            thinking=self.thinking,
+            multiline_mode=self.multiline_mode,
+            streaming=self.state.config.enable_streaming,
+            selection_menu_visible=self.selection_menu.is_visible,
+            prompt_message=self.prompt_message,
+            has_pending_callback=self.pending_callback is not None,
+            expecting_single_key=self.expecting_single_key,
+            history_index=self.input_history_index,
+            history_length=len(self.input_history),
+            running_script=self.running_script,
+            script_queue_length=len(self.script_queue),
+            message_queue_length=len(self.message_queue),
+            selection_menu_items=list(self.selection_menu.items),
+            selection_menu_index=self.selection_menu.selected_index,
+        )
+
     def _markdown_to_ansi(self, text: str) -> str:
         """Convert basic markdown formatting to ANSI codes.
 
@@ -657,6 +698,12 @@ class ScriptChatUI:
         # Force redraw
         self.app.invalidate()
 
+        # Emit event
+        self.events.emit(
+            UIEventType.CONVERSATION_UPDATED,
+            message_count=len(self.state.current_conversation.messages)
+        )
+
     def add_system_message(self, text: str):
         """Add a UI status message to the conversation display.
 
@@ -670,6 +717,9 @@ class ScriptChatUI:
             Message(role='status', content=text)
         )
         self.update_conversation_display()
+
+        # Emit event
+        self.events.emit(UIEventType.SYSTEM_MESSAGE_ADDED, message=text)
 
     def handle_user_message(self, message: str):
         """Handle a user message by sending it to the LLM.
@@ -715,10 +765,14 @@ class ScriptChatUI:
             else:
                 expanded_messages.append(msg)
         # Note: assistant messages are passed through unchanged
+        # Emit message sent event
+        self.events.emit(UIEventType.MESSAGE_SENT, content=message[:100])
+
         # Start thinking animation
         self.thinking = True
         self.thinking_dots = 0
         self.inference_cancelled = False
+        self.events.emit(UIEventType.THINKING_STARTED)
 
         def animate_thinking():
             import time
@@ -768,6 +822,12 @@ class ScriptChatUI:
 
                 self.thinking = False
                 self.cancel_requested_at = None
+                self.events.emit(UIEventType.THINKING_STOPPED)
+                self.events.emit(
+                    UIEventType.RESPONSE_COMPLETE,
+                    tokens_in=self.state.current_conversation.tokens_in,
+                    tokens_out=self.state.current_conversation.tokens_out
+                )
                 self.update_conversation_display()
                 self.add_system_message(duration_msg)
                 self.app.invalidate()
@@ -838,6 +898,13 @@ class ScriptChatUI:
         # Store callback - will be called when user presses Enter
         self.pending_callback = callback
         self.expecting_single_key = expect_single_key
+
+        # Emit event
+        self.events.emit(
+            UIEventType.PROMPT_SHOWN,
+            message=self.prompt_message,
+            single_key=expect_single_key
+        )
 
     def _process_script_queue(self):
         """Process pending script lines if idle and no queued messages."""
@@ -945,6 +1012,9 @@ class ScriptChatUI:
         self.thinking = False
         self.cancel_requested_at = None
 
+        # Emit event
+        self.events.emit(UIEventType.INFERENCE_CANCELLED)
+
         # Note: The HTTP request continues in background but response will be discarded
         self.add_system_message("⚠ Inference cancelled")
         self.app.invalidate()
@@ -969,11 +1039,12 @@ class ScriptChatUI:
             self._cleanup()
 
 
-def run_ui(state: AppState):  # pragma: no cover - interactive UI loop
+def run_ui(state: AppState, log_ui_events: bool = False):  # pragma: no cover - interactive UI loop
     """Run the terminal UI.
 
     Args:
         state: Application state
+        log_ui_events: Whether to log UI events to the logger
     """
-    ui = ScriptChatUI(state)
+    ui = ScriptChatUI(state, log_ui_events=log_ui_events)
     ui.run()

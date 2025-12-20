@@ -660,6 +660,11 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         action='store_true',
         help='Create initial configuration file interactively'
     )
+    parser.add_argument(
+        '--ui-events',
+        action='store_true',
+        help='Enable UI event logging for debugging/testing'
+    )
     args = parser.parse_args()
 
     # Handle --init before anything else
@@ -746,7 +751,8 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         # Run the UI
         print("Starting ScriptChat...")
         print("Press Ctrl+C or Ctrl+D to exit, or use /exit command")
-        run_ui(state)
+        log_events = args.ui_events or (config.log_level == "DEBUG")
+        run_ui(state, log_ui_events=log_events)
 
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
