@@ -19,6 +19,10 @@ Types of changes:
 ### Added
 - UI event system and test harness for automated UI testing (`scriptchat/ui/events.py`, `scriptchat/ui/test_harness.py`)
 - `--ui-events` CLI flag to enable UI event logging for debugging (auto-enabled on DEBUG log level)
+- Headless integration testing mode for UI with `MockLLMClient` and pipe-based input
+  - `UITestHarness.start_headless()` runs the full app with mock I/O for end-to-end testing
+  - Key sequence support for simulating keyboard input (enter, escape, arrows, ctrl/alt combos)
+  - Synchronization helpers: `wait_for_idle()`, `wait_for_thinking()`, `wait_for_menu()`
 
 ## [0.4.0] - 2025-12-19
 

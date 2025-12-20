@@ -18,7 +18,11 @@ import shutil
 import threading
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from prompt_toolkit.input import Input
+    from prompt_toolkit.output import Output
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -108,14 +112,24 @@ class AnsiLexer(Lexer):
 class ScriptChatUI:
     """Terminal user interface for ScriptChat."""
 
-    def __init__(self, state: AppState, log_ui_events: bool = False):
+    def __init__(
+        self,
+        state: AppState,
+        log_ui_events: bool = False,
+        input: 'Input | None' = None,
+        output: 'Output | None' = None,
+    ):
         """Initialize the UI.
 
         Args:
             state: Application state
             log_ui_events: Whether to log UI events to the logger
+            input: Optional custom input (for headless testing)
+            output: Optional custom output (for headless testing)
         """
         self.state = state
+        self._custom_input = input
+        self._custom_output = output
         self.events = UIEventEmitter(log_events=log_ui_events)
         self.multiline_mode = False
         self.prompt_message = ""  # Current prompt message for user input
@@ -162,13 +176,19 @@ class ScriptChatUI:
         # Create key bindings
         self.kb = self._create_key_bindings()
 
-        # Create application
-        self.app = Application(
-            layout=self.layout,
-            key_bindings=self.kb,
-            full_screen=True,
-            mouse_support=False  # Disabled to allow terminal-native mouse selection
-        )
+        # Create application with optional custom I/O for headless testing
+        app_kwargs = {
+            'layout': self.layout,
+            'key_bindings': self.kb,
+            'full_screen': True,
+            'mouse_support': False,  # Disabled to allow terminal-native mouse selection
+        }
+        if self._custom_input is not None:
+            app_kwargs['input'] = self._custom_input
+        if self._custom_output is not None:
+            app_kwargs['output'] = self._custom_output
+
+        self.app = Application(**app_kwargs)
 
         # Initialize conversation display (scroll to bottom initially)
         self.update_conversation_display()
