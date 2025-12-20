@@ -206,8 +206,11 @@ def reasoning_default_for_model(config: Config, provider_id: str, model_name: st
     return None
 
 
-def load_config() -> Config:
-    """Load configuration from ~/.scriptchat/config.toml.
+def load_config(config_path: Path | str | None = None) -> Config:
+    """Load configuration from a TOML file.
+
+    Args:
+        config_path: Path to config file. If None, uses ~/.scriptchat/config.toml
 
     Returns:
         Config object with loaded or default values
@@ -216,13 +219,19 @@ def load_config() -> Config:
         FileNotFoundError: If config file doesn't exist
         ValueError: If configuration is invalid
     """
-    config_path = Path.home() / ".scriptchat" / "config.toml"
+    if config_path is None:
+        config_path = Path.home() / ".scriptchat" / "config.toml"
+    else:
+        config_path = Path(config_path).expanduser().resolve()
 
     if not config_path.exists():
         raise FileNotFoundError(
             f"Configuration file not found at {config_path}\n"
-            "Please create ~/.scriptchat/config.toml with your settings."
+            "Please create a config.toml with your settings."
         )
+
+    # Base directory for resolving relative paths in config
+    config_dir = config_path.parent
 
     # Load TOML file
     with open(config_path, 'r') as f:
@@ -239,10 +248,20 @@ def load_config() -> Config:
     # Get general configuration values
     log_level = general_section.get('log_level', 'INFO').upper()
     log_file_str = general_section.get('log_file')
-    log_file = Path(log_file_str).expanduser() if log_file_str else None
+    if log_file_str:
+        log_file = Path(log_file_str).expanduser()
+        if not log_file.is_absolute():
+            log_file = config_dir / log_file
+    else:
+        log_file = None
 
     exports_dir_str = general_section.get('exports_dir')
-    exports_dir = Path(exports_dir_str).expanduser() if exports_dir_str else None
+    if exports_dir_str:
+        exports_dir = Path(exports_dir_str).expanduser()
+        if not exports_dir.is_absolute():
+            exports_dir = config_dir / exports_dir
+    else:
+        exports_dir = None
     if exports_dir:
         exports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -250,11 +269,14 @@ def load_config() -> Config:
     api_url = ollama_section.get('api_url', 'http://localhost:11434/api')
     api_key = ollama_section.get('api_key', '')
 
-    conversations_dir_str = general_section.get(
-        'conversations_dir',
-        str(Path.home() / '.scriptchat' / 'conversations')
-    )
-    conversations_dir = Path(conversations_dir_str).expanduser()
+    conversations_dir_str = general_section.get('conversations_dir')
+    if conversations_dir_str:
+        conversations_dir = Path(conversations_dir_str).expanduser()
+        if not conversations_dir.is_absolute():
+            conversations_dir = config_dir / conversations_dir
+    else:
+        # Default to ~/.scriptchat/conversations (always absolute)
+        conversations_dir = Path.home() / '.scriptchat' / 'conversations'
 
     # Ensure conversations directory exists
     conversations_dir.mkdir(parents=True, exist_ok=True)

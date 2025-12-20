@@ -256,5 +256,161 @@ models = [
             self.assertIn("mymodel", str(ctx.exception))
 
 
+class ConfigPathTests(unittest.TestCase):
+    """Tests for --config flag and custom config paths."""
+
+    def test_load_config_from_custom_path(self):
+        """Test loading config from a custom path instead of ~/.scriptchat/config.toml."""
+        toml_text = """
+[general]
+default_model = "ollama/llama3"
+conversations_dir = "{conv}"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create config at a custom location (not ~/.scriptchat)
+            config_path = Path(tmpdir) / "my-workspace" / "config.toml"
+            config_path.parent.mkdir(parents=True)
+            conv_dir = Path(tmpdir) / "conversations"
+            config_path.write_text(toml_text.format(conv=conv_dir.as_posix()), encoding="utf-8")
+
+            # Load from custom path
+            cfg = load_config(config_path)
+            self.assertEqual(cfg.default_provider, "ollama")
+            self.assertEqual(cfg.default_model, "llama3")
+
+    def test_relative_conversations_dir_resolved_from_config_dir(self):
+        """Test that relative conversations_dir is resolved relative to config file location."""
+        toml_text = """
+[general]
+default_model = "ollama/llama3"
+conversations_dir = "data/conversations"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "my-workspace"
+            workspace.mkdir()
+            config_path = workspace / "config.toml"
+            config_path.write_text(toml_text, encoding="utf-8")
+
+            cfg = load_config(config_path)
+            expected = workspace / "data" / "conversations"
+            self.assertEqual(cfg.conversations_dir, expected)
+            self.assertTrue(cfg.conversations_dir.exists())
+
+    def test_relative_exports_dir_resolved_from_config_dir(self):
+        """Test that relative exports_dir is resolved relative to config file location."""
+        toml_text = """
+[general]
+default_model = "ollama/llama3"
+conversations_dir = "conversations"
+exports_dir = "exports"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "my-workspace"
+            workspace.mkdir()
+            config_path = workspace / "config.toml"
+            config_path.write_text(toml_text, encoding="utf-8")
+
+            cfg = load_config(config_path)
+            expected = workspace / "exports"
+            self.assertEqual(cfg.exports_dir, expected)
+            self.assertTrue(cfg.exports_dir.exists())
+
+    def test_relative_log_file_resolved_from_config_dir(self):
+        """Test that relative log_file is resolved relative to config file location."""
+        toml_text = """
+[general]
+default_model = "ollama/llama3"
+conversations_dir = "conversations"
+log_file = "logs/scriptchat.log"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "my-workspace"
+            workspace.mkdir()
+            config_path = workspace / "config.toml"
+            config_path.write_text(toml_text, encoding="utf-8")
+
+            cfg = load_config(config_path)
+            expected = workspace / "logs" / "scriptchat.log"
+            self.assertEqual(cfg.log_file, expected)
+
+    def test_absolute_paths_unchanged(self):
+        """Test that absolute paths are not modified."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            abs_conv = Path(tmpdir) / "abs-conversations"
+            abs_exports = Path(tmpdir) / "abs-exports"
+
+            toml_text = f"""
+[general]
+default_model = "ollama/llama3"
+conversations_dir = "{abs_conv.as_posix()}"
+exports_dir = "{abs_exports.as_posix()}"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+            workspace = Path(tmpdir) / "my-workspace"
+            workspace.mkdir()
+            config_path = workspace / "config.toml"
+            config_path.write_text(toml_text, encoding="utf-8")
+
+            cfg = load_config(config_path)
+            self.assertEqual(cfg.conversations_dir, abs_conv)
+            self.assertEqual(cfg.exports_dir, abs_exports)
+
+    def test_config_not_found_raises(self):
+        """Test that loading a non-existent config raises FileNotFoundError."""
+        with self.assertRaises(FileNotFoundError):
+            load_config("/nonexistent/path/config.toml")
+
+    def test_tilde_expansion_in_config_path(self):
+        """Test that ~ is expanded in the config path argument."""
+        # This test just verifies the Path handling, not actual ~ expansion
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toml_text = """
+[general]
+default_model = "ollama/llama3"
+conversations_dir = "conversations"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+api_url = "http://localhost:11434/api"
+models = "llama3"
+"""
+            config_path = Path(tmpdir) / "config.toml"
+            config_path.write_text(toml_text, encoding="utf-8")
+
+            # Pass as string to test string handling
+            cfg = load_config(str(config_path))
+            self.assertEqual(cfg.default_model, "llama3")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -147,6 +147,7 @@ scriptchat --run tests/prompt-tests.sc --continue-on-error
 | `--init` | Interactive configuration setup |
 | `--run FILE` | Run a script file in batch mode |
 | `--continue-on-error` | Don't stop on assertion failures |
+| `--config PATH` | Use config file at PATH instead of `~/.scriptchat/config.toml` |
 | `--version` | Show version |
 
 ### Exit Codes

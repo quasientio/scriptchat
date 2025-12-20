@@ -665,6 +665,12 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
         action='store_true',
         help='Enable UI event logging for debugging/testing'
     )
+    parser.add_argument(
+        '--config',
+        metavar='PATH',
+        help='Path to config file (default: ~/.scriptchat/config.toml). '
+             'Relative paths in config are resolved relative to the config file location.'
+    )
     args = parser.parse_args()
 
     # Handle --init before anything else
@@ -674,11 +680,12 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
 
     try:
         # Load configuration (this also initializes logging)
-        config = load_config()
+        config = load_config(args.config)
 
         # Log startup information (logger is now configured)
         logger.info("=== ScriptChat starting ===")
-        logger.info("Loaded configuration from ~/.scriptchat/config.toml")
+        config_source = args.config or "~/.scriptchat/config.toml"
+        logger.info(f"Loaded configuration from {config_source}")
         logger.info(f"api_url={config.api_url}, default_model={config.default_model}")
 
         # Initialize provider clients
@@ -756,8 +763,11 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
 
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
-        print("\nPlease create a configuration file at ~/.scriptchat/config.toml", file=sys.stderr)
-        print("See the example configuration for reference.", file=sys.stderr)
+        if args.config:
+            print(f"\nConfig file not found: {args.config}", file=sys.stderr)
+        else:
+            print("\nPlease create a configuration file at ~/.scriptchat/config.toml", file=sys.stderr)
+        print("See config.toml.example for reference.", file=sys.stderr)
         sys.exit(1)
 
     except ValueError as e:

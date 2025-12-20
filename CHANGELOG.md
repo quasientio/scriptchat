@@ -17,6 +17,9 @@ Types of changes:
 ## [Unreleased]
 
 ### Added
+- `--config PATH` CLI flag to use an alternative config file instead of `~/.scriptchat/config.toml`
+  - Relative paths in config (conversations_dir, exports_dir, log_file) are resolved relative to the config file's directory
+  - Enables isolated workspaces for testing and automation
 - UI event system and test harness for automated UI testing (`scriptchat/ui/events.py`, `scriptchat/ui/test_harness.py`)
 - `--ui-events` CLI flag to enable UI event logging for debugging (auto-enabled on DEBUG log level)
 - Headless integration testing mode for UI with `MockLLMClient` and pipe-based input
