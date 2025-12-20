@@ -526,5 +526,473 @@ class SelectionMenuEventTests(unittest.TestCase):
             self.assertGreater(len(events), 0)
 
 
+class SelectionMenuScrollingTests(unittest.TestCase):
+    """Tests for selection menu viewport scrolling."""
+
+    def test_scroll_down_through_long_list(self):
+        """Test scrolling down through a list longer than max_visible."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            # Create more items than max_visible (default 10)
+            items = [(str(i), f"Item {i}") for i in range(15)]
+            harness.show_selection_menu(items)
+
+            # Initially at index 0, viewport_start 0
+            self.assertEqual(harness.ui.selection_menu.selected_index, 0)
+            self.assertEqual(harness.ui.selection_menu.viewport_start, 0)
+
+            # Navigate down past viewport
+            for _ in range(12):
+                harness.navigate_menu_down()
+
+            # Should be at index 12, viewport should have scrolled
+            self.assertEqual(harness.ui.selection_menu.selected_index, 12)
+            self.assertGreater(harness.ui.selection_menu.viewport_start, 0)
+
+    def test_scroll_up_through_long_list(self):
+        """Test scrolling up after scrolling down."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [(str(i), f"Item {i}") for i in range(15)]
+            harness.show_selection_menu(items)
+
+            # Scroll down first
+            for _ in range(12):
+                harness.navigate_menu_down()
+
+            # Now scroll back up
+            for _ in range(10):
+                harness.navigate_menu_up()
+
+            self.assertEqual(harness.ui.selection_menu.selected_index, 2)
+
+    def test_scroll_bounds(self):
+        """Test that scrolling respects list bounds."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [(str(i), f"Item {i}") for i in range(5)]
+            harness.show_selection_menu(items)
+
+            # Try to scroll up from start - should stay at 0
+            harness.navigate_menu_up()
+            self.assertEqual(harness.ui.selection_menu.selected_index, 0)
+
+            # Go to end
+            for _ in range(10):  # More than needed
+                harness.navigate_menu_down()
+
+            # Should be at last item
+            self.assertEqual(harness.ui.selection_menu.selected_index, 4)
+
+
+class HistoryNavigationComponentTests(unittest.TestCase):
+    """Tests for input history navigation in component mode."""
+
+    def test_history_previous_sets_input(self):
+        """Test navigating to previous history entry."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            # Add some history
+            harness.ui.input_history = ["first", "second", "third"]
+            harness.ui.input_history_index = None
+
+            # Navigate up
+            harness.ui._history_previous()
+
+            # Should show most recent
+            self.assertEqual(harness.get_input_text(), "third")
+            self.assertEqual(harness.ui.input_history_index, 2)
+
+    def test_history_next_cycles_forward(self):
+        """Test navigating forward through history."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.ui.input_history = ["first", "second", "third"]
+            harness.ui.input_history_index = None
+
+            # Navigate up twice
+            harness.ui._history_previous()
+            harness.ui._history_previous()
+            self.assertEqual(harness.get_input_text(), "second")
+
+            # Navigate forward
+            harness.ui._history_next()
+            self.assertEqual(harness.get_input_text(), "third")
+
+    def test_history_next_past_end_clears(self):
+        """Test that navigating past newest clears input."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.ui.input_history = ["first", "second"]
+            harness.ui.input_history_index = 1  # At "second"
+            harness.ui.input_buffer.text = "second"
+
+            # Navigate forward past end
+            harness.ui._history_next()
+
+            self.assertEqual(harness.get_input_text(), "")
+            self.assertIsNone(harness.ui.input_history_index)
+
+    def test_empty_history_no_crash(self):
+        """Test history navigation with empty history."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.ui.input_history = []
+
+            # Should not crash
+            harness.ui._history_previous()
+            harness.ui._history_next()
+
+            self.assertEqual(harness.get_input_text(), "")
+
+
+class MessageRoleRenderingTests(unittest.TestCase):
+    """Tests for different message role rendering."""
+
+    def test_echo_message_rendering(self):
+        """Test echo messages render in yellow without prefix."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('echo', 'Echo content here')
+
+            conv_text = harness.get_conversation_text()
+            # Yellow ANSI code
+            self.assertIn('\033[93m', conv_text)
+            self.assertIn('Echo content here', conv_text)
+            # No [echo] prefix
+            self.assertNotIn('[echo]', conv_text)
+
+    def test_note_message_rendering(self):
+        """Test note messages render in magenta with prefix."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('note', 'Note content here')
+
+            conv_text = harness.get_conversation_text()
+            # Magenta ANSI code
+            self.assertIn('\033[95m', conv_text)
+            self.assertIn('[note]', conv_text)
+            self.assertIn('Note content here', conv_text)
+
+    def test_system_error_rendering(self):
+        """Test system messages starting with Error are red."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('system', 'Error: Something went wrong')
+
+            conv_text = harness.get_conversation_text()
+            # Red ANSI code
+            self.assertIn('\033[91m', conv_text)
+
+    def test_status_error_rendering(self):
+        """Test status messages starting with Error are red."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('status', 'Error: Connection failed')
+
+            conv_text = harness.get_conversation_text()
+            # Red ANSI code
+            self.assertIn('\033[91m', conv_text)
+
+    def test_user_message_rendering(self):
+        """Test user messages render in cyan."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('user', 'User input')
+
+            conv_text = harness.get_conversation_text()
+            # Cyan ANSI code
+            self.assertIn('\033[96m', conv_text)
+            self.assertIn('[user]', conv_text)
+
+    def test_assistant_message_rendering(self):
+        """Test assistant messages render in green."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('assistant', 'Assistant response')
+
+            conv_text = harness.get_conversation_text()
+            # Green ANSI code
+            self.assertIn('\033[92m', conv_text)
+            self.assertIn('[assistant]', conv_text)
+
+
+class UIStateSnapshotTests(unittest.TestCase):
+    """Tests for UIState snapshot completeness."""
+
+    def test_state_captures_all_fields(self):
+        """Test that get_state captures all UI state."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            # Set various state values
+            harness.set_input("test input")
+            harness.add_message('user', 'hello')
+            harness.ui.thinking = True
+            harness.ui.multiline_mode = True
+            harness.ui.prompt_message = "Confirm?"
+
+            ui_state = harness.get_state()
+
+            # Verify all fields
+            self.assertEqual(ui_state.input_text, "test input")
+            self.assertEqual(ui_state.conversation_message_count, 1)
+            self.assertTrue(ui_state.thinking)
+            self.assertTrue(ui_state.multiline_mode)
+            self.assertEqual(ui_state.prompt_message, "Confirm?")
+            self.assertEqual(ui_state.model_name, "test-model")
+            self.assertEqual(ui_state.provider_id, "test")
+
+    def test_state_captures_selection_menu(self):
+        """Test that state captures selection menu state."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [("a", "A"), ("b", "B"), ("c", "C")]
+            harness.show_selection_menu(items)
+            harness.navigate_menu_down()
+
+            ui_state = harness.get_state()
+
+            self.assertTrue(ui_state.selection_menu_visible)
+            self.assertEqual(ui_state.selection_menu_index, 1)
+            self.assertEqual(len(ui_state.selection_menu_items), 3)
+
+
+class UIEventEmitterAdvancedTests(unittest.TestCase):
+    """Tests for advanced UIEventEmitter features."""
+
+    def test_wait_for_event_immediate(self):
+        """Test wait_for_event returns immediately if event fires."""
+        import threading
+
+        emitter = UIEventEmitter()
+
+        def emit_soon():
+            import time
+            time.sleep(0.05)
+            emitter.emit(UIEventType.THINKING_STOPPED)
+
+        threading.Thread(target=emit_soon, daemon=True).start()
+
+        event = emitter.wait_for_event(UIEventType.THINKING_STOPPED, timeout=1.0)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.type, UIEventType.THINKING_STOPPED)
+
+    def test_wait_for_event_timeout(self):
+        """Test wait_for_event returns None on timeout."""
+        emitter = UIEventEmitter()
+
+        event = emitter.wait_for_event(UIEventType.THINKING_STOPPED, timeout=0.1)
+        self.assertIsNone(event)
+
+    def test_wait_for_event_with_predicate(self):
+        """Test wait_for_event with predicate filter."""
+        import threading
+
+        emitter = UIEventEmitter()
+
+        def emit_events():
+            import time
+            time.sleep(0.05)
+            emitter.emit(UIEventType.INPUT_CHANGED, text="a")
+            time.sleep(0.05)
+            emitter.emit(UIEventType.INPUT_CHANGED, text="abc")
+
+        threading.Thread(target=emit_events, daemon=True).start()
+
+        # Wait for input with text length > 2
+        event = emitter.wait_for_event(
+            UIEventType.INPUT_CHANGED,
+            timeout=1.0,
+            predicate=lambda e: len(e.data.get('text', '')) > 2
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['text'], "abc")
+
+    def test_get_events_with_since_filter(self):
+        """Test filtering events by timestamp."""
+        from datetime import datetime
+        import time
+
+        emitter = UIEventEmitter()
+
+        emitter.emit(UIEventType.THINKING_STARTED)
+        time.sleep(0.01)
+        cutoff = datetime.now().isoformat()
+        time.sleep(0.01)
+        emitter.emit(UIEventType.THINKING_STOPPED)
+
+        # Get events since cutoff
+        events = emitter.get_events(since=cutoff)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, UIEventType.THINKING_STOPPED)
+
+    def test_listener_exception_doesnt_crash(self):
+        """Test that listener exceptions don't crash emit."""
+        emitter = UIEventEmitter()
+        received = []
+
+        def bad_listener(event):
+            raise ValueError("Intentional error")
+
+        def good_listener(event):
+            received.append(event)
+
+        emitter.add_listener(bad_listener)
+        emitter.add_listener(good_listener)
+
+        # Should not raise
+        emitter.emit(UIEventType.THINKING_STARTED)
+
+        # Good listener should still receive event
+        self.assertEqual(len(received), 1)
+
+
+class MarkdownAdvancedRenderingTests(unittest.TestCase):
+    """Tests for edge cases in markdown rendering."""
+
+    def test_multiple_bold_in_line(self):
+        """Test multiple bold segments in one line."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('assistant', 'This is **bold** and **also bold**')
+
+            conv_text = harness.get_conversation_text()
+            self.assertIn('bold', conv_text)
+            self.assertIn('also bold', conv_text)
+            self.assertNotIn('**', conv_text)
+
+    def test_code_not_spanning_newlines(self):
+        """Test that code backticks don't span newlines."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            # Backticks on different lines should not match
+            harness.add_message('assistant', 'Start `code\nend` here')
+
+            conv_text = harness.get_conversation_text()
+            # The backticks should remain since they span newlines
+            self.assertIn('`', conv_text)
+
+    def test_headers_at_different_levels(self):
+        """Test headers from h1 to h6."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            harness.add_message('assistant', '# H1\n## H2\n### H3')
+
+            conv_text = harness.get_conversation_text()
+            self.assertIn('H1', conv_text)
+            self.assertIn('H2', conv_text)
+            self.assertIn('H3', conv_text)
+            # No hash marks
+            self.assertNotIn('#', conv_text)
+
+
+class ResolveClearTargetTests(unittest.TestCase):
+    """Tests for resolve_clear_target_from_args helper."""
+
+    def test_no_args_clears_current(self):
+        """Test /clear with no args targets current conversation."""
+        from scriptchat.ui.app import resolve_clear_target_from_args
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            conversations_root = Path(tmpdir)
+
+            target_id, prompt, error, _, target_is_current = resolve_clear_target_from_args(
+                "",
+                conversations_root,
+                "current-convo-id"
+            )
+
+            self.assertEqual(target_id, "current-convo-id")
+            self.assertTrue(target_is_current)
+            self.assertIsNone(error)
+            self.assertIn("current-convo-id", prompt)
+
+    def test_invalid_index_returns_error(self):
+        """Test that invalid index returns error message."""
+        from scriptchat.ui.app import resolve_clear_target_from_args
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            conversations_root = Path(tmpdir)
+
+            target_id, prompt, error, _, _ = resolve_clear_target_from_args(
+                "999",  # No conversations exist
+                conversations_root,
+                None
+            )
+
+            self.assertIsNone(target_id)
+            self.assertIsNotNone(error)
+
+    def test_non_numeric_returns_usage_error(self):
+        """Test that non-numeric arg returns usage error."""
+        from scriptchat.ui.app import resolve_clear_target_from_args
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            conversations_root = Path(tmpdir)
+
+            target_id, prompt, error, _, _ = resolve_clear_target_from_args(
+                "abc",
+                conversations_root,
+                None
+            )
+
+            self.assertIsNone(target_id)
+            self.assertIn("Usage", error)
+
+
 if __name__ == "__main__":
     unittest.main()

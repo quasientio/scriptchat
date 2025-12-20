@@ -334,5 +334,303 @@ class HeadlessSynchronizationTests(unittest.TestCase):
                     harness.wait_for_menu(timeout=0.2)
 
 
+class MockLLMClientAdvancedTests(unittest.TestCase):
+    """Tests for advanced MockLLMClient features."""
+
+    def test_regex_pattern_matching(self):
+        """Test that patterns work with regex-like matching."""
+        mock = MockLLMClient(
+            responses={
+                "weather": "It's sunny!",
+                "what is": "Let me explain...",
+            },
+            default_response="I don't know"
+        )
+
+        convo = Conversation(
+            id=None, provider_id="test", model_name="test",
+            temperature=0.7, messages=[], tokens_in=0, tokens_out=0
+        )
+
+        # Partial match
+        resp = mock.chat(convo, "What is the meaning of life?")
+        self.assertEqual(resp, "Let me explain...")
+
+    def test_case_insensitive_matching(self):
+        """Test that pattern matching is case-insensitive."""
+        mock = MockLLMClient(
+            responses={"hello": "Hi!"},
+            default_response="Unknown"
+        )
+
+        convo = Conversation(
+            id=None, provider_id="test", model_name="test",
+            temperature=0.7, messages=[], tokens_in=0, tokens_out=0
+        )
+
+        resp = mock.chat(convo, "HELLO world")
+        self.assertEqual(resp, "Hi!")
+
+    def test_thinking_content_simulation(self):
+        """Test MockLLMClient with thinking content."""
+        mock = MockLLMClient(
+            responses={"calculate": "The answer is 42."},
+            thinking_responses={"calculate": "Let me think step by step..."},
+            default_response="Unknown"
+        )
+
+        convo = Conversation(
+            id=None, provider_id="test", model_name="test",
+            temperature=0.7, messages=[], tokens_in=0, tokens_out=0
+        )
+
+        mock.chat(convo, "Please calculate this")
+
+        self.assertEqual(len(convo.messages), 1)
+        self.assertEqual(convo.messages[0].content, "The answer is 42.")
+        self.assertEqual(convo.messages[0].thinking, "Let me think step by step...")
+
+    def test_response_delay(self):
+        """Test that response delay works."""
+        import time
+
+        mock = MockLLMClient(
+            default_response="Delayed response",
+            response_delay=0.1
+        )
+
+        convo = Conversation(
+            id=None, provider_id="test", model_name="test",
+            temperature=0.7, messages=[], tokens_in=0, tokens_out=0
+        )
+
+        start = time.time()
+        mock.chat(convo, "Hello")
+        elapsed = time.time() - start
+
+        self.assertGreaterEqual(elapsed, 0.1)
+
+
+class HeadlessMultipleMessagesTests(unittest.TestCase):
+    """Tests for multiple message exchanges in headless mode."""
+
+    def test_multiple_sequential_messages(self):
+        """Test sending multiple messages in sequence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            mock = MockLLMClient(
+                responses={
+                    "first": "Response 1",
+                    "second": "Response 2",
+                },
+                default_response="Default"
+            )
+
+            with UITestHarness(state) as harness:
+                harness.start_headless(mock_client=mock)
+
+                harness.send_message("first message", wait_for_response=True)
+                harness.send_message("second message", wait_for_response=True)
+
+                harness.assert_conversation_contains("Response 1")
+                harness.assert_conversation_contains("Response 2")
+
+    def test_conversation_context_preserved(self):
+        """Test that conversation context is preserved across messages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            call_count = [0]
+
+            class ContextAwareMock:
+                def chat(self, convo, message, **kwargs):
+                    call_count[0] += 1
+                    # Check that previous messages are in conversation
+                    msg_count = len(convo.messages)
+                    from scriptchat.core.conversations import Message
+                    convo.messages.append(Message(
+                        role='assistant',
+                        content=f"Response {call_count[0]}, saw {msg_count} messages"
+                    ))
+                    return f"Response {call_count[0]}"
+
+            with UITestHarness(state) as harness:
+                harness.start_headless(mock_client=ContextAwareMock())
+
+                harness.send_message("first", wait_for_response=True)
+                harness.send_message("second", wait_for_response=True)
+
+                self.assertEqual(call_count[0], 2)
+
+
+class HeadlessCommandTests(unittest.TestCase):
+    """Tests for various commands in headless mode."""
+
+    def test_echo_command(self):
+        """Test /echo command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.type_command("/echo Hello World!")
+
+                harness.assert_conversation_contains("Hello World!")
+
+    def test_note_command(self):
+        """Test /note command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.type_command("/note This is a note")
+
+                harness.assert_conversation_contains("This is a note")
+
+    def test_help_command(self):
+        """Test /help command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.type_command("/help")
+
+                # Help should show available commands
+                harness.assert_conversation_contains("/new")
+
+    def test_temp_command(self):
+        """Test /temp command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.type_command("/temp 0.5")
+                harness.wait_for_idle(timeout=1)
+
+                # Temperature should be updated
+                self.assertAlmostEqual(
+                    harness.state.current_conversation.temperature,
+                    0.5
+                )
+
+
+class HeadlessArrowKeyTests(unittest.TestCase):
+    """Tests for arrow key navigation in headless mode."""
+
+    def test_left_right_cursor_movement(self):
+        """Test left/right arrow keys move cursor."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.send_text("hello")
+                harness.wait_for_idle(timeout=1)
+
+                # Cursor should be at end
+                self.assertEqual(harness.ui.input_buffer.cursor_position, 5)
+
+                # Move left
+                harness.send_key('left')
+                harness.wait_for_idle(timeout=0.5)
+                self.assertEqual(harness.ui.input_buffer.cursor_position, 4)
+
+                # Move right
+                harness.send_key('right')
+                harness.wait_for_idle(timeout=0.5)
+                self.assertEqual(harness.ui.input_buffer.cursor_position, 5)
+
+
+class HeadlessInputHistoryTests(unittest.TestCase):
+    """Tests for input history in headless mode."""
+
+    def test_history_populated_after_commands(self):
+        """Test that command history is populated."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.type_command("/echo first")
+                harness.type_command("/echo second")
+
+                # History should have entries
+                self.assertIn("/echo first", harness.ui.input_history)
+                self.assertIn("/echo second", harness.ui.input_history)
+
+
+class HeadlessWaitForThinkingTests(unittest.TestCase):
+    """Tests for wait_for_thinking synchronization."""
+
+    def test_wait_for_thinking_when_already_thinking(self):
+        """Test wait_for_thinking when LLM is already thinking."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                # Manually set thinking
+                harness.ui.thinking = True
+
+                # Should return immediately
+                harness.wait_for_thinking(timeout=0.5)
+
+    def test_wait_for_thinking_timeout(self):
+        """Test wait_for_thinking times out when not thinking."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                with self.assertRaises(TimeoutError):
+                    harness.wait_for_thinking(timeout=0.2)
+
+
+class HeadlessAssertionTests(unittest.TestCase):
+    """Tests for assertion methods in headless mode."""
+
+    def test_assert_input_equals(self):
+        """Test assert_input_equals method."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.send_text("test")
+                harness.wait_for_idle(timeout=1)
+
+                harness.assert_input_equals("test")
+
+                with self.assertRaises(AssertionError):
+                    harness.assert_input_equals("wrong")
+
+    def test_assert_event_occurred(self):
+        """Test assert_event_occurred method."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+
+            with UITestHarness(state) as harness:
+                harness.start_headless()
+
+                harness.type_command("/echo test")
+
+                from scriptchat.ui.events import UIEventType
+                # /echo updates the conversation display
+                harness.assert_event_occurred(UIEventType.CONVERSATION_UPDATED)
+
+
 if __name__ == "__main__":
     unittest.main()

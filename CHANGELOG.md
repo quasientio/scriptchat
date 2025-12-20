@@ -26,6 +26,13 @@ Types of changes:
   - `UITestHarness.start_headless()` runs the full app with mock I/O for end-to-end testing
   - Key sequence support for simulating keyboard input (enter, escape, arrows, ctrl/alt combos)
   - Synchronization helpers: `wait_for_idle()`, `wait_for_thinking()`, `wait_for_menu()`
+- Expanded UI test coverage with 42 new tests covering:
+  - Selection menu scrolling and viewport management
+  - Input history navigation
+  - Message role rendering (echo, note, error styling)
+  - UIEventEmitter `wait_for_event()` with predicates and filters
+  - MockLLMClient `thinking_responses` and `response_delay` parameters
+  - Headless mode commands, arrow keys, and assertions
 
 ## [0.4.0] - 2025-12-19
 

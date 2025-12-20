@@ -74,18 +74,23 @@ class MockLLMClient:
     def __init__(
         self,
         responses: dict[str, str] | None = None,
-        default_response: str = "Mock response"
+        default_response: str = "Mock response",
+        thinking_responses: dict[str, str] | None = None,
+        response_delay: float | None = None
     ):
         """Initialize mock client.
 
         Args:
             responses: Dict mapping user message patterns to responses
             default_response: Response when no pattern matches
+            thinking_responses: Dict mapping patterns to thinking content
+            response_delay: Delay in seconds before responding (overrides default)
         """
         self.responses = responses or {}
         self.default_response = default_response
+        self.thinking_responses = thinking_responses or {}
         self.calls: list[dict] = []
-        self.delay: float = 0.1  # Simulated thinking time
+        self.delay: float = response_delay if response_delay is not None else 0.1
 
     def chat(
         self,
@@ -105,15 +110,26 @@ class MockLLMClient:
         # Simulate thinking time
         time.sleep(self.delay)
 
-        # Find matching response
+        # Find matching response and thinking
         response = self.default_response
+        thinking = None
+        matched_pattern = None
+
         for pattern, resp in self.responses.items():
             if pattern.lower() in new_user_message.lower():
                 response = resp
+                matched_pattern = pattern
                 break
 
+        # Check for matching thinking content
+        if matched_pattern and matched_pattern in self.thinking_responses:
+            thinking = self.thinking_responses[matched_pattern]
+
         # Add to conversation
-        convo.messages.append(Message(role='assistant', content=response))
+        msg = Message(role='assistant', content=response)
+        if thinking:
+            msg.thinking = thinking
+        convo.messages.append(msg)
         convo.tokens_in += len(new_user_message.split()) * 2  # Rough estimate
         convo.tokens_out += len(response.split()) * 2
 
