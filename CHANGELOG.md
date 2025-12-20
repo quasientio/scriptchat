@@ -39,7 +39,7 @@ Types of changes:
   - `reasoning_content` field capture for compatible providers
 - `include_thinking_in_history` config option to include thinking in messages sent to API
 - Nested file reference expansion: `@path` references inside registered files are also expanded (one level deep)
-- `reasoning_effort` support for Fireworks models (e.g., Kimi K2 Thinking with `/reason low|medium|high`)
+- `reasoning_effort` support for Fireworks models (e.g., Kimi K2 Thinking, GPT-OSS with `/reason low|medium|high`)
 - `skip_prompt_cache_param` model config option for models that don't support `prompt_cache_max_len` parameter
 
 ### Changed

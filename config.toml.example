@@ -106,7 +106,7 @@ prompt_cache = false  # Disable prompt caching for full privacy (no data in vola
 # Use skip_prompt_cache_param = true for models that don't support prompt_cache_max_len parameter.
 # Use reasoning_levels for models that support /reason command (Fireworks uses reasoning_effort param).
 models = [
-  { name = "accounts/fireworks/models/gpt-oss-120b", alias = "gpt-oss" },
+  { name = "accounts/fireworks/models/gpt-oss-120b", alias = "gpt-oss", reasoning_levels = ["low", "medium", "high"] },
   { name = "accounts/fireworks/models/deepseek-v3", alias = "dsv3" },
   { name = "accounts/fireworks/models/deepseek-r1", alias = "dsr1" },
   { name = "accounts/fireworks/models/kimi-k2-thinking", alias = "kimi", max_tokens = 16384, skip_prompt_cache_param = true, reasoning_levels = ["low", "medium", "high"] }
