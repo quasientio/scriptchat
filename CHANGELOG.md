@@ -26,6 +26,7 @@ Types of changes:
   - `UITestHarness.start_headless()` runs the full app with mock I/O for end-to-end testing
   - Key sequence support for simulating keyboard input (enter, escape, arrows, ctrl/alt combos)
   - Synchronization helpers: `wait_for_idle()`, `wait_for_thinking()`, `wait_for_menu()`
+- Support for `<thinking>...</thinking>` tags (Kimi format) in addition to `<think>...</think>` tags (DeepSeek R1 format) for thinking content extraction
 - Expanded UI test coverage with 42 new tests covering:
   - Selection menu scrolling and viewport management
   - Input history navigation

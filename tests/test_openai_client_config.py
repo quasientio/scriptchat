@@ -1087,5 +1087,94 @@ models = "gpt-4o"
         self.assertEqual(content, "Hello world")
 
 
+class ExtractThinkTagsTests(unittest.TestCase):
+    """Tests for _extract_think_tags method."""
+
+    def _make_client(self):
+        """Create a minimal client for testing."""
+        provider = ProviderConfig(
+            id="test",
+            type="openai-compatible",
+            api_url="https://api.test.com",
+            api_key="test-key",
+            models=[],
+            streaming=True,
+            headers={},
+            default_model="test-model",
+        )
+        cfg = Config(
+            api_url="https://api.test.com",
+            api_key="test-key",
+            conversations_dir=Path("."),
+            exports_dir=None,
+            enable_streaming=False,
+            system_prompt=None,
+            default_provider="test",
+            default_model="test-model",
+            default_temperature=0.7,
+            timeout=1,
+            file_confirm_threshold_bytes=40_000,
+            log_level="INFO",
+            log_file=None,
+            providers=[provider],
+        )
+        return OpenAIChatClient(cfg, provider, timeout=1)
+
+    def test_extract_think_tags_deepseek_format(self):
+        """Test extraction of <think>...</think> tags (DeepSeek R1 format)."""
+        client = self._make_client()
+        content = "<think>I need to analyze this carefully.</think>\n\nThe answer is 42."
+        result, thinking = client._extract_think_tags(content)
+        self.assertEqual(result, "The answer is 42.")
+        self.assertEqual(thinking, "I need to analyze this carefully.")
+
+    def test_extract_thinking_tags_kimi_format(self):
+        """Test extraction of <thinking>...</thinking> tags (Kimi format)."""
+        client = self._make_client()
+        content = "<thinking>Let me reason through this step by step.</thinking>\n\n# Plan\n\n1. First step\n2. Second step"
+        result, thinking = client._extract_think_tags(content)
+        self.assertEqual(result, "# Plan\n\n1. First step\n2. Second step")
+        self.assertEqual(thinking, "Let me reason through this step by step.")
+
+    def test_extract_think_tags_multiline(self):
+        """Test extraction with multiline thinking content."""
+        client = self._make_client()
+        content = """<thinking>
+Line 1 of thinking
+Line 2 of thinking
+Line 3 of thinking
+</thinking>
+
+Here is the response."""
+        result, thinking = client._extract_think_tags(content)
+        self.assertEqual(result, "Here is the response.")
+        self.assertIn("Line 1 of thinking", thinking)
+        self.assertIn("Line 3 of thinking", thinking)
+
+    def test_extract_think_tags_no_tags(self):
+        """Test that content without think tags is returned unchanged."""
+        client = self._make_client()
+        content = "Just a regular response without thinking."
+        result, thinking = client._extract_think_tags(content)
+        self.assertEqual(result, content)
+        self.assertIsNone(thinking)
+
+    def test_extract_think_tags_case_insensitive(self):
+        """Test that tag matching is case insensitive."""
+        client = self._make_client()
+        content = "<THINKING>Uppercase tags</THINKING>\n\nResponse."
+        result, thinking = client._extract_think_tags(content)
+        self.assertEqual(result, "Response.")
+        self.assertEqual(thinking, "Uppercase tags")
+
+    def test_extract_think_tags_empty_thinking(self):
+        """Test extraction with empty thinking block."""
+        client = self._make_client()
+        content = "<think></think>Response."
+        result, thinking = client._extract_think_tags(content)
+        self.assertEqual(result, "Response.")
+        self.assertEqual(thinking, "")
+
+
 if __name__ == "__main__":
     unittest.main()

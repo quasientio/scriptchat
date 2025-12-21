@@ -89,7 +89,9 @@ class OpenAIChatClient:
         return content
 
     def _extract_think_tags(self, content: str) -> tuple[str, str | None]:
-        """Extract and strip <think>...</think> tags from content (DeepSeek R1 format).
+        """Extract and strip <think>...</think> or <thinking>...</thinking> tags from content.
+
+        Handles both DeepSeek R1 format (<think>) and Kimi format (<thinking>).
 
         Args:
             content: The response content that may contain think tags
@@ -98,14 +100,16 @@ class OpenAIChatClient:
             Tuple of (content_without_thinking, thinking_content or None)
         """
         import re
-        # Match <think>...</think> block (case insensitive, dotall for multiline)
-        pattern = re.compile(r'<think>(.*?)</think>\s*', re.IGNORECASE | re.DOTALL)
-        match = pattern.search(content)
-        if match:
-            thinking = match.group(1).strip()
-            # Remove the think block from content
-            content_clean = pattern.sub('', content).strip()
-            return content_clean, thinking
+        # Match <think>...</think> or <thinking>...</thinking> block (case insensitive, dotall for multiline)
+        # Try <thinking> first (longer tag name), then <think>
+        for tag in ['thinking', 'think']:
+            pattern = re.compile(rf'<{tag}>(.*?)</{tag}>\s*', re.IGNORECASE | re.DOTALL)
+            match = pattern.search(content)
+            if match:
+                thinking = match.group(1).strip()
+                # Remove the think block from content
+                content_clean = pattern.sub('', content).strip()
+                return content_clean, thinking
         return content, None
 
     def _build_url(self, endpoint: str) -> str:
