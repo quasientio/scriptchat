@@ -16,6 +16,9 @@ Types of changes:
 
 ## [Unreleased]
 
+### Changed
+- Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted
+
 ### Fixed
 - Selection menu items (e.g., `/model`, `/load`) now highlight visually when navigating with UP/DOWN keys
   - Added reverse video styling for the currently selected item

@@ -703,13 +703,21 @@ class UITestHarness:
     def show_selection_menu(
         self,
         items: list[tuple[Any, str]],
-        on_select: Callable[[Any], None] = None
+        on_select: Callable[[Any], None] = None,
+        initial_index: int = 0
     ):
-        """Show selection menu with items (component mode)."""
+        """Show selection menu with items (component mode).
+
+        Args:
+            items: List of (value, display_label) tuples
+            on_select: Callback when item is selected
+            initial_index: Initial selection index (default 0)
+        """
         self.ui.selection_menu.show(
             items=items,
             on_select=on_select or (lambda x: None),
-            on_cancel=lambda: None
+            on_cancel=lambda: None,
+            initial_index=initial_index
         )
 
     def navigate_menu_down(self):

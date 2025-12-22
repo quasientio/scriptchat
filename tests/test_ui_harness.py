@@ -647,6 +647,73 @@ class SelectionMenuScrollingTests(unittest.TestCase):
             self.assertIn('class:menu-border', styles_used)
             self.assertIn('class:menu-hint', styles_used)
 
+    def test_menu_initial_index_selects_correct_item(self):
+        """Test that initial_index parameter selects the correct item."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [("a", "Item A"), ("b", "Item B"), ("c", "Item C"), ("d", "Item D")]
+
+            # Show menu starting at index 2 (Item C)
+            harness.show_selection_menu(items, initial_index=2)
+
+            # Third item should be selected
+            self.assertEqual(harness.ui.selection_menu.selected_index, 2)
+
+            # Check styling reflects selection
+            menu_text = harness.ui.selection_menu._get_menu_text()
+            item_styles = [
+                (style, text) for style, text in menu_text
+                if style in ('class:menu-selected', 'class:menu-item')
+            ]
+
+            self.assertEqual(len(item_styles), 4)
+            self.assertEqual(item_styles[0][0], 'class:menu-item')  # Item A
+            self.assertEqual(item_styles[1][0], 'class:menu-item')  # Item B
+            self.assertEqual(item_styles[2][0], 'class:menu-selected')  # Item C
+            self.assertEqual(item_styles[3][0], 'class:menu-item')  # Item D
+
+    def test_menu_initial_index_clamps_to_bounds(self):
+        """Test that initial_index is clamped to valid range."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [("a", "Item A"), ("b", "Item B"), ("c", "Item C")]
+
+            # Test with index beyond bounds
+            harness.show_selection_menu(items, initial_index=100)
+            self.assertEqual(harness.ui.selection_menu.selected_index, 2)  # Last item
+
+            # Test with negative index
+            harness.ui.selection_menu.hide()
+            harness.show_selection_menu(items, initial_index=-5)
+            self.assertEqual(harness.ui.selection_menu.selected_index, 0)  # First item
+
+    def test_menu_initial_index_adjusts_viewport(self):
+        """Test that viewport scrolls to show initially selected item."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            # Create menu with more items than visible (default max_visible=10)
+            items = [(str(i), f"Item {i}") for i in range(15)]
+
+            # Select item 12 (beyond initial viewport)
+            harness.show_selection_menu(items, initial_index=12)
+
+            # Viewport should have scrolled
+            menu = harness.ui.selection_menu
+            self.assertEqual(menu.selected_index, 12)
+            # Viewport start should be adjusted so item 12 is visible
+            self.assertGreater(menu.viewport_start, 0)
+            self.assertLessEqual(menu.viewport_start, 12)
+            self.assertGreater(menu.viewport_start + menu.max_visible, 12)
+
 
 class HistoryNavigationComponentTests(unittest.TestCase):
     """Tests for input history navigation in component mode."""

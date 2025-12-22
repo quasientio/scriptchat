@@ -187,11 +187,21 @@ class CommandHandlers:
             self.app.add_system_message("No models configured")
             return
 
+        # Find the index of the currently selected model
+        current_provider = self.app.state.current_conversation.provider_id
+        current_model = self.app.state.current_conversation.model_name
+        initial_index = 0
+        for i, ((provider_id, model_name), _) in enumerate(options):
+            if provider_id == current_provider and model_name == current_model:
+                initial_index = i
+                break
+
         # Show selection menu
         self.app.selection_menu.show(
             items=options,
             on_select=self._on_model_selected,
-            on_cancel=lambda: self.app.add_system_message("Model selection cancelled")
+            on_cancel=lambda: self.app.add_system_message("Model selection cancelled"),
+            initial_index=initial_index
         )
 
     def _on_model_selected(self, value: tuple):
@@ -471,10 +481,23 @@ class CommandHandlers:
         options = [(level, level.capitalize()) for level in available]
         options.append(("clear", "Clear (provider default)"))
 
+        # Find the index of the currently selected reasoning level
+        current_level = self.app.state.current_conversation.reasoning_level
+        initial_index = 0
+        if current_level:
+            for i, (level, _) in enumerate(options):
+                if level == current_level:
+                    initial_index = i
+                    break
+        # If no reasoning level is set (None), default to "clear" option (last item)
+        elif current_level is None:
+            initial_index = len(options) - 1
+
         self.app.selection_menu.show(
             items=options,
             on_select=self._on_reason_selected,
-            on_cancel=lambda: self.app.add_system_message("Reason selection cancelled")
+            on_cancel=lambda: self.app.add_system_message("Reason selection cancelled"),
+            initial_index=initial_index
         )
 
     def _on_reason_selected(self, level: str):
@@ -511,10 +534,19 @@ class CommandHandlers:
             ("CRITICAL", "Critical - Severe errors"),
         ]
 
+        # Find the index of the currently set log level
+        current_level = self.app.state.config.log_level.upper() if self.app.state.config.log_level else "INFO"
+        initial_index = 0
+        for i, (level, _) in enumerate(levels):
+            if level == current_level:
+                initial_index = i
+                break
+
         self.app.selection_menu.show(
             items=levels,
             on_select=self._on_log_level_selected,
-            on_cancel=lambda: self.app.add_system_message("Log level selection cancelled")
+            on_cancel=lambda: self.app.add_system_message("Log level selection cancelled"),
+            initial_index=initial_index
         )
 
     def _on_log_level_selected(self, level: str):

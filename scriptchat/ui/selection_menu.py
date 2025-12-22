@@ -67,7 +67,8 @@ class SelectionMenu:
         self,
         items: list[tuple[Any, str]],
         on_select: Callable[[Any], None],
-        on_cancel: Optional[Callable[[], None]] = None
+        on_cancel: Optional[Callable[[], None]] = None,
+        initial_index: int = 0
     ):
         """Display the selection menu with given items.
 
@@ -75,10 +76,19 @@ class SelectionMenu:
             items: List of (value, display_label) tuples
             on_select: Callback when item is selected, receives the value
             on_cancel: Optional callback when selection is cancelled
+            initial_index: Initial selection index (default 0), clamped to valid range
         """
         self.items = items
-        self.selected_index = 0
-        self.viewport_start = 0
+        # Clamp initial_index to valid range
+        if items:
+            self.selected_index = max(0, min(initial_index, len(items) - 1))
+        else:
+            self.selected_index = 0
+        # Adjust viewport to show selected item
+        if self.selected_index >= self.max_visible:
+            self.viewport_start = self.selected_index - self.max_visible + 1
+        else:
+            self.viewport_start = 0
         self._on_select = on_select
         self._on_cancel = on_cancel
         self._visible = True
