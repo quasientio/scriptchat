@@ -39,6 +39,7 @@ from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.formatted_text import ANSI, to_formatted_text
 from prompt_toolkit.mouse_events import MouseEventType
+from prompt_toolkit.styles import Style
 
 from ..core.commands import AppState, handle_command, set_model, set_temperature
 from ..core.conversations import (
@@ -50,6 +51,17 @@ from .events import UIEventEmitter, UIEventType, UIState
 from .selection_menu import SelectionMenu
 
 logger = logging.getLogger(__name__)
+
+# Style definitions for the application
+APP_STYLE = Style.from_dict({
+    # Selection menu styles
+    'menu-selected': 'reverse',  # Highlighted/selected item
+    'menu-item': '',  # Regular menu item
+    'menu-border': 'fg:ansigray',  # Menu border characters
+    'menu-hint': 'fg:ansigray italic',  # Navigation hint text
+    'menu-scroll': 'fg:ansigray',  # Scroll indicators
+    'selection-menu': '',  # Menu container
+})
 
 
 def resolve_clear_target_from_args(
@@ -183,6 +195,7 @@ class ScriptChatUI:
         app_kwargs = {
             'layout': self.layout,
             'key_bindings': self.kb,
+            'style': APP_STYLE,
             'full_screen': True,
             'mouse_support': False,  # Disabled to allow terminal-native mouse selection
         }

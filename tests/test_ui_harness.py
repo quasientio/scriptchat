@@ -593,6 +593,60 @@ class SelectionMenuScrollingTests(unittest.TestCase):
             # Should be at last item
             self.assertEqual(harness.ui.selection_menu.selected_index, 4)
 
+    def test_menu_item_styling_classes(self):
+        """Test that menu items have correct style classes for highlighting."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [("a", "Item A"), ("b", "Item B"), ("c", "Item C")]
+            harness.show_selection_menu(items)
+
+            # Get the formatted text from the menu
+            menu_text = harness.ui.selection_menu._get_menu_text()
+
+            # Extract style classes for menu items (skip border lines)
+            item_styles = [
+                (style, text) for style, text in menu_text
+                if style in ('class:menu-selected', 'class:menu-item')
+            ]
+
+            # First item (index 0) should be selected
+            self.assertEqual(len(item_styles), 3)
+            self.assertEqual(item_styles[0][0], 'class:menu-selected')
+            self.assertEqual(item_styles[1][0], 'class:menu-item')
+            self.assertEqual(item_styles[2][0], 'class:menu-item')
+
+            # Navigate down - now second item should be selected
+            harness.navigate_menu_down()
+            menu_text = harness.ui.selection_menu._get_menu_text()
+            item_styles = [
+                (style, text) for style, text in menu_text
+                if style in ('class:menu-selected', 'class:menu-item')
+            ]
+
+            self.assertEqual(item_styles[0][0], 'class:menu-item')
+            self.assertEqual(item_styles[1][0], 'class:menu-selected')
+            self.assertEqual(item_styles[2][0], 'class:menu-item')
+
+    def test_menu_border_and_hint_styling(self):
+        """Test that menu borders and hints have correct style classes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_test_state(Path(tmpdir))
+            harness = UITestHarness(state)
+            harness.setup_component_mode()
+
+            items = [("a", "Item A"), ("b", "Item B")]
+            harness.show_selection_menu(items)
+
+            menu_text = harness.ui.selection_menu._get_menu_text()
+            styles_used = {style for style, text in menu_text}
+
+            # Should have border and hint styles
+            self.assertIn('class:menu-border', styles_used)
+            self.assertIn('class:menu-hint', styles_used)
+
 
 class HistoryNavigationComponentTests(unittest.TestCase):
     """Tests for input history navigation in component mode."""

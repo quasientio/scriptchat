@@ -16,6 +16,11 @@ Types of changes:
 
 ## [Unreleased]
 
+### Fixed
+- Selection menu items (e.g., `/model`, `/load`) now highlight visually when navigating with UP/DOWN keys
+  - Added reverse video styling for the currently selected item
+  - Menu borders and hints now use subtle gray styling
+
 ### Added
 - `--config PATH` CLI flag to use an alternative config file instead of `~/.scriptchat/config.toml`
   - Relative paths in config (conversations_dir, exports_dir, log_file) are resolved relative to the config file's directory
