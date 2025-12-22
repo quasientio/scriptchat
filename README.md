@@ -51,6 +51,10 @@ This installs the `scriptchat` command (and the shorter `sc` alias) globally.
    ```bash
    pip install -e ".[dev]"
    ```
+   To include DeepSeek tokenizer support (for exact token counts):
+   ```bash
+   pip install -e ".[dev,deepseek]"
+   ```
 
 ## Quickstart
 
