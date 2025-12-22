@@ -14,6 +14,7 @@
 
 """Terminal UI for ScriptChat using prompt_toolkit."""
 
+import json
 import shutil
 import threading
 import logging
@@ -144,7 +145,9 @@ class ScriptChatUI:
         self.message_queue: list[str] = []  # Pending user messages to send when LLM is free
         self.script_queue: list[str] = []  # Pending script lines to execute
         self.running_script: bool = False
-        self.history_path = self.state.config.conversations_dir.expanduser().parent / "history.txt"
+        history_dir = self.state.config.conversations_dir.expanduser().parent
+        self.history_path = history_dir / "history.json"
+        self._legacy_history_path = history_dir / "history.txt"
 
         # Create command handlers
         self.handlers = CommandHandlers(self)
@@ -956,7 +959,7 @@ class ScriptChatUI:
             self.handle_user_message(line)
 
     def _append_history(self, entry: str):
-        """Append a line to the input history."""
+        """Append an entry to the input history."""
         entry = entry.strip()
         if not entry:
             return
@@ -968,16 +971,29 @@ class ScriptChatUI:
             # Keep file trimmed by rewriting if it grows large
             if len(self.input_history) > 500:
                 self.input_history = self.input_history[-500:]
-            self.history_path.write_text("\n".join(self.input_history) + "\n", encoding="utf-8")
+            # Use JSON format to preserve multi-line entries
+            self.history_path.write_text(json.dumps(self.input_history), encoding="utf-8")
         except Exception:
             # Ignore persistence errors to avoid interrupting the session
             pass
 
     def _load_history(self):
-        """Load persisted input history."""
+        """Load persisted input history.
+
+        Uses JSON format to properly preserve multi-line entries.
+        Falls back to legacy plain-text format for backward compatibility.
+        """
         try:
             if self.history_path.exists():
-                lines = [line.strip() for line in self.history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+                # Load JSON format
+                content = self.history_path.read_text(encoding="utf-8")
+                entries = json.loads(content)
+                if isinstance(entries, list):
+                    self.input_history = [e for e in entries if isinstance(e, str) and e.strip()][-500:]
+                    return
+            # Fall back to legacy format if JSON file doesn't exist
+            if self._legacy_history_path.exists():
+                lines = [line.strip() for line in self._legacy_history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
                 self.input_history = lines[-500:]
         except Exception:
             # Ignore load errors

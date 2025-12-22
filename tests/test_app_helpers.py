@@ -172,6 +172,66 @@ class AppHelperTests(unittest.TestCase):
             ui2 = ScriptChatUI(state)
             self.assertEqual(ui2.input_history, ["first", "second"])
 
+    def test_multiline_history_persistence(self):
+        """Multi-line messages should be preserved as single entries in history."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            conv_dir = root / "conversations"
+            conv_dir.mkdir(parents=True, exist_ok=True)
+            state = make_state()
+            state.config.conversations_dir = conv_dir
+            ui = ScriptChatUI(state)
+
+            # Add a multi-line entry
+            multiline_entry = "line one\nline two\nline three"
+            ui._append_history(multiline_entry)
+            ui._append_history("single line")
+
+            # Reload UI and ensure multi-line entry was preserved as one entry
+            ui2 = ScriptChatUI(state)
+            self.assertEqual(len(ui2.input_history), 2)
+            self.assertEqual(ui2.input_history[0], multiline_entry)
+            self.assertEqual(ui2.input_history[1], "single line")
+
+    def test_history_json_format(self):
+        """History file should be stored in JSON format."""
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            conv_dir = root / "conversations"
+            conv_dir.mkdir(parents=True, exist_ok=True)
+            state = make_state()
+            state.config.conversations_dir = conv_dir
+            ui = ScriptChatUI(state)
+
+            ui._append_history("entry one")
+            ui._append_history("entry\nwith\nnewlines")
+
+            # Verify file is valid JSON
+            history_path = root / "history.json"
+            self.assertTrue(history_path.exists())
+            content = history_path.read_text(encoding="utf-8")
+            entries = json.loads(content)
+            self.assertEqual(entries, ["entry one", "entry\nwith\nnewlines"])
+
+    def test_history_legacy_migration(self):
+        """Legacy text history format should be loaded if JSON doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            conv_dir = root / "conversations"
+            conv_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create legacy history file
+            legacy_path = root / "history.txt"
+            legacy_path.write_text("legacy one\nlegacy two\n", encoding="utf-8")
+
+            state = make_state()
+            state.config.conversations_dir = conv_dir
+            ui = ScriptChatUI(state)
+
+            # Should load from legacy format
+            self.assertEqual(ui.input_history, ["legacy one", "legacy two"])
+
     def test_markdown_to_ansi_conversion(self):
         state = make_state()
         ui = object.__new__(ScriptChatUI)
