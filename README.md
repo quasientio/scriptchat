@@ -314,7 +314,7 @@ include_thinking_in_history = true
 | `Ctrl+Up` | Focus conversation pane |
 | `Ctrl+Home/End` | Jump to start/end of conversation |
 | `Up/Down` | Scroll (conversation) or history (input) |
-| `Tab` | Command completion or return to input |
+| `Tab` | Complete commands, paths, and registered keys (bash-like behavior) |
 | `Escape` | Clear input or return to input pane |
 | `Escape` ×2 | Cancel ongoing inference |
 | `Ctrl+C/D` | Exit |

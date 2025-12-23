@@ -26,6 +26,11 @@ Types of changes:
 - `/unfolder <folder-key>` command to unregister a folder and all its files
 - `@folder-name` expansion in messages: expands to all files in the folder with XML tags enclosing each file's content
 - `/unset <name>` command to remove a variable
+- TAB completion for file paths in commands that take path arguments (`/file`, `/folder`, `/unfile`, `/unfolder`, `/import`, `/import-chatgpt`, `/run`)
+  - Bash-like behavior: stops at common prefix, double-TAB to show all options
+  - `/folder` completes only directories
+  - `/unfile` and `/unfolder` complete with registered file/folder keys
+  - Supports tilde expansion (`~` for home directory)
 
 ### Changed
 - Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted

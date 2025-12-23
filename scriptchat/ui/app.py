@@ -36,6 +36,7 @@ from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.completion import WordCompleter
+from .completers import ScriptChatCompleter
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.formatted_text import ANSI, to_formatted_text
 from prompt_toolkit.mouse_events import MouseEventType
@@ -167,18 +168,17 @@ class ScriptChatUI:
         # Create selection menu for interactive command selection
         self.selection_menu = SelectionMenu(self)
 
-        # Create command completer
-        command_completer = WordCompleter(
-            ['/new', '/save', '/open', '/branch', '/rename', '/chats', '/archive', '/unarchive', '/send', '/history', '/export', '/export-all', '/import', '/import-chatgpt', '/stream', '/prompt', '/run', '/sleep', '/model', '/models', '/temp', '/reason', '/thinking', '/timeout', '/profile', '/log-level', '/files', '/clear', '/file', '/unfile', '/echo', '/note', '/tag', '/untag', '/tags', '/set', '/vars', '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
-            ignore_case=True,
-            sentence=True
+        # Create custom completer with path support
+        self.command_completer = ScriptChatCompleter(
+            file_registry=self.state.file_registry,
+            folder_registry=self.state.folder_registry
         )
 
         # Create buffers
         self.input_buffer = Buffer(
             multiline=True,
             history=InMemoryHistory(),
-            completer=command_completer,
+            completer=self.command_completer,
             complete_while_typing=True
         )
 
