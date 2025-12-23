@@ -16,6 +16,8 @@ Types of changes:
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-23
+
 ### Added
 - `/clear [index]` command to clear all messages from a conversation while keeping metadata (requires saved conversation)
 - `/search <pattern>` command to search the current conversation for text/regex matches
