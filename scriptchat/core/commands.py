@@ -64,10 +64,16 @@ COMMAND_REGISTRY = {
         "description": "List saved conversations. Use --archived for archived only, --all for both.",
         "examples": ["/chats", "/chats --archived", "/chats --all"],
     },
+    "del": {
+        "category": "Conversation",
+        "usage": "/del [index]",
+        "description": "Delete current conversation or delete a saved one by index.",
+        "examples": ["/del", "/del 2"],
+    },
     "clear": {
         "category": "Conversation",
         "usage": "/clear [index]",
-        "description": "Clear current conversation or delete a saved one by index.",
+        "description": "Clear all messages from a conversation while keeping metadata (requires saved conversation).",
         "examples": ["/clear", "/clear 2"],
     },
     "archive": {
@@ -940,6 +946,12 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         except ValueError:
             return CommandResult(message="Invalid timeout. Usage: /timeout <seconds|0|off>")
         return set_timeout(state, seconds)
+
+    elif command == 'del':
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='del'
+        )
 
     elif command == 'clear':
         return CommandResult(

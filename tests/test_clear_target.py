@@ -16,7 +16,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scriptchat.ui.app import resolve_clear_target_from_args
+from scriptchat.ui.app import resolve_del_target_from_args
 from scriptchat.core.conversations import ConversationSummary
 
 
@@ -28,15 +28,15 @@ def make_convo_dir(root: Path, name: str):
     return d
 
 
-class ClearTargetTests(unittest.TestCase):
-    def test_clear_uses_fresh_list_on_index(self):
+class DelTargetTests(unittest.TestCase):
+    def test_del_uses_fresh_list_on_index(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             # create two conversations with sortable names (list_conversations sorts reverse)
             c1 = make_convo_dir(root, "202401010900_model_a")
             c2 = make_convo_dir(root, "202401011000_model_b")  # newest -> index 0
 
-            target_id, prompt, err, summaries, is_current = resolve_clear_target_from_args(
+            target_id, prompt, err, summaries, is_current = resolve_del_target_from_args(
                 "1", root, None
             )
 
@@ -47,11 +47,11 @@ class ClearTargetTests(unittest.TestCase):
             self.assertEqual(len(summaries), 2)
             self.assertFalse(is_current)
 
-    def test_clear_defaults_to_current_without_index(self):
+    def test_del_defaults_to_current_without_index(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             make_convo_dir(root, "202401010900_model_a")
-            target_id, prompt, err, summaries, is_current = resolve_clear_target_from_args(
+            target_id, prompt, err, summaries, is_current = resolve_del_target_from_args(
                 "", root, "current-id"
             )
             self.assertIsNone(err)
@@ -59,11 +59,11 @@ class ClearTargetTests(unittest.TestCase):
             self.assertIn("current-id", prompt)
             self.assertTrue(is_current)
 
-    def test_clear_marks_current_when_ids_match(self):
+    def test_del_marks_current_when_ids_match(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             make_convo_dir(root, "202401010900_model_a")
-            target_id, prompt, err, summaries, is_current = resolve_clear_target_from_args(
+            target_id, prompt, err, summaries, is_current = resolve_del_target_from_args(
                 "0", root, "202401010900_model_a"
             )
 

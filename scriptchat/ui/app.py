@@ -65,12 +65,12 @@ APP_STYLE = Style.from_dict({
 })
 
 
-def resolve_clear_target_from_args(
+def resolve_del_target_from_args(
     args: str,
     conversations_root: Path,
     current_conversation_id: Optional[str]
 ) -> tuple[Optional[str], Optional[str], Optional[str], list, bool]:
-    """Resolve target id and prompt for /clear.
+    """Resolve target id and prompt for /del.
 
     Returns (target_id, prompt_message, error_message, summaries_used, target_is_current).
     """
@@ -86,16 +86,16 @@ def resolve_clear_target_from_args(
                 return None, None, "Invalid conversation index.", summaries_used, False
 
             target_id = summaries_used[idx].dir_name
-            prompt = f"Clear and delete conversation #{idx} ({summaries_used[idx].display_name})? (y/N)"
+            prompt = f"Delete conversation #{idx} ({summaries_used[idx].display_name})? (y/N)"
             target_is_current = (current_conversation_id is not None and target_id == current_conversation_id)
             return target_id, prompt, None, summaries_used, target_is_current
         except ValueError:
-            return None, None, "Usage: /clear [index]", summaries_used, False
+            return None, None, "Usage: /del [index]", summaries_used, False
 
-    # No arg: clear current
+    # No arg: delete current
     target_id = current_conversation_id
     target_label = target_id or "current (unsaved) conversation"
-    prompt = f"Clear and delete {target_label}? (y/N)"
+    prompt = f"Delete {target_label}? (y/N)"
     target_is_current = True
     return target_id, prompt, None, summaries_used, target_is_current
 

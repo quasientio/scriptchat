@@ -59,9 +59,9 @@ class ScriptChatCompleter(Completer):
              '/unarchive', '/send', '/history', '/export', '/export-all', '/import',
              '/import-chatgpt', '/stream', '/prompt', '/run', '/sleep', '/model',
              '/models', '/temp', '/reason', '/thinking', '/think-history', '/timeout',
-             '/profile', '/log-level', '/files', '/clear', '/file', '/unfile', '/folder',
+             '/profile', '/log-level', '/files', '/clear', '/del', '/file', '/unfile', '/folder',
              '/unfolder', '/echo', '/note', '/tag', '/untag', '/tags', '/set', '/vars',
-             '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit'],
+             '/assert', '/assert-not', '/undo', '/retry', '/help', '/keys', '/exit', '/search', '/unset'],
             ignore_case=True,
             sentence=True
         )

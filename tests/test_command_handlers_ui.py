@@ -164,7 +164,7 @@ class CommandHandlersUiTests(unittest.TestCase):
             handlers.handle_run(str(script))
             self.assertEqual(app.script_queue, ["hello", "/send there"])
 
-    def test_clear_deletes_current_and_saved(self):
+    def test_del_deletes_current_and_saved(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             state = make_state(root, system_prompt="sys")
@@ -175,12 +175,47 @@ class CommandHandlersUiTests(unittest.TestCase):
             saved_dir = root / state.current_conversation.id
             self.assertTrue(saved_dir.exists())
 
-            handlers.handle_clear("")
-            # simulate user confirming clear
+            handlers.handle_del("")
+            # simulate user confirming delete
             app.last_callback("y")
 
             self.assertFalse(saved_dir.exists())
             self.assertIsNone(state.current_conversation.id)
+            self.assertIn("deleted", " ".join(app.messages).lower())
+
+    def test_clear_removes_messages_but_keeps_conversation(self):
+        """Test that /clear removes messages but keeps conversation metadata."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = make_state(root, system_prompt="sys")
+            app = FakeApp(state)
+            handlers = CommandHandlers(app)
+
+            # Add messages and save
+            state.current_conversation.messages.append(Message(role="user", content="hello"))
+            state.current_conversation.messages.append(Message(role="assistant", content="hi"))
+            handlers.handle_save("test-convo")
+            saved_dir = root / state.current_conversation.id
+            self.assertTrue(saved_dir.exists())
+
+            # Verify message files exist
+            message_files = list(saved_dir.glob("*_user.txt")) + list(saved_dir.glob("*_llm.txt"))
+            self.assertGreater(len(message_files), 0)
+
+            # Clear messages
+            handlers.handle_clear("")
+            app.last_callback("y")
+
+            # Conversation folder should still exist
+            self.assertTrue(saved_dir.exists())
+            # meta.json should still exist
+            self.assertTrue((saved_dir / "meta.json").exists())
+            # But message files should be gone
+            message_files = list(saved_dir.glob("*_user.txt")) + list(saved_dir.glob("*_llm.txt"))
+            self.assertEqual(len(message_files), 0)
+            # Current conversation should have no user/assistant messages (only system prompt if any)
+            non_system_messages = [m for m in state.current_conversation.messages if m.role != 'system']
+            self.assertEqual(len(non_system_messages), 0)
             self.assertIn("cleared", " ".join(app.messages).lower())
 
     def test_send_and_export(self):

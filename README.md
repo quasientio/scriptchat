@@ -174,7 +174,8 @@ All commands start with `/`:
 - `/chats [--archived|--all]` - List saved conversations. Use `--archived` for archived only, `--all` for both.
 - `/archive [index|name|range] [--tag key=value]` - Archive conversations by index (`3`), name, range (`1-5`), or tag filter
 - `/unarchive [index|name|range] [--tag key=value]` - Restore archived conversations (same syntax as `/archive`)
-- `/clear [index]` - Clear and delete the current conversation, or delete a saved conversation by index (requires confirmation)
+- `/del [index]` - Delete the current conversation or delete a saved conversation by index (requires confirmation)
+- `/clear [index]` - Clear all messages from a conversation while keeping metadata (requires saved conversation)
 
 **Export/Import**
 - `/export [format]` - Export the current conversation (formats: `md`, `json`, `html`; prompts if omitted). `json` includes full metadata; `md`/`html` are minimal, human-friendly transcripts.

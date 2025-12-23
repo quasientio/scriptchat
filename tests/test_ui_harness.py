@@ -1062,17 +1062,17 @@ class MarkdownAdvancedRenderingTests(unittest.TestCase):
             self.assertNotIn('#', conv_text)
 
 
-class ResolveClearTargetTests(unittest.TestCase):
-    """Tests for resolve_clear_target_from_args helper."""
+class ResolveDelTargetTests(unittest.TestCase):
+    """Tests for resolve_del_target_from_args helper."""
 
-    def test_no_args_clears_current(self):
-        """Test /clear with no args targets current conversation."""
-        from scriptchat.ui.app import resolve_clear_target_from_args
+    def test_no_args_deletes_current(self):
+        """Test /del with no args targets current conversation."""
+        from scriptchat.ui.app import resolve_del_target_from_args
 
         with tempfile.TemporaryDirectory() as tmpdir:
             conversations_root = Path(tmpdir)
 
-            target_id, prompt, error, _, target_is_current = resolve_clear_target_from_args(
+            target_id, prompt, error, _, target_is_current = resolve_del_target_from_args(
                 "",
                 conversations_root,
                 "current-convo-id"
@@ -1085,12 +1085,12 @@ class ResolveClearTargetTests(unittest.TestCase):
 
     def test_invalid_index_returns_error(self):
         """Test that invalid index returns error message."""
-        from scriptchat.ui.app import resolve_clear_target_from_args
+        from scriptchat.ui.app import resolve_del_target_from_args
 
         with tempfile.TemporaryDirectory() as tmpdir:
             conversations_root = Path(tmpdir)
 
-            target_id, prompt, error, _, _ = resolve_clear_target_from_args(
+            target_id, prompt, error, _, _ = resolve_del_target_from_args(
                 "999",  # No conversations exist
                 conversations_root,
                 None
@@ -1101,12 +1101,12 @@ class ResolveClearTargetTests(unittest.TestCase):
 
     def test_non_numeric_returns_usage_error(self):
         """Test that non-numeric arg returns usage error."""
-        from scriptchat.ui.app import resolve_clear_target_from_args
+        from scriptchat.ui.app import resolve_del_target_from_args
 
         with tempfile.TemporaryDirectory() as tmpdir:
             conversations_root = Path(tmpdir)
 
-            target_id, prompt, error, _, _ = resolve_clear_target_from_args(
+            target_id, prompt, error, _, _ = resolve_del_target_from_args(
                 "abc",
                 conversations_root,
                 None

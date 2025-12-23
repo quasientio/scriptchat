@@ -23,7 +23,7 @@ from ..core.commands import handle_command, set_model, set_temperature, expand_v
 from ..core.conversations import (
     list_conversations, load_conversation, save_conversation,
     branch_conversation, delete_conversation, rename_conversation, ConversationSummary,
-    archive_conversation, unarchive_conversation
+    archive_conversation, unarchive_conversation, clear_conversation_messages
 )
 from ..core.exports import (
     export_conversation_md,
@@ -52,9 +52,11 @@ class CommandHandlers:
 
         # Handler-specific state
         self.last_model_options: list[tuple[str, str]] = []
+        self.pending_del_index: Optional[int] = None
+        self.pending_del_target_id: Optional[str] = None
+        self.pending_del_is_current: bool = False
         self.pending_clear_index: Optional[int] = None
         self.pending_clear_target_id: Optional[str] = None
-        self.pending_clear_is_current: bool = False
 
     def handle_command(self, command_line: str):
         """Handle a command.
@@ -137,6 +139,8 @@ class CommandHandlers:
                 self.handle_run(args)
             elif result.command_type == 'temp':
                 self.handle_temp(args)
+            elif result.command_type == 'del':
+                self.handle_del(args)
             elif result.command_type == 'clear':
                 self.handle_clear(args)
             elif result.command_type == 'profile':
@@ -869,10 +873,10 @@ class CommandHandlers:
         except ValueError:
             self.app.add_system_message("Invalid temperature. Please enter a number.")
 
-    def handle_clear(self, args: str = ""):
-        from .app import resolve_clear_target_from_args
-        self.pending_clear_index = None
-        target_id, prompt, error, summaries_used, is_current = resolve_clear_target_from_args(
+    def handle_del(self, args: str = ""):
+        from .app import resolve_del_target_from_args
+        self.pending_del_index = None
+        target_id, prompt, error, summaries_used, is_current = resolve_del_target_from_args(
             args,
             self.app.state.conversations_root,
             self.app.state.current_conversation.id
@@ -883,24 +887,24 @@ class CommandHandlers:
         if args.strip():
             try:
                 idx = int(args.strip())
-                self.pending_clear_index = idx
+                self.pending_del_index = idx
             except ValueError:
-                self.app.add_system_message("Usage: /clear [index]")
+                self.app.add_system_message("Usage: /del [index]")
                 return
-        self.pending_clear_target_id = target_id
-        self.pending_clear_is_current = is_current
+        self.pending_del_target_id = target_id
+        self.pending_del_is_current = is_current
         self.app.prompt_message = prompt
-        self.app.prompt_for_input(self._clear_callback, expect_single_key=True)
+        self.app.prompt_for_input(self._del_callback, expect_single_key=True)
 
-    def _clear_callback(self, confirm: str):
+    def _del_callback(self, confirm: str):
         if confirm.lower() != 'y':
-            self.app.add_system_message("Clear cancelled")
-            self.pending_clear_index = None
-            self.pending_clear_target_id = None
-            self.pending_clear_is_current = False
+            self.app.add_system_message("Delete cancelled")
+            self.pending_del_index = None
+            self.pending_del_target_id = None
+            self.pending_del_is_current = False
             return
-        target_id = self.pending_clear_target_id
-        is_current = self.pending_clear_is_current
+        target_id = self.pending_del_target_id
+        is_current = self.pending_del_is_current
         if is_current:
             from ..core.commands import create_new_conversation
             self.app.state.current_conversation = create_new_conversation(self.app.state)
@@ -913,12 +917,82 @@ class CommandHandlers:
                 self.app.add_system_message(f"Error deleting: {str(e)}")
                 return
         if is_current:
-            self.app.add_system_message("Conversation cleared")
+            self.app.add_system_message("Conversation deleted")
         else:
             self.app.add_system_message(f"Conversation deleted: {target_id}")
+        self.pending_del_index = None
+        self.pending_del_target_id = None
+        self.pending_del_is_current = False
+
+    def handle_clear(self, args: str = ""):
+        """Handle /clear command - clears messages but keeps conversation metadata."""
         self.pending_clear_index = None
         self.pending_clear_target_id = None
-        self.pending_clear_is_current = False
+
+        # Parse args
+        arg = args.strip()
+        summaries = list_conversations(self.app.state.conversations_root)
+
+        if arg:
+            # Clear by index
+            try:
+                idx = int(arg)
+                if idx < 0 or idx >= len(summaries):
+                    self.app.add_system_message("Invalid conversation index.")
+                    return
+                target_id = summaries[idx].dir_name
+                prompt = f"Clear all messages from conversation #{idx} ({summaries[idx].display_name})? (y/N)"
+                self.pending_clear_index = idx
+            except ValueError:
+                self.app.add_system_message("Usage: /clear [index]")
+                return
+        else:
+            # Clear current conversation
+            if not self.app.state.current_conversation.id:
+                self.app.add_system_message("Cannot clear unsaved conversation. Use /save first, or use /new to start fresh.")
+                return
+            target_id = self.app.state.current_conversation.id
+            prompt = f"Clear all messages from current conversation ({target_id})? (y/N)"
+
+        self.pending_clear_target_id = target_id
+        self.app.prompt_message = prompt
+        self.app.prompt_for_input(self._clear_callback, expect_single_key=True)
+
+    def _clear_callback(self, confirm: str):
+        if confirm.lower() != 'y':
+            self.app.add_system_message("Clear cancelled")
+            self.pending_clear_index = None
+            self.pending_clear_target_id = None
+            return
+
+        target_id = self.pending_clear_target_id
+        is_current = (target_id == self.app.state.current_conversation.id)
+
+        try:
+            clear_conversation_messages(self.app.state.conversations_root, target_id)
+        except Exception as e:
+            logger.error(f"Error clearing conversation messages: {e}")
+            self.app.add_system_message(f"Error clearing messages: {str(e)}")
+            return
+
+        # If clearing current conversation, reload it (will have no messages)
+        if is_current:
+            try:
+                from ..core.conversations import load_conversation
+                self.app.state.current_conversation = load_conversation(
+                    self.app.state.conversations_root,
+                    target_id
+                )
+                self.app.update_conversation_display()
+                self.app.add_system_message("Messages cleared from current conversation")
+            except Exception as e:
+                logger.error(f"Error reloading conversation: {e}")
+                self.app.add_system_message(f"Messages cleared, but error reloading: {str(e)}")
+        else:
+            self.app.add_system_message(f"Messages cleared from conversation: {target_id}")
+
+        self.pending_clear_index = None
+        self.pending_clear_target_id = None
 
     def handle_search(self, args: str):
         """Handle /search command with selection menu."""

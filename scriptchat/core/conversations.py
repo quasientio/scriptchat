@@ -583,6 +583,26 @@ def delete_conversation(root: Path, dir_name: str) -> None:
         shutil.rmtree(conv_dir)
 
 
+def clear_conversation_messages(root: Path, dir_name: str) -> None:
+    """Clear all messages from a conversation while keeping metadata.
+
+    Args:
+        root: Conversations root directory
+        dir_name: Directory name to clear messages from
+
+    Raises:
+        FileNotFoundError: If conversation doesn't exist
+    """
+    conv_dir = root / dir_name
+    if not conv_dir.exists():
+        raise FileNotFoundError(f"Conversation not found: {dir_name}")
+
+    # Delete all message files but keep meta.json
+    for file in conv_dir.iterdir():
+        if file.is_file() and file.name != "meta.json":
+            file.unlink()
+
+
 def archive_conversation(root: Path, dir_name: str) -> None:
     """Move a conversation to the archive.
 

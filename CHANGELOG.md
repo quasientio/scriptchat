@@ -19,8 +19,10 @@ Types of changes:
 ### Changed
 - `/load` command renamed to `/open` for clarity (from a user perspective, they are opening a conversation)
 - `/set <name>=` (empty value) now unsets the variable instead of setting it to an empty string
+- `/clear` command renamed to `/del` (deletes conversation and its folder from disk)
 
 ### Added
+- `/clear [index]` command to clear all messages from a conversation while keeping metadata (requires saved conversation)
 - `/search <pattern>` command to search the current conversation for text/regex matches
   - Shows results in a selection menu with context snippets
   - Navigate with arrow keys and press Enter to jump to a message in the conversation
