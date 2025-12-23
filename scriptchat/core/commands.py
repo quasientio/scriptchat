@@ -138,6 +138,12 @@ COMMAND_REGISTRY = {
         "description": "Set exact thinking budget in tokens (Anthropic Claude only). 1024-128000, or off to disable.",
         "examples": ["/thinking", "/thinking 8000", "/thinking 32000", "/thinking off"],
     },
+    "think-history": {
+        "category": "Model & Settings",
+        "usage": "/think-history [on|off]",
+        "description": "Toggle whether thinking content is included in conversation history sent to API.",
+        "examples": ["/think-history", "/think-history on", "/think-history off"],
+    },
     "timeout": {
         "category": "Model & Settings",
         "usage": "/timeout <seconds|0|off>",
@@ -725,6 +731,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
     elif command == 'thinking':
         budget_arg = parts[1].strip() if len(parts) > 1 else ""
         return set_thinking_budget(state, budget_arg)
+
+    elif command == 'think-history':
+        arg = parts[1].strip().lower() if len(parts) > 1 else ""
+        return toggle_thinking_history(state, arg)
 
     elif command == 'import':
         if len(parts) < 2 or not parts[1].strip():
@@ -1426,6 +1436,36 @@ def set_thinking_budget(state: AppState, budget: str) -> CommandResult:
     convo.thinking_budget = tokens
     convo.reasoning_level = None  # Clear preset when using custom budget
     return CommandResult(message=f"Thinking budget set to {tokens} tokens")
+
+
+def toggle_thinking_history(state: AppState, arg: str) -> CommandResult:
+    """Toggle whether thinking content is included in conversation history sent to API.
+
+    Args:
+        state: Application state
+        arg: "on", "off", or empty string (to show current status)
+
+    Returns:
+        CommandResult with execution result
+    """
+    current = state.config.include_thinking_in_history
+
+    if not arg:
+        # Show current status
+        status = "on" if current else "off"
+        return CommandResult(
+            message=f"Thinking content in history: {status}\n"
+                   f"Usage: /think-history [on|off]"
+        )
+
+    if arg == "on":
+        state.config.include_thinking_in_history = True
+        return CommandResult(message="Thinking content will now be included in conversation history sent to API")
+    elif arg == "off":
+        state.config.include_thinking_in_history = False
+        return CommandResult(message="Thinking content will not be included in conversation history sent to API")
+    else:
+        return CommandResult(message="Usage: /think-history [on|off]")
 
 
 def set_timeout(state: AppState, seconds: float | None) -> CommandResult:

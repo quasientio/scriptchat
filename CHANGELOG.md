@@ -16,6 +16,9 @@ Types of changes:
 
 ## [Unreleased]
 
+### Added
+- `/think-history [on|off]` command to dynamically toggle whether thinking content is included in conversation history sent to API (default: off)
+
 ### Changed
 - Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted
 

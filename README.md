@@ -188,6 +188,7 @@ All commands start with `/`:
 - `/temp` - Change the temperature setting
 - `/reason [level]` - Set reasoning level (`low`, `medium`, `high`, `max`). Without args, shows interactive selection menu. For Anthropic Claude, these map to thinking budgets (4K, 16K, 32K, 55K tokens).
 - `/thinking [tokens]` - Set exact thinking budget in tokens for Anthropic Claude (1024-128000). Use `/thinking off` to disable. Overrides `/reason` presets.
+- `/think-history [on|off]` - Toggle whether thinking content is included in conversation history sent to API. Without args, shows current status. Default is `off` (thinking displayed but not sent back).
 - `/timeout <seconds|0|off>` - Set the request timeout in seconds, or disable with `0` or `off`
 - `/stream [on|off]` - Toggle or set streaming of assistant responses
 - `/prompt [text|clear]` - Set or clear the system prompt for this conversation (prompts if omitted)

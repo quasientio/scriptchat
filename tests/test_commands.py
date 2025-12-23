@@ -829,6 +829,60 @@ class CommandTests(unittest.TestCase):
             self.assertIsNone(state.current_conversation.reasoning_level)
             self.assertEqual(state.current_conversation.thinking_budget, 20000)
 
+    def test_think_history_command_shows_status(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Default is off
+            state.config.include_thinking_in_history = False
+            res = handle_command("/think-history", state)
+            self.assertIn("off", res.message)
+            self.assertIn("Usage", res.message)
+
+            # When on
+            state.config.include_thinking_in_history = True
+            res = handle_command("/think-history", state)
+            self.assertIn("on", res.message)
+
+    def test_think_history_command_turns_on(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.config.include_thinking_in_history = False
+            res = handle_command("/think-history on", state)
+            self.assertIn("included", res.message)
+            self.assertTrue(state.config.include_thinking_in_history)
+
+    def test_think_history_command_turns_off(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.config.include_thinking_in_history = True
+            res = handle_command("/think-history off", state)
+            self.assertIn("not be included", res.message)
+            self.assertFalse(state.config.include_thinking_in_history)
+
+    def test_think_history_command_invalid_arg(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            res = handle_command("/think-history invalid", state)
+            self.assertIn("Usage", res.message)
+
+    def test_think_history_command_toggles(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Start with off
+            state.config.include_thinking_in_history = False
+
+            # Turn on
+            handle_command("/think-history on", state)
+            self.assertTrue(state.config.include_thinking_in_history)
+
+            # Turn off
+            handle_command("/think-history off", state)
+            self.assertFalse(state.config.include_thinking_in_history)
+
+            # Turn on again
+            handle_command("/think-history on", state)
+            self.assertTrue(state.config.include_thinking_in_history)
+
 
 class HelpCommandTests(unittest.TestCase):
     """Tests for the /help command."""
