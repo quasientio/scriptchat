@@ -109,8 +109,8 @@ class CommandHandlers:
                 self.handle_model(args)
             elif result.command_type == 'save':
                 self.handle_save(args)
-            elif result.command_type == 'load':
-                self.handle_load(args)
+            elif result.command_type == 'open':
+                self.handle_open(args)
             elif result.command_type == 'branch':
                 self.handle_branch(args)
             elif result.command_type == 'rename':
@@ -260,7 +260,7 @@ class CommandHandlers:
         except Exception as e:
             self.app.add_system_message(f"Error saving: {str(e)}")
 
-    def handle_load(self, args: str = ""):
+    def handle_open(self, args: str = ""):
         # Parse --archived flag
         args = args.strip()
         from_archived = False
@@ -276,7 +276,7 @@ class CommandHandlers:
             self.app.add_system_message(f"No {label} conversations found")
             return
         if args:
-            self._load_by_name(args, from_archived=from_archived)
+            self._open_by_name(args, from_archived=from_archived)
             return
 
         # Build options for selection menu
@@ -289,21 +289,21 @@ class CommandHandlers:
             options.append((summary.dir_name, display))
 
         # Store from_archived state for callback
-        self._load_from_archived = from_archived
+        self._open_from_archived = from_archived
 
         # Show selection menu
         self.app.selection_menu.show(
             items=options,
-            on_select=self._on_load_selected,
-            on_cancel=lambda: self.app.add_system_message("Load cancelled")
+            on_select=self._on_open_selected,
+            on_cancel=lambda: self.app.add_system_message("Open cancelled")
         )
 
-    def _on_load_selected(self, dir_name: str):
+    def _on_open_selected(self, dir_name: str):
         """Handle conversation selection from menu."""
-        from_archived = getattr(self, '_load_from_archived', False)
-        self._load_by_name(dir_name, from_archived=from_archived)
+        from_archived = getattr(self, '_open_from_archived', False)
+        self._open_by_name(dir_name, from_archived=from_archived)
 
-    def _load_by_name(self, name: str, from_archived: bool = False):
+    def _open_by_name(self, name: str, from_archived: bool = False):
         from ..core.conversations import ARCHIVE_DIR
 
         filter_mode = "archived" if from_archived else "active"
@@ -333,13 +333,13 @@ class CommandHandlers:
         target = matches[0].dir_name
         display = matches[0].display_name
 
-        # Determine load directory
+        # Determine open directory
         if from_archived:
-            load_root = self.app.state.conversations_root / ARCHIVE_DIR
+            open_root = self.app.state.conversations_root / ARCHIVE_DIR
         else:
-            load_root = self.app.state.conversations_root
+            open_root = self.app.state.conversations_root
 
-        conversation = load_conversation(load_root, target)
+        conversation = load_conversation(open_root, target)
         self.app.state.current_conversation = conversation
         # Rehydrate file registry for placeholder expansion
         self.app.state.file_registry = getattr(conversation, "file_registry", {})
@@ -348,7 +348,7 @@ class CommandHandlers:
             if isinstance(entry, dict) and entry.get("missing")
         ]
         self.app.update_conversation_display()
-        self.app.add_system_message(f"Loaded: {display}")
+        self.app.add_system_message(f"Opened: {display}")
         if missing:
             self.app.add_system_message(
                 "Warning: missing file(s) referenced: " + ", ".join(sorted(missing))

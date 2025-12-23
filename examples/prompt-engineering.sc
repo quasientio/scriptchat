@@ -1,6 +1,6 @@
 # Title: Iterative Prompt Engineering
 # Mode: interactive
-# Commands: /save, /branch, /prompt, /retry, /tag, /note, /history, /export, /load
+# Commands: /save, /branch, /prompt, /retry, /tag, /note, /history, /export, /open
 #
 # Refine a prompt across multiple iterations using conversation branching.
 # Compare different approaches by saving, branching, and exporting results.
@@ -36,8 +36,8 @@ What are the key principles of REST API design?
 # Export this version
 /export md
 
-# Load the original baseline
-/load rest-api-baseline
+# Open the original baseline
+/open rest-api-baseline
 
 # Tag and export for comparison
 /tag variant=baseline

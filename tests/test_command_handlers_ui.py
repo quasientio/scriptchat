@@ -98,7 +98,7 @@ def make_state(tmp_path: Path, system_prompt: str | None = None):
 
 
 class CommandHandlersUiTests(unittest.TestCase):
-    def test_echo_and_save_load_flow(self):
+    def test_echo_and_save_open_flow(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir), system_prompt="sys")
             app = FakeApp(state)
@@ -112,8 +112,8 @@ class CommandHandlersUiTests(unittest.TestCase):
             self.assertIsNotNone(state.current_conversation.id)
             self.assertIn("saved as", app.messages[-1].lower())
 
-            handlers.handle_load("0")
-            self.assertIn("loaded", app.messages[-1].lower())
+            handlers.handle_open("0")
+            self.assertIn("opened", app.messages[-1].lower())
             self.assertEqual(state.current_conversation.messages[0].role, "system")
 
     def test_branch_and_rename_and_stream_toggle(self):
@@ -262,7 +262,7 @@ class CommandHandlersUiTests(unittest.TestCase):
             handlers.handle_export_all("md")
             self.assertIn("no saved conversations", app.messages[-1].lower())
 
-    def test_load_registers_file_references(self):
+    def test_open_registers_file_references(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             file_path = root / "note.txt"
@@ -285,14 +285,14 @@ class CommandHandlersUiTests(unittest.TestCase):
             app = FakeApp(state)
             handlers = CommandHandlers(app)
 
-            handlers.handle_load("0")
+            handlers.handle_open("0")
 
             self.assertEqual(state.current_conversation.id, saved.id)
             self.assertIn(str(file_path), state.file_registry)
             self.assertIn(file_path.name, state.file_registry)
             self.assertEqual(state.file_registry[str(file_path)]["content"], "hello world")
 
-    def test_load_warns_missing_file_references(self):
+    def test_open_warns_missing_file_references(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             convo = Conversation(
@@ -313,7 +313,7 @@ class CommandHandlersUiTests(unittest.TestCase):
             app = FakeApp(state)
             handlers = CommandHandlers(app)
 
-            handlers.handle_load("0")
+            handlers.handle_open("0")
 
             combined = " ".join(app.messages).lower()
             self.assertIn("missing file", combined)
@@ -354,8 +354,8 @@ class CommandHandlersUiTests(unittest.TestCase):
             cb("new prompt")
             self.assertEqual(state.current_conversation.system_prompt, "new prompt")
 
-    def test_load_by_display_name(self):
-        """Load a conversation by its simple save name."""
+    def test_open_by_display_name(self):
+        """Open a conversation by its simple save name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             state = make_state(root)
@@ -372,13 +372,13 @@ class CommandHandlersUiTests(unittest.TestCase):
                 tokens_in=0, tokens_out=0,
             )
 
-            # Load by display name
-            handlers.handle_load("my-chat")
+            # Open by display name
+            handlers.handle_open("my-chat")
             self.assertEqual(state.current_conversation.id, saved_id)
-            self.assertIn("loaded", app.messages[-1].lower())
+            self.assertIn("opened", app.messages[-1].lower())
 
-    def test_load_by_full_dir_name(self):
-        """Load a conversation by its full directory name."""
+    def test_open_by_full_dir_name(self):
+        """Open a conversation by its full directory name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             state = make_state(root)
@@ -395,12 +395,12 @@ class CommandHandlersUiTests(unittest.TestCase):
                 tokens_in=0, tokens_out=0,
             )
 
-            # Load by full dir_name
-            handlers.handle_load(saved_id)
+            # Open by full dir_name
+            handlers.handle_open(saved_id)
             self.assertEqual(state.current_conversation.id, saved_id)
-            self.assertIn("loaded", app.messages[-1].lower())
+            self.assertIn("opened", app.messages[-1].lower())
 
-    def test_load_by_name_not_found(self):
+    def test_open_by_name_not_found(self):
         """Error message when conversation name doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -410,10 +410,10 @@ class CommandHandlersUiTests(unittest.TestCase):
 
             handlers.handle_save("exists")
 
-            handlers.handle_load("nonexistent")
+            handlers.handle_open("nonexistent")
             self.assertIn("not found", app.messages[-1].lower())
 
-    def test_load_by_name_multiple_matches(self):
+    def test_open_by_name_multiple_matches(self):
         """Error when multiple conversations match the same name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -430,8 +430,8 @@ class CommandHandlersUiTests(unittest.TestCase):
                 meta = {"model": "llama3", "provider_id": "ollama", "temperature": 0.7}
                 (conv_dir / "meta.json").write_text(json.dumps(meta))
 
-            # Try to load by name - should fail with multiple matches
-            handlers.handle_load("samename")
+            # Try to open by name - should fail with multiple matches
+            handlers.handle_open("samename")
             self.assertIn("multiple", app.messages[-1].lower())
 
 

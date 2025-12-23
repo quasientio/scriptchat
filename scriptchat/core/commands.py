@@ -40,11 +40,11 @@ COMMAND_REGISTRY = {
         "description": "Save the current conversation. Prompts for name if not provided.",
         "examples": ["/save", "/save my-chat"],
     },
-    "load": {
+    "open": {
         "category": "Conversation",
-        "usage": "/load [--archived] [name]",
-        "description": "Load a saved conversation. Without args, shows interactive selection menu. Use --archived to load from archive.",
-        "examples": ["/load", "/load my-chat", "/load --archived my-chat"],
+        "usage": "/open [--archived] [name]",
+        "description": "Open a saved conversation. Without args, shows interactive selection menu. Use --archived to open from archive.",
+        "examples": ["/open", "/open my-chat", "/open --archived my-chat"],
     },
     "branch": {
         "category": "Conversation",
@@ -222,7 +222,7 @@ COMMAND_REGISTRY = {
     "history": {
         "category": "Messaging",
         "usage": "/history [n|all]",
-        "description": "Show recent user messages in the current conversation (persists if saved/loaded). Default: last 10.",
+        "description": "Show recent user messages in the current conversation (persists if saved/opened). Default: last 10.",
         "examples": ["/history", "/history 5", "/history all"],
     },
     "undo": {
@@ -429,7 +429,7 @@ Keyboard Shortcuts:
     \"\"\"              Start multiline input (text stays visible/editable)
     \"\"\" + Enter      End multiline mode and send message
 
-  In selection menu (/model, /load, /reason, /log-level):
+  In selection menu (/model, /open, /reason, /log-level):
     j/k or Up/Down   Navigate items
     Enter or Tab     Select item
     Escape           Cancel selection
@@ -594,10 +594,10 @@ def handle_command(line: str, state: AppState) -> CommandResult:
             command_type='save'
         )
 
-    elif command == 'load':
+    elif command == 'open':
         return CommandResult(
             needs_ui_interaction=True,
-            command_type='load'
+            command_type='open'
         )
 
     elif command == 'branch':

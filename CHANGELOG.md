@@ -16,6 +16,9 @@ Types of changes:
 
 ## [Unreleased]
 
+### Changed
+- `/load` command renamed to `/open` for clarity (from a user perspective, they are opening a conversation)
+
 ### Added
 - `/think-history [on|off]` command to dynamically toggle whether thinking content is included in conversation history sent to API (default: off)
 - `/folder [--force] <path>` command to register all files in a folder for @reference in messages
@@ -26,7 +29,7 @@ Types of changes:
 - Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted
 
 ### Fixed
-- Selection menu items (e.g., `/model`, `/load`) now highlight visually when navigating with UP/DOWN keys
+- Selection menu items (e.g., `/model`, `/open`) now highlight visually when navigating with UP/DOWN keys
   - Added reverse video styling for the currently selected item
   - Menu borders and hints now use subtle gray styling
 

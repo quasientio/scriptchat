@@ -168,7 +168,7 @@ All commands start with `/`:
 **Conversation**
 - `/new` - Start a new conversation
 - `/save` - Save the current conversation
-- `/load [--archived] [name]` - Load a saved conversation. Use `--archived` to load from archive. Without args, shows interactive selection menu.
+- `/open [--archived] [name]` - Open a saved conversation. Use `--archived` to open from archive. Without args, shows interactive selection menu.
 - `/branch` - Create a branch (copy) of the current conversation
 - `/rename` - Rename a saved conversation (renames its directory)
 - `/chats [--archived|--all]` - List saved conversations. Use `--archived` for archived only, `--all` for both.
@@ -199,13 +199,13 @@ All commands start with `/`:
 - `/files [--long]` - List registered files (with sizes and hashes when using `--long`)
 
 **Tags**
-- `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/load`)
+- `/tag key=value` - Apply metadata tags to the conversation (shown in `/chats` and `/open`)
 - `/untag <key>` - Remove a metadata tag from the conversation
 - `/tags` - List tags on the current conversation
 
 **Messaging**
 - `/send <message>` - Queue a message (sends immediately if the model is idle)
-- `/history [n|all]` - Show recent user messages in current conversation (persists if saved/loaded; default: last 10)
+- `/history [n|all]` - Show recent user messages in current conversation (persists if saved/opened; default: last 10)
 - `/note <text>` - Add a note to the conversation (saved and visible, but not sent to model)
 - `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
 - `/retry` - Drop the last assistant message and resend the previous user message
@@ -389,7 +389,7 @@ Exports (`/export`) go to the current working directory by default, or to `expor
 4. Switch models: `/model` then select a model
 5. Continue chatting with the new model
 6. Rename or branch to organize: `/rename new-name` or `/branch`
-7. Load a previous conversation: `/load`
+7. Open a previous conversation: `/open`
 8. Exit when done: `/exit` or Ctrl+C
 
 ## Examples Gallery
