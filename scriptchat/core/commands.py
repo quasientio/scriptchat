@@ -225,6 +225,12 @@ COMMAND_REGISTRY = {
         "description": "Show recent user messages in the current conversation (persists if saved/opened). Default: last 10.",
         "examples": ["/history", "/history 5", "/history all"],
     },
+    "search": {
+        "category": "Messaging",
+        "usage": "/search <pattern>",
+        "description": "Search the current conversation for text/regex matches. Shows results in a selection menu to navigate.",
+        "examples": ["/search error", "/search function.*def", "/search important"],
+    },
     "undo": {
         "category": "Messaging",
         "usage": "/undo [n]",
@@ -531,6 +537,81 @@ def assert_last_response(convo: Conversation, pattern: str, negate: bool = False
         return False, f"Assertion FAILED: pattern '{pattern}' not found in last response."
 
 
+def search_conversation(convo: Conversation, pattern: str) -> list[tuple[int, str, str]]:
+    """Search conversation messages for a pattern.
+
+    Args:
+        convo: Conversation to search
+        pattern: Text or regex pattern to search for
+
+    Returns:
+        List of tuples (message_index, role, snippet) where snippet includes context around match
+    """
+    matches = []
+
+    # Try to compile as regex, fall back to literal substring search
+    try:
+        regex = re.compile(pattern, flags=re.IGNORECASE)
+        is_regex = True
+    except re.error:
+        is_regex = False
+        pattern_lower = pattern.lower()
+
+    for idx, msg in enumerate(convo.messages):
+        # Skip non-content messages
+        if msg.role not in ('user', 'assistant', 'system'):
+            continue
+
+        content = msg.content or ""
+
+        # Search for pattern
+        if is_regex:
+            match = regex.search(content)
+            if match:
+                # Get snippet with context around match
+                snippet = _extract_snippet(content, match.start(), match.end())
+                matches.append((idx, msg.role, snippet))
+        else:
+            # Literal substring search
+            pos = content.lower().find(pattern_lower)
+            if pos >= 0:
+                snippet = _extract_snippet(content, pos, pos + len(pattern))
+                matches.append((idx, msg.role, snippet))
+
+    return matches
+
+
+def _extract_snippet(text: str, match_start: int, match_end: int, context_chars: int = 50) -> str:
+    """Extract a snippet from text with context around a match.
+
+    Args:
+        text: Full text
+        match_start: Start position of match
+        match_end: End position of match
+        context_chars: Number of characters to include before/after match
+
+    Returns:
+        Snippet string with ellipsis if truncated
+    """
+    # Calculate snippet bounds
+    start = max(0, match_start - context_chars)
+    end = min(len(text), match_end + context_chars)
+
+    # Extract snippet
+    snippet = text[start:end]
+
+    # Add ellipsis if truncated
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(text):
+        snippet = snippet + "..."
+
+    # Replace newlines with spaces for display
+    snippet = " ".join(snippet.split())
+
+    return snippet
+
+
 def handle_command(line: str, state: AppState) -> CommandResult:
     """Parse and handle a command.
 
@@ -676,6 +757,14 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
         header = f"Last {len(recent)} of {len(user_msgs)} messages:"
         return CommandResult(message=header + "\n" + "\n".join(lines))
+
+    elif command == 'search':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /search <pattern>")
+        return CommandResult(
+            needs_ui_interaction=True,
+            command_type='search'
+        )
 
     elif command == 'export':
         return CommandResult(

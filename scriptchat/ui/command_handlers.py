@@ -151,6 +151,8 @@ class CommandHandlers:
                 self.handle_reason(args)
             elif result.command_type == 'log-level':
                 self.handle_log_level(args)
+            elif result.command_type == 'search':
+                self.handle_search(args)
 
     def handle_model(self, args: str = ""):
         # If name provided directly, apply it (for scripting)
@@ -917,6 +919,89 @@ class CommandHandlers:
         self.pending_clear_index = None
         self.pending_clear_target_id = None
         self.pending_clear_is_current = False
+
+    def handle_search(self, args: str):
+        """Handle /search command with selection menu."""
+        from ..core.commands import search_conversation
+
+        pattern = args.strip()
+        if not pattern:
+            self.app.add_system_message("Usage: /search <pattern>")
+            return
+
+        # Search conversation
+        matches = search_conversation(self.app.state.current_conversation, pattern)
+
+        if not matches:
+            self.app.add_system_message(f"No matches found for: {pattern}")
+            return
+
+        # Build options for selection menu
+        options = []
+        for msg_idx, role, snippet in matches:
+            # Format: [#12 user] ...matched text with context...
+            display = f"[#{msg_idx} {role}] {snippet}"
+            # Store message index as value
+            options.append((msg_idx, display))
+
+        # Show selection menu
+        self.app.selection_menu.show(
+            items=options,
+            on_select=self._on_search_result_selected,
+            on_cancel=lambda: self.app.add_system_message("Search cancelled")
+        )
+
+    def _on_search_result_selected(self, msg_idx: int):
+        """Handle search result selection - scroll to message in conversation."""
+        # Scroll conversation to the selected message
+        # We need to calculate the position in the conversation buffer text
+        messages = self.app.state.current_conversation.messages
+
+        # Validate index
+        if msg_idx < 0 or msg_idx >= len(messages):
+            self.app.add_system_message(f"Invalid message index: {msg_idx}")
+            return
+
+        # Calculate character position of the message in the buffer
+        # Build text up to the selected message
+        lines = []
+        for idx, msg in enumerate(messages[:msg_idx + 1]):
+            if msg.role == 'system':
+                content = self.app._markdown_to_ansi(msg.content or "")
+                is_error = content.strip().lower().startswith("error")
+                # Don't include ANSI codes in position calculation
+                lines.append(f"[system] {msg.content or ''}")
+            elif msg.role == 'user':
+                lines.append(f"[user] {msg.content}")
+            elif msg.role == 'assistant':
+                thinking = getattr(msg, 'thinking', None)
+                if thinking:
+                    lines.append("<thinking>")
+                    lines.append(thinking)
+                    lines.append("</thinking>")
+                lines.append(f"[assistant] {msg.content or ''}")
+            elif msg.role == 'echo':
+                lines.append(msg.content or '')
+            elif msg.role == 'note':
+                lines.append(f"[note] {msg.content}")
+            elif msg.role == 'status':
+                lines.append(f"[system] {msg.content or ''}")
+
+        # Calculate position (without ANSI codes)
+        text_before_message = '\n'.join(lines[:-1]) if len(lines) > 1 else ''
+        position = len(text_before_message)
+        if position > 0:
+            position += 1  # Account for newline
+
+        # Update conversation buffer cursor to scroll to this position
+        # Focus conversation pane and set cursor
+        self.app.app.layout.focus(self.app.conversation_buffer)
+        # Clamp position to valid range
+        max_pos = len(self.app.conversation_buffer.text)
+        position = max(0, min(position, max_pos))
+        self.app.conversation_buffer.cursor_position = position
+
+        self.app.add_system_message(f"Jumped to message #{msg_idx}")
 
 
 def format_conversation_list(summaries: list[ConversationSummary]) -> list[str]:

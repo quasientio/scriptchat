@@ -206,6 +206,7 @@ All commands start with `/`:
 **Messaging**
 - `/send <message>` - Queue a message (sends immediately if the model is idle)
 - `/history [n|all]` - Show recent user messages in current conversation (persists if saved/opened; default: last 10)
+- `/search <pattern>` - Search the current conversation for text/regex matches. Shows results in a selection menu with context snippets. Navigate with arrow keys and press Enter to jump to a message.
 - `/note <text>` - Add a note to the conversation (saved and visible, but not sent to model)
 - `/undo [n]` - Remove the last user/assistant exchange(s) from the conversation. Without n, it removes 1.
 - `/retry` - Drop the last assistant message and resend the previous user message

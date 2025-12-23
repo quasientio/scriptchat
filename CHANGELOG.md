@@ -21,6 +21,10 @@ Types of changes:
 - `/set <name>=` (empty value) now unsets the variable instead of setting it to an empty string
 
 ### Added
+- `/search <pattern>` command to search the current conversation for text/regex matches
+  - Shows results in a selection menu with context snippets
+  - Navigate with arrow keys and press Enter to jump to a message in the conversation
+  - Case-insensitive search with regex support
 - `/think-history [on|off]` command to dynamically toggle whether thinking content is included in conversation history sent to API (default: off)
 - `/folder [--force] <path>` command to register all files in a folder for @reference in messages
 - `/unfolder <folder-key>` command to unregister a folder and all its files
