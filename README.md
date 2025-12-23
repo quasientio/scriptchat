@@ -317,11 +317,33 @@ Use `/keys` for the full list.
 
 - Register: `/file docs/plan.md`
 - Send with inline file: `Summarize @docs/plan.md and list action items.` (you can also use `@{docs/plan.md}` or `@plan.md` if unique)
-- If an `@path` isn’t registered, the send will error and nothing is sent.
+- If an `@path` isn't registered, the send will error and nothing is sent.
 
 You can register multiple files and mix references in one message. `/profile` lists full paths of registered files.
 
 **Nested references:** If a registered file contains `@path` references to other registered files, those are also expanded (one level deep).
+
+#### Folder References
+
+`/folder [--force] <path>` registers all files in a folder for use in messages. When you reference a folder with `@folder-name`, it expands to all files with XML tags:
+
+```
+<file path="/path/to/file1.txt">
+content of file1
+</file>
+<file path="/path/to/file2.txt">
+content of file2
+</file>
+```
+
+Examples:
+
+- Register: `/folder src/components`
+- Send with inline folder: `Review the code in @components and suggest improvements.`
+- Individual files in the folder are still accessible: `@file1.txt` or `@{/path/to/file1.txt}`
+- Unregister: `/unfolder src/components` (removes the folder and all its files)
+
+**Note:** `/folder` registers files non-recursively (only files directly in the folder, not subdirectories). Use `--force` to include files larger than the configured threshold.
 
 ### Token Estimation
 

@@ -181,6 +181,18 @@ COMMAND_REGISTRY = {
         "description": "Unregister a file. Use the key shown in /files (path or basename).",
         "examples": ["/unfile src/main.py", "/unfile main.py"],
     },
+    "folder": {
+        "category": "Files",
+        "usage": "/folder [--force] <path>",
+        "description": "Register all files in a folder for @reference. Use --force for large files.",
+        "examples": ["/folder src/components", "/folder --force ./data"],
+    },
+    "unfolder": {
+        "category": "Files",
+        "usage": "/unfolder <folder-key>",
+        "description": "Unregister a folder and all its files.",
+        "examples": ["/unfolder src/components", "/unfolder data"],
+    },
     # Tags
     "tag": {
         "category": "Tags",
@@ -437,6 +449,7 @@ class AppState:
     client: object
     conversations_root: Path
     file_registry: dict = field(default_factory=dict)  # key -> {"content": str, "full_path": str}
+    folder_registry: dict = field(default_factory=dict)  # folder_key -> {"path": str, "files": [str]}
     variables: dict = field(default_factory=dict)  # script variables: name -> value
 
 
@@ -965,6 +978,211 @@ def handle_command(line: str, state: AppState) -> CommandResult:
 
         removed_keys = ", ".join(f"@{k}" for k in keys_to_remove)
         return CommandResult(message=f"Unregistered {removed_keys}{saved_note}")
+
+    elif command == 'folder':
+        if len(parts) < 2:
+            return CommandResult(message="Usage: /folder [--force] <path>")
+
+        arg_str = parts[1].strip()
+        force = False
+        folder_path = arg_str
+        if arg_str.startswith("--force "):
+            force = True
+            folder_path = arg_str[len("--force "):].strip()
+        elif arg_str == "--force":
+            return CommandResult(message="Usage: /folder [--force] <path>")
+
+        expanded_path = Path(folder_path).expanduser()
+        if not expanded_path.exists():
+            return CommandResult(message=f"Folder not found: {folder_path}")
+        if not expanded_path.is_dir():
+            return CommandResult(message=f"Not a directory: {folder_path}")
+
+        # Collect all files in the directory (non-recursive)
+        try:
+            files = [f for f in expanded_path.iterdir() if f.is_file()]
+        except PermissionError:
+            return CommandResult(message=f"Permission denied: {folder_path}")
+        except Exception as e:
+            return CommandResult(message=f"Error reading directory: {str(e)}")
+
+        if not files:
+            return CommandResult(message=f"No files found in folder: {folder_path}")
+
+        # Register each file
+        threshold = getattr(state.config, "file_confirm_threshold_bytes", 40_000)
+        registered_files = []
+        skipped_files = []
+        total_size = 0
+
+        import hashlib
+
+        for file_path in sorted(files):
+            try:
+                content = file_path.read_text(encoding='utf-8')
+                full_path_str = str(file_path.resolve())
+                size = len(content.encode("utf-8"))
+                total_size += size
+
+                # Skip if file is too large and force not specified
+                if not force and size > threshold:
+                    skipped_files.append((file_path.name, size))
+                    continue
+
+                # Compute hash for the file content
+                content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+                # Register by full path
+                state.file_registry[str(file_path)] = {"content": content, "full_path": full_path_str}
+                # Also register by basename if not already present
+                basename = file_path.name
+                if basename not in state.file_registry:
+                    state.file_registry[basename] = {"content": content, "full_path": full_path_str}
+
+                # Persist references on the conversation
+                if not hasattr(state.current_conversation, "file_references") or state.current_conversation.file_references is None:
+                    state.current_conversation.file_references = {}
+                file_ref_entry = {"path": full_path_str, "sha256": content_hash}
+                state.current_conversation.file_references[str(file_path)] = file_ref_entry
+                if basename not in state.current_conversation.file_references:
+                    state.current_conversation.file_references[basename] = file_ref_entry
+
+                registered_files.append(str(file_path))
+
+            except UnicodeDecodeError:
+                skipped_files.append((file_path.name, "not UTF-8"))
+            except Exception as e:
+                skipped_files.append((file_path.name, f"error: {str(e)}"))
+
+        if not registered_files:
+            if skipped_files:
+                skip_info = ", ".join(f"{name} ({reason})" for name, reason in skipped_files[:3])
+                return CommandResult(message=f"No files registered. Skipped: {skip_info}")
+            return CommandResult(message=f"No valid files found in folder: {folder_path}")
+
+        # Register the folder itself
+        folder_key = str(expanded_path)
+        state.folder_registry[folder_key] = {
+            "path": str(expanded_path.resolve()),
+            "files": registered_files
+        }
+        # Also register by basename if not already present
+        folder_basename = expanded_path.name
+        if folder_basename and folder_basename not in state.folder_registry:
+            state.folder_registry[folder_basename] = {
+                "path": str(expanded_path.resolve()),
+                "files": registered_files
+            }
+
+        # Auto-save meta if conversation already saved
+        try:
+            if state.current_conversation.id:
+                save_conversation(
+                    state.conversations_root,
+                    state.current_conversation,
+                    system_prompt=state.current_conversation.system_prompt
+                )
+        except Exception:
+            pass
+
+        # Estimate total tokens
+        from .tokenizer import estimate_tokens
+        from .model_defaults import get_default_context_limit
+        total_content = "\n".join(state.file_registry[f]["content"] for f in registered_files)
+        token_count, token_method = estimate_tokens(
+            total_content,
+            provider_id=state.current_conversation.provider_id,
+            model_name=state.current_conversation.model_name
+        )
+        is_approximate = token_method == "estimate" or token_method.endswith("~")
+        token_prefix = "~" if is_approximate else ""
+
+        # Get context length for percentage calculation
+        context_length = state.current_conversation.context_length_configured
+        if context_length is None:
+            try:
+                model_cfg = state.config.get_model(
+                    state.current_conversation.provider_id,
+                    state.current_conversation.model_name
+                )
+                context_length = model_cfg.context
+            except Exception:
+                pass
+        if context_length is None:
+            context_length = get_default_context_limit(state.current_conversation.model_name)
+
+        # Build token info with optional context percentage
+        if context_length:
+            pct = token_count / context_length * 100
+            token_info = f", {token_prefix}{token_count} tokens / {pct:.1f}% ctx"
+        else:
+            token_info = f", {token_prefix}{token_count} tokens"
+
+        message_parts = [f"Registered folder @{folder_key}"]
+        if folder_basename and folder_basename != folder_key:
+            message_parts.append(f" and @{folder_basename}")
+        message_parts.append(f" ({len(registered_files)} files, {total_size} chars{token_info})")
+
+        if skipped_files:
+            skip_summary = f"\nSkipped {len(skipped_files)} file(s)"
+            if not force:
+                skip_summary += " (use --force to include large files)"
+            message_parts.append(skip_summary)
+
+        return CommandResult(message="".join(message_parts))
+
+    elif command == 'unfolder':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /unfolder <folder-key>")
+        key = parts[1].strip()
+        if key not in state.folder_registry:
+            return CommandResult(message=f"Folder not registered: {key}")
+
+        # Get the folder entry
+        folder_entry = state.folder_registry[key]
+        folder_path = folder_entry["path"]
+        registered_files = folder_entry["files"]
+
+        # Remove all files in the folder from file_registry
+        for file_path in registered_files:
+            # Find all keys that point to this file and remove them
+            keys_to_remove = [k for k, e in state.file_registry.items()
+                             if isinstance(e, dict) and e.get("full_path") == state.file_registry.get(file_path, {}).get("full_path")]
+            for k in keys_to_remove:
+                state.file_registry.pop(k, None)
+
+            # Also remove from file_references on the conversation
+            if hasattr(state.current_conversation, "file_references") and state.current_conversation.file_references:
+                refs_to_remove = []
+                file_full_path = Path(file_path).resolve()
+                for ref_key, ref_val in state.current_conversation.file_references.items():
+                    ref_path = ref_val.get("path") if isinstance(ref_val, dict) else ref_val
+                    if ref_path and Path(ref_path).resolve() == file_full_path:
+                        refs_to_remove.append(ref_key)
+                for ref_key in refs_to_remove:
+                    del state.current_conversation.file_references[ref_key]
+
+        # Remove all folder keys that point to the same folder
+        folder_keys_to_remove = [k for k, e in state.folder_registry.items()
+                                  if e.get("path") == folder_path]
+        for k in folder_keys_to_remove:
+            del state.folder_registry[k]
+
+        # Auto-save if conversation has an ID
+        saved_note = ""
+        try:
+            if state.current_conversation.id:
+                save_conversation(
+                    state.conversations_root,
+                    state.current_conversation,
+                    system_prompt=state.current_conversation.system_prompt
+                )
+                saved_note = " (saved)"
+        except Exception:
+            pass
+
+        removed_keys = ", ".join(f"@{k}" for k in folder_keys_to_remove)
+        return CommandResult(message=f"Unregistered {removed_keys} and {len(registered_files)} file(s){saved_note}")
 
     elif command == 'echo':
         # Echo command - print message without sending to LLM
@@ -1660,24 +1878,54 @@ def expand_variables(
     return re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', replace_var, text)
 
 
-def resolve_placeholders(text: str, registry: dict, max_depth: int = 2) -> tuple[Optional[str], Optional[str]]:
-    """Expand @path placeholders using the file registry.
+def resolve_placeholders(text: str, registry: dict, max_depth: int = 2, folder_registry: dict = None) -> tuple[Optional[str], Optional[str]]:
+    """Expand @path placeholders using the file registry and folder registry.
 
     Supports @path or @{path}. Only expands references that exist in the registry;
     other @-prefixed tokens (e.g., Java annotations like @Override) are left untouched.
+
+    For folder references, expands to all files in the folder with XML tags:
+    <file path="path/to/file1.txt">
+    content1
+    </file>
+    <file path="path/to/file2.txt">
+    content2
+    </file>
 
     Args:
         text: The text containing @path placeholders
         registry: Dict mapping keys to file content
         max_depth: Maximum expansion depth (default 2 allows one level of nesting)
+        folder_registry: Dict mapping folder keys to folder info (path, files)
     """
     import re
     # Match @{path} or @path where path contains valid file path characters
     # (excludes backticks, quotes, brackets to handle markdown code blocks)
     pattern = re.compile(r'@(?:\{([^}]+)\}|([a-zA-Z0-9_./-]+))')
 
+    if folder_registry is None:
+        folder_registry = {}
+
     def repl(match):
         key = match.group(1) or match.group(2)
+
+        # Check if it's a folder reference first
+        if key in folder_registry:
+            folder_entry = folder_registry[key]
+            file_paths = folder_entry.get("files", [])
+
+            # Build XML-tagged content for each file in the folder
+            parts = []
+            for file_path in file_paths:
+                if file_path in registry:
+                    file_entry = registry[file_path]
+                    content = file_entry["content"] if isinstance(file_entry, dict) else file_entry
+                    # Use the file path as the XML attribute
+                    parts.append(f'<file path="{file_path}">\n{content}\n</file>')
+
+            return "\n".join(parts) if parts else match.group(0)
+
+        # Check if it's a file reference
         if key not in registry:
             # Not a registered file reference; leave as-is
             return match.group(0)

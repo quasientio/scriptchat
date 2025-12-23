@@ -66,7 +66,7 @@ def make_state(tmpdir: Path, system_prompt: str | None = "system says"):
         tokens_in=3,
         tokens_out=4,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmpdir, file_registry={})
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmpdir, file_registry={}, folder_registry={})
 
 
 class CommandTests(unittest.TestCase):
@@ -189,6 +189,137 @@ class CommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
             result = handle_command("/unfile nonexistent.txt", state)
+            self.assertIn("not registered", result.message)
+
+    def test_folder_command_registers_all_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            folder_path = Path(tmpdir) / "testfolder"
+            folder_path.mkdir()
+
+            # Create test files
+            (folder_path / "file1.txt").write_text("content1", encoding="utf-8")
+            (folder_path / "file2.txt").write_text("content2", encoding="utf-8")
+            (folder_path / "file3.txt").write_text("content3", encoding="utf-8")
+
+            result = handle_command(f"/folder {folder_path}", state)
+
+            self.assertIn("Registered folder", result.message)
+            self.assertIn("3 files", result.message)
+            self.assertIn("tokens", result.message)
+
+            # Check that all files are in the file_registry
+            self.assertIn(str(folder_path / "file1.txt"), state.file_registry)
+            self.assertIn(str(folder_path / "file2.txt"), state.file_registry)
+            self.assertIn(str(folder_path / "file3.txt"), state.file_registry)
+
+            # Check that the folder is in the folder_registry
+            self.assertIn(str(folder_path), state.folder_registry)
+            folder_entry = state.folder_registry[str(folder_path)]
+            self.assertEqual(len(folder_entry["files"]), 3)
+
+    def test_folder_command_skips_large_files_without_force(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.config.file_confirm_threshold_bytes = 10
+
+            folder_path = Path(tmpdir) / "testfolder"
+            folder_path.mkdir()
+
+            # Create small and large files
+            (folder_path / "small.txt").write_text("hi", encoding="utf-8")
+            (folder_path / "large.txt").write_text("x" * 100, encoding="utf-8")
+
+            result = handle_command(f"/folder {folder_path}", state)
+
+            self.assertIn("1 files", result.message)
+            self.assertIn("Skipped", result.message)
+            self.assertIn(str(folder_path / "small.txt"), state.file_registry)
+            self.assertNotIn(str(folder_path / "large.txt"), state.file_registry)
+
+    def test_folder_command_with_force_includes_large_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            state.config.file_confirm_threshold_bytes = 10
+
+            folder_path = Path(tmpdir) / "testfolder"
+            folder_path.mkdir()
+
+            # Create large file
+            (folder_path / "large.txt").write_text("x" * 100, encoding="utf-8")
+
+            result = handle_command(f"/folder --force {folder_path}", state)
+
+            self.assertIn("Registered folder", result.message)
+            self.assertIn(str(folder_path / "large.txt"), state.file_registry)
+
+    def test_folder_command_not_found(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/folder /nonexistent", state)
+            self.assertIn("not found", result.message)
+
+    def test_folder_command_not_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            file_path = Path(tmpdir) / "file.txt"
+            file_path.write_text("content", encoding="utf-8")
+
+            result = handle_command(f"/folder {file_path}", state)
+            self.assertIn("Not a directory", result.message)
+
+    def test_unfolder_command_removes_folder_and_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            folder_path = Path(tmpdir) / "testfolder"
+            folder_path.mkdir()
+
+            # Create test files
+            (folder_path / "file1.txt").write_text("content1", encoding="utf-8")
+            (folder_path / "file2.txt").write_text("content2", encoding="utf-8")
+
+            # Register the folder
+            handle_command(f"/folder {folder_path}", state)
+
+            # Verify files are registered
+            self.assertIn(str(folder_path / "file1.txt"), state.file_registry)
+            self.assertIn(str(folder_path / "file2.txt"), state.file_registry)
+            self.assertIn(str(folder_path), state.folder_registry)
+
+            # Unregister the folder
+            result = handle_command(f"/unfolder {folder_path}", state)
+
+            self.assertIn("Unregistered", result.message)
+            self.assertIn("2 file(s)", result.message)
+
+            # Verify files and folder are removed
+            self.assertNotIn(str(folder_path / "file1.txt"), state.file_registry)
+            self.assertNotIn(str(folder_path / "file2.txt"), state.file_registry)
+            self.assertNotIn(str(folder_path), state.folder_registry)
+
+    def test_unfolder_command_by_basename(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            folder_path = Path(tmpdir) / "testfolder"
+            folder_path.mkdir()
+
+            # Create test file
+            (folder_path / "file.txt").write_text("content", encoding="utf-8")
+
+            # Register the folder
+            handle_command(f"/folder {folder_path}", state)
+
+            # Unregister by basename
+            result = handle_command("/unfolder testfolder", state)
+
+            self.assertIn("Unregistered", result.message)
+            self.assertNotIn(str(folder_path), state.folder_registry)
+            self.assertNotIn("testfolder", state.folder_registry)
+
+    def test_unfolder_command_not_found(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/unfolder nonexistent", state)
             self.assertIn("not registered", result.message)
 
     def test_models_command_lists_providers_and_models(self):
@@ -1065,6 +1196,88 @@ class ResolvePlaceholdersTests(unittest.TestCase):
         result, err = resolve_placeholders("Start @a.txt end", registry, max_depth=3)
         self.assertIsNone(err)
         self.assertEqual(result, "Start A contains B contains C FINAL end")
+
+    def test_expands_folder_reference_with_xml_tags(self):
+        """Test that @folder-name expands to all files with XML tags."""
+        registry = {
+            "/tmp/folder/file1.txt": {"content": "content1", "full_path": "/tmp/folder/file1.txt"},
+            "/tmp/folder/file2.txt": {"content": "content2", "full_path": "/tmp/folder/file2.txt"},
+        }
+        folder_registry = {
+            "/tmp/folder": {
+                "path": "/tmp/folder",
+                "files": ["/tmp/folder/file1.txt", "/tmp/folder/file2.txt"]
+            }
+        }
+
+        text = "Review @{/tmp/folder} please"
+        result, err = resolve_placeholders(text, registry, folder_registry=folder_registry)
+        self.assertIsNone(err)
+
+        # Check that XML tags are present
+        self.assertIn('<file path="/tmp/folder/file1.txt">', result)
+        self.assertIn('content1', result)
+        self.assertIn('</file>', result)
+        self.assertIn('<file path="/tmp/folder/file2.txt">', result)
+        self.assertIn('content2', result)
+
+    def test_expands_folder_by_basename(self):
+        """Test that folders can be referenced by basename."""
+        registry = {
+            "/tmp/testfolder/file1.txt": {"content": "hello", "full_path": "/tmp/testfolder/file1.txt"},
+        }
+        folder_registry = {
+            "testfolder": {
+                "path": "/tmp/testfolder",
+                "files": ["/tmp/testfolder/file1.txt"]
+            }
+        }
+
+        text = "Check @testfolder"
+        result, err = resolve_placeholders(text, registry, folder_registry=folder_registry)
+        self.assertIsNone(err)
+        self.assertIn('<file path="/tmp/testfolder/file1.txt">', result)
+        self.assertIn('hello', result)
+
+    def test_folder_takes_precedence_over_file_with_same_name(self):
+        """Test that folder reference takes precedence when both exist."""
+        registry = {
+            "data": {"content": "just a file", "full_path": "/tmp/data"},
+            "/tmp/data/file1.txt": {"content": "folder file", "full_path": "/tmp/data/file1.txt"},
+        }
+        folder_registry = {
+            "data": {
+                "path": "/tmp/data",
+                "files": ["/tmp/data/file1.txt"]
+            }
+        }
+
+        text = "Check @data"
+        result, err = resolve_placeholders(text, registry, folder_registry=folder_registry)
+        self.assertIsNone(err)
+        # Should expand as folder, not file
+        self.assertIn('<file path=', result)
+        self.assertIn('folder file', result)
+        self.assertNotIn('just a file', result)
+
+    def test_individual_files_in_folder_still_accessible(self):
+        """Test that individual files can still be referenced after folder registration."""
+        registry = {
+            "/tmp/folder/file1.txt": {"content": "content1", "full_path": "/tmp/folder/file1.txt"},
+            "/tmp/folder/file2.txt": {"content": "content2", "full_path": "/tmp/folder/file2.txt"},
+        }
+        folder_registry = {
+            "/tmp/folder": {
+                "path": "/tmp/folder",
+                "files": ["/tmp/folder/file1.txt", "/tmp/folder/file2.txt"]
+            }
+        }
+
+        # Reference individual file
+        text = "Just show me @{/tmp/folder/file1.txt}"
+        result, err = resolve_placeholders(text, registry, folder_registry=folder_registry)
+        self.assertIsNone(err)
+        self.assertEqual(result, "Just show me content1")
 
 
 class ScriptVariablesTests(unittest.TestCase):

@@ -62,7 +62,7 @@ def make_state(tmp_path: Path):
         tokens_in=0,
         tokens_out=0,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path, file_registry={})
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path, file_registry={}, folder_registry={})
 
 
 class MainBatchCommandBranches(unittest.TestCase):

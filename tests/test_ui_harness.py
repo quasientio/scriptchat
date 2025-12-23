@@ -67,7 +67,8 @@ def make_test_state(tmp_path: Path):
         current_conversation=convo,
         client=None,
         conversations_root=tmp_path,
-        file_registry={}
+        file_registry={},
+        folder_registry={}
     )
 
 

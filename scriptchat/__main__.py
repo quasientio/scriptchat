@@ -272,6 +272,11 @@ def handle_batch_command(
             print(f"[{line_num}] {result.message}")
             return True, None, None
 
+    if command in ('folder', 'unfolder'):
+        result = handle_command(line, state)
+        print(f"[{line_num}] {result.message}")
+        return True, None, None
+
     if command == 'export':
         format_arg = args.strip().lower() or "md"
         if format_arg not in ('md', 'json', 'html'):
@@ -345,7 +350,7 @@ def handle_batch_command(
         return True, result.resend_message if command == 'retry' else None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /vars, /note, /history")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /folder, /unfolder, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /vars, /note, /history")
     return True, None, None
 
 
@@ -417,7 +422,7 @@ def run_batch_lines(
             expanded_messages = []
             for msg in state.current_conversation.messages:
                 if msg.role in ('user', 'system'):
-                    expanded, err = resolve_placeholders(msg.content, state.file_registry)
+                    expanded, err = resolve_placeholders(msg.content, state.file_registry, folder_registry=state.folder_registry)
                     if err:
                         print(f"[{i}] {err}", file=sys.stderr)
                         # remove the appended user message on error
@@ -740,7 +745,8 @@ def main():  # pragma: no cover - interactive entrypoint not exercised in unit t
             current_conversation=initial_conversation,
             client=dispatcher,
             conversations_root=config.conversations_dir,
-            file_registry={}
+            file_registry={},
+            folder_registry={}
         )
 
         # Check if running in batch mode

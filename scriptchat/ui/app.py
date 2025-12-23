@@ -792,7 +792,7 @@ class ScriptChatUI:
         expanded_messages = []
         for msg in self.state.current_conversation.messages:
             if msg.role in ('user', 'system'):
-                expanded, err = resolve_placeholders(msg.content, self.state.file_registry)
+                expanded, err = resolve_placeholders(msg.content, self.state.file_registry, folder_registry=self.state.folder_registry)
                 if err:
                     self.add_system_message(err)
                     self.state.current_conversation.messages.pop()

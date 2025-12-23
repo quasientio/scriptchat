@@ -94,7 +94,7 @@ def make_state(tmp_path: Path, system_prompt: str | None = None):
         tokens_in=0,
         tokens_out=0,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path, file_registry={})
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=tmp_path, file_registry={}, folder_registry={})
 
 
 class CommandHandlersUiTests(unittest.TestCase):

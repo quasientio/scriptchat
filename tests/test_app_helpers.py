@@ -68,7 +68,7 @@ def make_state():
         context_length_configured=1000,
         context_length_used=100,
     )
-    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=Path("."), file_registry={})
+    return AppState(config=cfg, current_conversation=convo, client=None, conversations_root=Path("."), file_registry={}, folder_registry={})
 
 
 class AppHelperTests(unittest.TestCase):
