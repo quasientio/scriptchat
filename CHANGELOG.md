@@ -16,11 +16,6 @@ Types of changes:
 
 ## [Unreleased]
 
-### Changed
-- `/load` command renamed to `/open` for clarity (from a user perspective, they are opening a conversation)
-- `/set <name>=` (empty value) now unsets the variable instead of setting it to an empty string
-- `/clear` command renamed to `/del` (deletes conversation and its folder from disk)
-
 ### Added
 - `/clear [index]` command to clear all messages from a conversation while keeping metadata (requires saved conversation)
 - `/search <pattern>` command to search the current conversation for text/regex matches
@@ -37,16 +32,6 @@ Types of changes:
   - `/folder` completes only directories
   - `/unfile` and `/unfolder` complete with registered file/folder keys
   - Supports tilde expansion (`~` for home directory)
-
-### Changed
-- Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted
-
-### Fixed
-- Selection menu items (e.g., `/model`, `/open`) now highlight visually when navigating with UP/DOWN keys
-  - Added reverse video styling for the currently selected item
-  - Menu borders and hints now use subtle gray styling
-
-### Added
 - `--config PATH` CLI flag to use an alternative config file instead of `~/.scriptchat/config.toml`
   - Relative paths in config (conversations_dir, exports_dir, log_file) are resolved relative to the config file's directory
   - Enables isolated workspaces for testing and automation
@@ -65,7 +50,16 @@ Types of changes:
   - MockLLMClient `thinking_responses` and `response_delay` parameters
   - Headless mode commands, arrow keys, and assertions
 
+### Changed
+- Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted
+- `/load` command renamed to `/open` for clarity (from a user perspective, they are opening a conversation)
+- `/set <name>=` (empty value) now unsets the variable instead of setting it to an empty string
+- `/clear` command renamed to `/del` (deletes conversation and its folder from disk)
+
 ### Fixed
+- Selection menu items (e.g., `/model`, `/open`) now highlight visually when navigating with UP/DOWN keys
+  - Added reverse video styling for the currently selected item
+  - Menu borders and hints now use subtle gray styling
 - Multi-line messages are now preserved as single entries in input history
   - Previously, multi-line messages were split into separate entries when reloading history
   - History file format changed from plain text to JSON (`history.json`)
