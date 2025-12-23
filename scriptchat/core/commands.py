@@ -290,8 +290,14 @@ COMMAND_REGISTRY = {
     "set": {
         "category": "Scripting",
         "usage": "/set <name>=<value>",
-        "description": "Set a variable for use in scripts. Use ${name} to reference.",
-        "examples": ["/set model=llama3", "/set prompt=Be concise", "/send ${prompt}"],
+        "description": "Set a variable for use in scripts. Use ${name} to reference. Omit value to unset.",
+        "examples": ["/set model=llama3", "/set prompt=Be concise", "/send ${prompt}", "/set var="],
+    },
+    "unset": {
+        "category": "Scripting",
+        "usage": "/unset <name>",
+        "description": "Unset (remove) a variable.",
+        "examples": ["/unset model", "/unset prompt"],
     },
     "vars": {
         "category": "Scripting",
@@ -716,8 +722,31 @@ def handle_command(line: str, state: AppState) -> CommandResult:
         import re
         if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
             return CommandResult(message="Invalid variable name. Use letters, numbers, and underscores (cannot start with number).")
+
+        # If value is empty, unset the variable
+        if not value:
+            if name in state.variables:
+                del state.variables[name]
+                return CommandResult(message=f"Unset ${{{name}}}")
+            else:
+                return CommandResult(message=f"Variable ${{{name}}} not defined")
+
         state.variables[name] = value
         return CommandResult(message=f"Set ${{{name}}} = {value}")
+
+    elif command == 'unset':
+        if len(parts) < 2 or not parts[1].strip():
+            return CommandResult(message="Usage: /unset <name>")
+        name = parts[1].strip()
+        # Validate variable name
+        import re
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+            return CommandResult(message="Invalid variable name. Use letters, numbers, and underscores (cannot start with number).")
+        if name in state.variables:
+            del state.variables[name]
+            return CommandResult(message=f"Unset ${{{name}}}")
+        else:
+            return CommandResult(message=f"Variable ${{{name}}} not defined")
 
     elif command == 'vars':
         if not state.variables:

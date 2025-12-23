@@ -18,12 +18,14 @@ Types of changes:
 
 ### Changed
 - `/load` command renamed to `/open` for clarity (from a user perspective, they are opening a conversation)
+- `/set <name>=` (empty value) now unsets the variable instead of setting it to an empty string
 
 ### Added
 - `/think-history [on|off]` command to dynamically toggle whether thinking content is included in conversation history sent to API (default: off)
 - `/folder [--force] <path>` command to register all files in a folder for @reference in messages
 - `/unfolder <folder-key>` command to unregister a folder and all its files
 - `@folder-name` expansion in messages: expands to all files in the folder with XML tags enclosing each file's content
+- `/unset <name>` command to remove a variable
 
 ### Changed
 - Selection menus (`/model`, `/reason`, `/log-level`) now open with the currently set value pre-selected and highlighted

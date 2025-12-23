@@ -331,8 +331,33 @@ def handle_batch_command(
         if not re_module.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
             print(f"[{line_num}] Error: Invalid variable name: {name}")
             return True, None, None
-        state.variables[name] = value
-        print(f"[{line_num}] Set ${{{name}}} = {value}")
+
+        # If value is empty, unset the variable
+        if not value:
+            if name in state.variables:
+                del state.variables[name]
+                print(f"[{line_num}] Unset ${{{name}}}")
+            else:
+                print(f"[{line_num}] Variable ${{{name}}} not defined")
+        else:
+            state.variables[name] = value
+            print(f"[{line_num}] Set ${{{name}}} = {value}")
+        return True, None, None
+
+    if command == 'unset':
+        if not args or not args.strip():
+            print(f"[{line_num}] Error: /unset requires a variable name")
+            return True, None, None
+        name = args.strip()
+        import re as re_module
+        if not re_module.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+            print(f"[{line_num}] Error: Invalid variable name: {name}")
+            return True, None, None
+        if name in state.variables:
+            del state.variables[name]
+            print(f"[{line_num}] Unset ${{{name}}}")
+        else:
+            print(f"[{line_num}] Variable ${{{name}}} not defined")
         return True, None, None
 
     if command == 'vars':
@@ -350,7 +375,7 @@ def handle_batch_command(
         return True, result.resend_message if command == 'retry' else None, None
 
     print(f"[{line_num}] Error: Command '{command}' not supported in batch mode or unknown")
-    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /folder, /unfolder, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /vars, /note, /history")
+    print(f"[{line_num}] Supported commands: /new, /exit, /model, /temp, /timeout, /profile, /log-level, /files, /stream, /prompt, /save, /send, /file, /folder, /unfolder, /export, /import, /echo, /sleep, /assert, /undo, /retry, /tag, /set, /unset, /vars, /note, /history")
     return True, None, None
 
 

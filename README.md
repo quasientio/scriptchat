@@ -219,7 +219,8 @@ All commands start with `/`:
 **Scripting**
 - `/run <path>` - Execute a script file (one command/message per line; lines starting with `#` are comments)
 - `/sleep <seconds>` - Pause execution for the specified duration (scripts/batch mode only)
-- `/set <name>=<value>` - Define a script variable for use with `${name}` syntax
+- `/set <name>=<value>` - Define a script variable for use with `${name}` syntax. Omit value (`/set var=`) to unset.
+- `/unset <name>` - Remove a variable
 - `/vars` - List all defined variables
 
 **System**
@@ -257,6 +258,15 @@ ${greeting}
 ```
 
 Variables are expanded in both commands and messages. Variable names must start with a letter or underscore and contain only letters, numbers, and underscores.
+
+**Unsetting variables:** Use `/unset` or `/set var=` (empty value) to remove a variable:
+
+```bash
+/set temp=testing
+/unset temp         # Remove variable
+/set foo=bar
+/set foo=           # Also removes variable
+```
 
 **Environment variable fallback:** If a variable isn't defined via `/set`, ScriptChat checks environment variables. This enables parameterized scripts:
 

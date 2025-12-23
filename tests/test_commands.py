@@ -1376,12 +1376,16 @@ class ScriptVariablesTests(unittest.TestCase):
             self.assertEqual(state.variables.get("foo"), "updated")
 
     def test_set_empty_value(self):
-        """Setting a variable to empty string is allowed."""
+        """Setting a variable with empty value unsets it (changed behavior)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             state = make_state(Path(tmpdir))
+            # First set it to a value
+            handle_command("/set empty=something", state)
+            self.assertEqual(state.variables.get("empty"), "something")
+            # Now set it to empty value (should unset)
             result = handle_command("/set empty=", state)
-            self.assertEqual(state.variables.get("empty"), "")
-            self.assertIn("empty", result.message)
+            self.assertNotIn("empty", state.variables)
+            self.assertIn("Unset", result.message)
 
     def test_set_value_with_spaces(self):
         """Value can contain spaces."""
@@ -1412,6 +1416,70 @@ class ScriptVariablesTests(unittest.TestCase):
             # "my var=value" splits as name="my var" which is invalid
             result = handle_command("/set my var=value", state)
             self.assertIn("Invalid", result.message)
+
+    def test_set_empty_value_unsets_variable(self):
+        """Test /set var= (empty value) unsets the variable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Set a variable first
+            handle_command("/set foo=bar", state)
+            self.assertEqual(state.variables.get("foo"), "bar")
+            # Unset it with empty value
+            result = handle_command("/set foo=", state)
+            self.assertIn("Unset", result.message)
+            self.assertNotIn("foo", state.variables)
+
+    def test_set_empty_value_on_undefined_variable(self):
+        """Test /set var= when variable isn't defined."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/set undefined=", state)
+            self.assertIn("not defined", result.message)
+            self.assertNotIn("undefined", state.variables)
+
+    def test_unset_command_removes_variable(self):
+        """Test /unset command removes a variable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Set a variable first
+            handle_command("/set foo=bar", state)
+            self.assertEqual(state.variables.get("foo"), "bar")
+            # Unset it
+            result = handle_command("/unset foo", state)
+            self.assertIn("Unset", result.message)
+            self.assertNotIn("foo", state.variables)
+
+    def test_unset_command_on_undefined_variable(self):
+        """Test /unset on undefined variable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/unset undefined", state)
+            self.assertIn("not defined", result.message)
+
+    def test_unset_command_missing_name(self):
+        """Test /unset requires a variable name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/unset", state)
+            self.assertIn("Usage", result.message)
+
+    def test_unset_command_invalid_name(self):
+        """Test /unset rejects invalid variable names."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            result = handle_command("/unset 123invalid", state)
+            self.assertIn("Invalid", result.message)
+
+    def test_unset_command_with_whitespace(self):
+        """Test /unset with leading/trailing whitespace."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = make_state(Path(tmpdir))
+            # Set a variable first
+            handle_command("/set foo=bar", state)
+            # Unset it with whitespace
+            result = handle_command("/unset  foo  ", state)
+            self.assertIn("Unset", result.message)
+            self.assertNotIn("foo", state.variables)
 
     def test_expand_adjacent_variables(self):
         """Adjacent variable references expand correctly."""
