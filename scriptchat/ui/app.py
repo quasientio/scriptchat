@@ -160,7 +160,6 @@ class ScriptChatUI:
         self.running_script: bool = False
         history_dir = self.state.config.conversations_dir.expanduser().parent
         self.history_path = history_dir / "history.json"
-        self._legacy_history_path = history_dir / "history.txt"
 
         # Create command handlers
         self.handlers = CommandHandlers(self)
@@ -991,23 +990,13 @@ class ScriptChatUI:
             pass
 
     def _load_history(self):
-        """Load persisted input history.
-
-        Uses JSON format to properly preserve multi-line entries.
-        Falls back to legacy plain-text format for backward compatibility.
-        """
+        """Load persisted input history from JSON format."""
         try:
             if self.history_path.exists():
-                # Load JSON format
                 content = self.history_path.read_text(encoding="utf-8")
                 entries = json.loads(content)
                 if isinstance(entries, list):
                     self.input_history = [e for e in entries if isinstance(e, str) and e.strip()][-500:]
-                    return
-            # Fall back to legacy format if JSON file doesn't exist
-            if self._legacy_history_path.exists():
-                lines = [line.strip() for line in self._legacy_history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-                self.input_history = lines[-500:]
         except Exception:
             # Ignore load errors
             self.input_history = []

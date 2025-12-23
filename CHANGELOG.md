@@ -63,7 +63,6 @@ Types of changes:
 - Multi-line messages are now preserved as single entries in input history
   - Previously, multi-line messages were split into separate entries when reloading history
   - History file format changed from plain text to JSON (`history.json`)
-  - Legacy `history.txt` files are still loaded for backward compatibility
 
 ## [0.4.0] - 2025-12-19
 

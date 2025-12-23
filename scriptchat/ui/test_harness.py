@@ -215,7 +215,7 @@ class UITestHarness:
         self.ui.message_queue = []
         self.ui.script_queue = []
         self.ui.running_script = False
-        self.ui.history_path = self.state.config.conversations_dir.parent / "history.txt"
+        self.ui.history_path = self.state.config.conversations_dir.parent / "history.json"
 
         # Create buffers
         self.ui.input_buffer = Buffer()

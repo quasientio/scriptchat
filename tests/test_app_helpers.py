@@ -214,24 +214,6 @@ class AppHelperTests(unittest.TestCase):
             entries = json.loads(content)
             self.assertEqual(entries, ["entry one", "entry\nwith\nnewlines"])
 
-    def test_history_legacy_migration(self):
-        """Legacy text history format should be loaded if JSON doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            conv_dir = root / "conversations"
-            conv_dir.mkdir(parents=True, exist_ok=True)
-
-            # Create legacy history file
-            legacy_path = root / "history.txt"
-            legacy_path.write_text("legacy one\nlegacy two\n", encoding="utf-8")
-
-            state = make_state()
-            state.config.conversations_dir = conv_dir
-            ui = ScriptChatUI(state)
-
-            # Should load from legacy format
-            self.assertEqual(ui.input_history, ["legacy one", "legacy two"])
-
     def test_markdown_to_ansi_conversion(self):
         state = make_state()
         ui = object.__new__(ScriptChatUI)
